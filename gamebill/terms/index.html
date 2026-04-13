@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#07071a" />
+  <title>GameBill – Terms of Use</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #07071a;
+      --bgCard: rgba(22,14,52,0.82);
+      --bgInput: rgba(28,16,58,0.88);
+      --bgHover: rgba(38,22,72,0.88);
+      --purple: #9333ea;
+      --purpleLight: #c084fc;
+      --purpleDark: #2e0a6e;
+      --cyan: #00e5ff;
+      --green: #00f59b;
+      --red: #ff4d6a;
+      --orange: #ffb300;
+      --pink: #ff3eb5;
+      --blue: #4d9fff;
+      --lime: #b0f000;
+      --textPrimary: #ffffff;
+      --textSecondary: #e8d8ff;
+      --textMuted: #c4aaff;
+      --border: rgba(160,100,255,0.45);
+      --glass: rgba(22,10,55,0.72);
+      --glassBorder: rgba(180,100,255,0.28);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--textPrimary);
+      font-family: 'Rajdhani', 'Exo 2', sans-serif;
+      font-weight: 500;
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.75;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 10% 20%, rgba(147,51,234,0.18) 0%, transparent 55%),
+        radial-gradient(ellipse at 90% 80%, rgba(0,229,255,0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 100%, rgba(255,62,181,0.09) 0%, transparent 45%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(147,51,234,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(147,51,234,0.06) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #app { position: relative; z-index: 1; }
+
+    h1, h2, h3, h4 { font-family: 'Orbitron', monospace; letter-spacing: 1px; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+
+    @keyframes fadeIn { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes glowTitle { 0%,100%{ text-shadow: 0 0 20px rgba(147,51,234,0.5), 0 0 40px rgba(0,229,255,0.2); } 50%{ text-shadow: 0 0 40px rgba(147,51,234,0.9), 0 0 70px rgba(0,229,255,0.4); } }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--glass);
+      border-bottom: 1px solid rgba(180,100,255,0.22);
+      padding: 0 24px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .header-logo-icon {
+      width: 36px; height: 36px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 18px;
+      box-shadow: 0 0 22px rgba(147,51,234,0.7), 0 0 44px rgba(0,229,255,0.2);
+    }
+
+    .header-logo-text {
+      font-family: 'Orbitron', monospace;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--purpleLight);
+      letter-spacing: 2px;
+    }
+
+    .header-badge {
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      background: rgba(255,77,106,0.15);
+      border: 1px solid rgba(255,77,106,0.4);
+      color: #ff8099;
+      font-family: 'Orbitron', monospace;
+      letter-spacing: 1px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 64px 24px 48px;
+      animation: fadeIn 0.6s ease-out both;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-family: 'Orbitron', monospace;
+      letter-spacing: 3px;
+      color: #ff8099;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      padding: 6px 18px;
+      border: 1px solid rgba(255,77,106,0.35);
+      border-radius: 20px;
+      background: rgba(255,77,106,0.08);
+    }
+
+    .hero-title {
+      font-size: clamp(28px, 5vw, 50px);
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #ffffff 0%, #c084fc 45%, #00e5ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: glowTitle 4s ease-in-out infinite;
+    }
+
+    .hero-meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    .hero-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--textMuted);
+    }
+
+    .hero-meta-item svg { color: var(--purpleLight); flex-shrink: 0; }
+
+    .hero-meta-dot {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+
+    /* ── ACCEPTANCE BANNER ── */
+    .acceptance-banner {
+      max-width: 860px;
+      margin: 0 auto 52px;
+      padding: 22px 26px;
+      background: linear-gradient(135deg, rgba(0,229,255,0.1), rgba(147,51,234,0.12));
+      border: 1px solid rgba(0,229,255,0.35);
+      border-radius: 16px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      box-shadow: 0 0 40px rgba(0,229,255,0.07);
+    }
+
+    .acceptance-icon {
+      width: 42px; height: 42px; flex-shrink: 0;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(0,229,255,0.2), rgba(147,51,234,0.2));
+      border: 1px solid rgba(0,229,255,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+
+    .acceptance-text { flex: 1; }
+    .acceptance-text strong { color: var(--cyan); font-size: 14px; font-family: 'Orbitron', monospace; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
+    .acceptance-text p { color: var(--textSecondary); font-size: 14px; line-height: 1.65; }
+
+    /* ── MAIN LAYOUT ── */
+    .main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    /* ── CLAUSE ── */
+    .clause {
+      margin-bottom: 48px;
+      animation: fadeIn 0.5s ease-out both;
+    }
+
+    .clause-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(180,100,255,0.18);
+    }
+
+    .clause-number {
+      font-family: 'Orbitron', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--textMuted);
+      background: rgba(147,51,234,0.15);
+      border: 1px solid rgba(147,51,234,0.3);
+      border-radius: 6px;
+      padding: 4px 10px;
+      flex-shrink: 0;
+      margin-top: 3px;
+      letter-spacing: 1px;
+    }
+
+    .clause-title {
+      font-size: clamp(16px, 2.5vw, 20px);
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.3;
+    }
+
+    .clause-title span {
+      display: block;
+      font-size: 12px;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 500;
+      color: var(--textMuted);
+      margin-top: 4px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ── CLAUSE BODY ── */
+    .clause-body {
+      padding-left: 4px;
+    }
+
+    .clause-body p {
+      color: var(--textSecondary);
+      font-size: 15px;
+      line-height: 1.8;
+      margin-bottom: 14px;
+    }
+
+    .clause-body p:last-child { margin-bottom: 0; }
+
+    .clause-body strong {
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .clause-body a {
+      color: var(--cyan);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(0,229,255,0.3);
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .clause-body a:hover {
+      color: #ffffff;
+      border-color: #ffffff;
+    }
+
+    /* ── SUB-CLAUSE ── */
+    .sub-clause {
+      margin: 16px 0;
+      padding: 16px 18px;
+      background: var(--bgCard);
+      border: 1px solid var(--glassBorder);
+      border-radius: 12px;
+      backdrop-filter: blur(8px);
+    }
+
+    .sub-clause-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .sub-clause p {
+      color: var(--textSecondary) !important;
+      font-size: 14px !important;
+      line-height: 1.7 !important;
+      margin-bottom: 0 !important;
+    }
+
+    /* ── ITEM LIST ── */
+    .item-list {
+      list-style: none;
+      margin: 14px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .item-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      color: var(--textSecondary);
+      font-size: 14.5px;
+      line-height: 1.65;
+    }
+
+    .item-list li .bullet {
+      flex-shrink: 0;
+      margin-top: 5px;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+    }
+
+    /* ── PROHIBITED LIST ── */
+    .prohibited-list {
+      list-style: none;
+      margin: 14px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .prohibited-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 11px 14px;
+      background: rgba(255,77,106,0.06);
+      border: 1px solid rgba(255,77,106,0.18);
+      border-radius: 10px;
+      color: #ffc0cc;
+      font-size: 14px;
+      line-height: 1.6;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .prohibited-list li:hover {
+      border-color: rgba(255,77,106,0.35);
+      background: rgba(255,77,106,0.09);
+    }
+
+    .prohibited-list li .x-icon {
+      color: var(--red);
+      flex-shrink: 0;
+      margin-top: 2px;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    /* ── WARNING BOX ── */
+    .warning-box {
+      padding: 16px 20px;
+      background: rgba(255,179,0,0.08);
+      border: 1px solid rgba(255,179,0,0.35);
+      border-radius: 12px;
+      margin: 16px 0;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .warning-box .w-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .warning-box p { color: #ffe0a0; font-size: 14px; line-height: 1.65; margin: 0 !important; }
+
+    /* ── INFO BOX ── */
+    .info-box {
+      padding: 16px 20px;
+      background: rgba(147,51,234,0.1);
+      border: 1px solid rgba(192,132,252,0.35);
+      border-radius: 12px;
+      margin: 16px 0;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .info-box .i-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .info-box p { color: #ddc0ff; font-size: 14px; line-height: 1.65; margin: 0 !important; }
+
+    /* ── HIGHLIGHT ROW ── */
+    .highlight-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    .highlight-cell {
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid;
+    }
+
+    .highlight-cell-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 7px;
+      letter-spacing: 0.5px;
+    }
+
+    .highlight-cell p {
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 0 !important;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(180,100,255,0.3), transparent);
+      margin: 52px 0;
+    }
+
+    /* ── EFFECTIVE DATE FOOTER ── */
+    .tos-footer {
+      padding: 32px 24px;
+      text-align: center;
+      background: var(--bgCard);
+      border: 1px solid var(--glassBorder);
+      border-radius: 16px;
+      margin-bottom: 48px;
+    }
+
+    .tos-footer p { color: var(--textMuted); font-size: 14px; line-height: 1.7; }
+    .tos-footer strong { color: var(--purpleLight); }
+
+    /* ── SITE FOOTER ── */
+    .footer {
+      text-align: center;
+      padding: 24px 20px;
+      color: var(--textMuted);
+      font-size: 13px;
+      border-top: 1px solid var(--glassBorder);
+    }
+
+    .footer a { color: var(--purpleLight); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+    .footer-links { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+
+    /* ── SCROLL REVEAL ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.55s ease, transform 0.55s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 600px) {
+      .hero { padding: 44px 16px 32px; }
+      .acceptance-banner { flex-direction: column; }
+      .main { padding: 0 16px 60px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <a href="index.html" class="header-logo">
+      <div class="header-logo-icon">🎮</div>
+      <span class="header-logo-text">GAMEBILL</span>
+    </a>
+    <span class="header-badge">LEGAL</span>
+  </header>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-eyebrow">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Legal Agreement
+    </div>
+    <h1 class="hero-title">Terms of Use</h1>
+    <div class="hero-meta">
+      <span class="hero-meta-item">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Effective Date: July 1, 2025
+      </span>
+      <span class="hero-meta-dot"></span>
+      <span class="hero-meta-item">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Last Updated: July 1, 2025
+      </span>
+      <span class="hero-meta-dot"></span>
+      <span class="hero-meta-item">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Applies to All Users
+      </span>
+    </div>
+  </div>
+
+  <!-- ACCEPTANCE BANNER -->
+  <div class="main" style="padding-bottom:0;">
+    <div class="acceptance-banner reveal">
+      <div class="acceptance-icon">ℹ️</div>
+      <div class="acceptance-text">
+        <strong>Your Continued Use Constitutes Acceptance</strong>
+        <p>By accessing, signing into, or otherwise using the GameBill platform — including its web interface, features, billing tools, and analytics — you acknowledge that you have read, understood, and agreed to be legally bound by these Terms of Use in their entirety. If you do not agree with any part of these Terms, you must discontinue use of the platform immediately.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- §1 ACCEPTANCE OF TERMS -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 01</span>
+        <div>
+          <h2 class="clause-title">Acceptance of Terms
+            <span>Agreement by access and use</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>These Terms of Use ("Terms," "Agreement") constitute a legally binding agreement between you ("User," "you," or "your") and the operators of GameBill ("we," "us," "our," or "the Platform"). These Terms govern your access to and use of the GameBill web application, including all associated features, tools, content, analytics, billing systems, data storage, and any related services (collectively, the "Service").</p>
+        <p>By signing into GameBill — whether through email/password authentication or any third-party sign-in provider — you are affirmatively acting to indicate your acceptance of these Terms. <strong>No separate checkbox, toggle, or explicit "I Accept" button is required at sign-in; your act of signing in and using the Service constitutes your full and complete acceptance of this Agreement.</strong> This is a standard and legally recognized form of assent in digital services.</p>
+        <p>If you are signing into or using GameBill on behalf of a business, organization, or other legal entity — such as a gaming arcade, virtual casino, gaming lounge, or any similar enterprise — you represent and warrant that you have the authority to bind that entity to these Terms. In such cases, "you" and "your" refer to both you individually and to that entity.</p>
+        <p>These Terms apply to all users of the Service, including individuals who register companies, generate bills, view analytics, export reports, or access any part of the platform in any capacity. Visitors who browse without signing in may also be subject to relevant portions of these Terms as applicable.</p>
+        <div class="info-box">
+          <span class="i-icon">📋</span>
+          <p>We recommend you save or print a copy of these Terms for your records. These Terms are always accessible from the footer of the GameBill platform. If you have any questions about what you're agreeing to, please contact us before using the Service.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §2 DESCRIPTION OF SERVICE -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 02</span>
+        <div>
+          <h2 class="clause-title">Description of Service
+            <span>What GameBill provides</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>GameBill is a cloud-based game points management, billing, and business analytics platform designed for game arcades, virtual casino, gaming lounges, and similar points-based gaming operations. The Service enables users to:</p>
+        <ul class="item-list">
+          <li><span class="bullet" style="background:#c084fc;"></span>Register and manage multiple company profiles within a single account.</li>
+          <li><span class="bullet" style="background:#00e5ff;"></span>Configure game types and define custom cost rates per point for each game.</li>
+          <li><span class="bullet" style="background:#00f59b;"></span>Generate accurate billing records based on points consumed during gaming sessions.</li>
+          <li><span class="bullet" style="background:#ffb300;"></span>Store all billing records securely in Google Firebase Firestore, a cloud-based database.</li>
+          <li><span class="bullet" style="background:#ff3eb5;"></span>Access a real-time analytics dashboard to view revenue trends, profit/loss summaries, and per-game performance data.</li>
+          <li><span class="bullet" style="background:#4d9fff;"></span>Export detailed billing and financial reports in Excel (.xlsx) format for individual companies or across all companies.</li>
+          <li><span class="bullet" style="background:#b0f000;"></span>Use the platform across multiple devices simultaneously via its Progressive Web App (PWA) interface.</li>
+        </ul>
+        <p>The Service is provided "as is" subject to these Terms. We reserve the right to modify, enhance, restrict, or discontinue any feature of the Service at any time, with or without notice, as further described in Section 16 (Changes to Service and Terms).</p>
+        <p>GameBill is intended solely for lawful business and personal use in connection with game point management. Use of the Service for any purpose outside its intended scope — including but not limited to financial fraud, unauthorized data access, or the generation of false billing records — is strictly prohibited and may result in immediate account termination.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §3 ELIGIBILITY & ACCOUNT REGISTRATION -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 03</span>
+        <div>
+          <h2 class="clause-title">Eligibility &amp; Account Registration
+            <span>Who may use the service</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>To access and use GameBill, you must meet the following eligibility requirements:</p>
+        <ul class="item-list">
+          <li><span class="bullet" style="background:#c084fc;"></span>You must be at least <strong>18 years of age</strong>, or the age of legal majority in your jurisdiction, whichever is greater.</li>
+          <li><span class="bullet" style="background:#00e5ff;"></span>You must have the legal capacity to enter into a binding agreement under the laws of your jurisdiction.</li>
+          <li><span class="bullet" style="background:#00f59b;"></span>You must not have been previously suspended, banned, or removed from the Service for violations of these Terms.</li>
+          <li><span class="bullet" style="background:#ffb300;"></span>Your use of the Service must not violate any applicable local, national, or international laws or regulations.</li>
+        </ul>
+        <p>When you register an account, you agree to provide accurate, complete, and current information. You are solely responsible for maintaining the confidentiality of your login credentials — including your email address, password, and any authentication tokens — and for all activities that occur under your account. You must notify us immediately if you believe your account has been compromised or accessed without authorization.</p>
+        <p>You may not create more than one account per individual or business entity for the purpose of circumventing restrictions, bans, or limitations placed on a prior account. Each account is personal to you and may not be transferred, sold, or shared with any third party without our prior written consent.</p>
+        <p>We reserve the right to reject any registration, deactivate any account, or deny access to the Service at our sole and absolute discretion, including where we reasonably suspect that eligibility requirements are not met or that provided information is inaccurate or fraudulent.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §4 PROHIBITED USES -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 04</span>
+        <div>
+          <h2 class="clause-title">Prohibited Uses
+            <span>What you must never do</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>The following activities are explicitly prohibited on GameBill and constitute material breaches of these Terms. Engaging in any prohibited use may result in immediate account suspension, permanent termination, reporting to law enforcement, and/or legal action. You agree that you will not, directly or indirectly:</p>
+
+        <div class="sub-clause" style="border-color:rgba(255,77,106,0.2); background:rgba(255,77,106,0.04);">
+          <div class="sub-clause-title" style="color:var(--red);">⚠ Illegal Activities</div>
+          <ul class="prohibited-list">
+            <li><span class="x-icon">✕</span>Use the Service for any purpose that is unlawful, fraudulent, deceptive, or in violation of any applicable local, state, national, or international law or regulation.</li>
+            <li><span class="x-icon">✕</span>Generate, store, or transmit false, fabricated, or misleading billing records for the purpose of financial fraud, tax evasion, insurance fraud, or any other dishonest financial scheme.</li>
+            <li><span class="x-icon">✕</span>Use the Service in any manner that could give rise to civil or criminal liability for GameBill or any third party.</li>
+            <li><span class="x-icon">✕</span>Engage in money laundering, financial manipulation, or any activity that violates anti-corruption or anti-bribery laws.</li>
+          </ul>
+        </div>
+
+        <div class="sub-clause" style="border-color:rgba(255,77,106,0.2); background:rgba(255,77,106,0.04); margin-top:10px;">
+          <div class="sub-clause-title" style="color:var(--red);">⚠ Unauthorized Access &amp; Hacking</div>
+          <ul class="prohibited-list">
+            <li><span class="x-icon">✕</span>Attempt to gain unauthorized access to any part of the Service, its servers, its underlying databases (including Firebase Firestore), or the accounts of other users.</li>
+            <li><span class="x-icon">✕</span>Circumvent, disable, or interfere with any security features, authentication mechanisms, access controls, or encryption used by the Service.</li>
+            <li><span class="x-icon">✕</span>Use any automated tool, bot, script, crawler, scraper, or other automated means to access, extract, or interact with the Service without our express written permission.</li>
+            <li><span class="x-icon">✕</span>Conduct penetration testing, vulnerability scanning, or security research on the Service without prior written authorization from us.</li>
+            <li><span class="x-icon">✕</span>Introduce, transmit, or upload any virus, malware, ransomware, trojan horse, worm, spyware, or any other malicious code or software that could harm the Service, its infrastructure, or its users.</li>
+            <li><span class="x-icon">✕</span>Attempt to reverse-engineer, decompile, disassemble, or otherwise derive the source code of the Service or any of its components.</li>
+          </ul>
+        </div>
+
+        <div class="sub-clause" style="border-color:rgba(255,77,106,0.2); background:rgba(255,77,106,0.04); margin-top:10px;">
+          <div class="sub-clause-title" style="color:var(--red);">⚠ Spam, Harassment &amp; Abuse</div>
+          <ul class="prohibited-list">
+            <li><span class="x-icon">✕</span>Harass, threaten, intimidate, bully, defame, or otherwise harm any user, employee, representative, or partner of GameBill.</li>
+            <li><span class="x-icon">✕</span>Use the Service to send unsolicited communications, spam, phishing messages, or promotional materials to any person.</li>
+            <li><span class="x-icon">✕</span>Upload, store, or transmit content that is hateful, discriminatory, obscene, pornographic, violent, or otherwise offensive or inappropriate.</li>
+            <li><span class="x-icon">✕</span>Create false identities, impersonate any person or entity, or misrepresent your affiliation with any person or organization within the Service.</li>
+          </ul>
+        </div>
+
+        <div class="sub-clause" style="border-color:rgba(255,77,106,0.2); background:rgba(255,77,106,0.04); margin-top:10px;">
+          <div class="sub-clause-title" style="color:var(--red);">⚠ System Integrity &amp; Intended Purpose</div>
+          <ul class="prohibited-list">
+            <li><span class="x-icon">✕</span>Use the Service for any purpose other than legitimate game point management, billing, and related business analytics as intended.</li>
+            <li><span class="x-icon">✕</span>Overburden, disrupt, or impair the Service's servers, network infrastructure, or operational capacity through denial-of-service attacks, excessive API calls, or similar actions.</li>
+            <li><span class="x-icon">✕</span>Access, alter, delete, or tamper with the data of any other user or company within the Service.</li>
+            <li><span class="x-icon">✕</span>Sublicense, resell, rent, lease, or commercially exploit the Service or any portion of it without our express written consent.</li>
+            <li><span class="x-icon">✕</span>Remove, obscure, or alter any copyright notice, trademark, or other proprietary rights notices displayed within the Service.</li>
+          </ul>
+        </div>
+
+        <div class="warning-box">
+          <span class="w-icon">⚡</span>
+          <p>Violation of any prohibited use provision may result in immediate and permanent account termination without refund, civil or criminal legal action, and reporting to appropriate law enforcement authorities. We actively monitor for policy violations and reserve the right to investigate any suspected breach.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §5 USER CONTENT & DATA -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 05</span>
+        <div>
+          <h2 class="clause-title">User Content &amp; Data
+            <span>Your data, your responsibility</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>"User Content" refers to all data, information, configurations, and records that you create, input, upload, or generate through the Service — including company profiles, game type configurations, cost rate settings, billing records, session data, and any other information stored within your GameBill account.</p>
+        <p><strong>You retain full ownership of all User Content you create.</strong> By using the Service, you grant GameBill a limited, non-exclusive, royalty-free, worldwide license to store, process, and display your User Content solely for the purpose of providing the Service to you. We do not claim ownership over your billing data, company information, or any other content you create within the platform.</p>
+        <p>You are solely responsible for the accuracy, legality, and integrity of all User Content you input. GameBill does not verify, audit, or validate the billing data you enter — the platform computes calculations based on the rates and point values you provide, and it is your responsibility to ensure that this data is accurate, complete, and lawful.</p>
+        <p>You represent and warrant that your User Content does not infringe upon the intellectual property rights, privacy rights, or any other rights of any third party, and that you have all necessary rights, licenses, and permissions to input, store, and use such content within the Service.</p>
+        <p>We may access your User Content only to the extent necessary to provide technical support, ensure compliance with these Terms, comply with applicable law, or respond to a valid legal process such as a court order or regulatory demand. We will not access or disclose your business data to third parties for advertising, marketing, or commercial purposes.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §6 INTELLECTUAL PROPERTY RIGHTS -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 06</span>
+        <div>
+          <h2 class="clause-title">Intellectual Property Rights
+            <span>Ownership of the platform and its content</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>The GameBill platform — including but not limited to its source code, software architecture, user interface design, graphics, visual elements, icons, typography, color systems, animations, database schemas, algorithms, analytical models, text content, documentation, and all other creative and technical elements — is the exclusive intellectual property of GameBill and its creators, and is protected by applicable copyright, trademark, trade secret, patent, and other intellectual property laws.</p>
+
+        <div class="highlight-row">
+          <div class="highlight-cell" style="background:rgba(147,51,234,0.1); border-color:rgba(192,132,252,0.3);">
+            <div class="highlight-cell-title" style="color:var(--purpleLight);">© Copyright</div>
+            <p style="color:#ddc0ff;">All original content, design, and code within GameBill is copyrighted. Unauthorized reproduction or distribution is prohibited.</p>
+          </div>
+          <div class="highlight-cell" style="background:rgba(0,229,255,0.08); border-color:rgba(0,229,255,0.25);">
+            <div class="highlight-cell-title" style="color:var(--cyan);">™ Trademarks</div>
+            <p style="color:#b0eeff;">The name "GameBill," its logo, and associated branding are trademarks. Use without permission is not permitted.</p>
+          </div>
+          <div class="highlight-cell" style="background:rgba(0,245,155,0.07); border-color:rgba(0,245,155,0.25);">
+            <div class="highlight-cell-title" style="color:var(--green);">🔒 Trade Secrets</div>
+            <p style="color:#b0f0d8;">Platform logic, billing algorithms, and data structures constitute proprietary trade secrets protected by law.</p>
+          </div>
+        </div>
+
+        <p><strong>Limited License to Users.</strong> Subject to your compliance with these Terms, we grant you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to access and use the Service solely for its intended purpose — managing game points, billing, and analytics for your own business operations. This license does not include any right to: copy, reproduce, or distribute any portion of the Service; modify, adapt, translate, or create derivative works based on the Service; reverse-engineer, decompile, or disassemble any part of the platform; or use the Service to develop a competing or similar product.</p>
+        <p><strong>Feedback and Suggestions.</strong> If you provide us with any feedback, suggestions, ideas, bug reports, or recommendations regarding the Service ("Feedback"), you hereby grant us an irrevocable, perpetual, worldwide, royalty-free license to use, incorporate, and exploit such Feedback in any manner we deem fit, without any obligation of compensation or attribution to you.</p>
+        <p>Any unauthorized use of GameBill's intellectual property is a serious violation of these Terms and applicable law and may result in immediate legal action, including injunctive relief, damages claims, and criminal prosecution where applicable.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §7 BILLING DATA ACCURACY & FINANCIAL DISCLAIMER -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 07</span>
+        <div>
+          <h2 class="clause-title">Billing Data Accuracy &amp; Financial Disclaimer
+            <span>Your responsibility for data accuracy</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>GameBill is a tool designed to assist you in managing and recording game session billing based on point values and rates that you configure. The platform performs mathematical computations according to the data you enter. <strong>The accuracy of all billing records, financial summaries, profit and loss calculations, and exported reports depends entirely on the accuracy of the data you input.</strong></p>
+        <p>GameBill does not function as a licensed accounting software, financial advisor, auditing tool, or tax preparation system. Reports, revenue figures, and financial data generated by GameBill are provided for operational management purposes only and should not be relied upon as the sole basis for tax filings, regulatory submissions, investor reporting, loan applications, or any formal financial or legal determination.</p>
+        <p>You are solely responsible for:</p>
+        <ul class="item-list">
+          <li><span class="bullet" style="background:#ffb300;"></span>Verifying the accuracy of all cost rates configured within your account.</li>
+          <li><span class="bullet" style="background:#ffb300;"></span>Ensuring that point values entered during billing sessions correctly reflect actual gameplay.</li>
+          <li><span class="bullet" style="background:#ffb300;"></span>Reviewing generated bills and reports before using them for any official or financial purpose.</li>
+          <li><span class="bullet" style="background:#ffb300;"></span>Maintaining your own independent financial records as required by your applicable tax and regulatory obligations.</li>
+          <li><span class="bullet" style="background:#ffb300;"></span>Consulting with a qualified accountant or financial professional for formal financial reporting needs.</li>
+        </ul>
+        <p>GameBill bears no liability for financial decisions, tax obligations, regulatory penalties, or commercial losses arising from reliance on data generated by the platform.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §8 CLOUD STORAGE & DATA SECURITY -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 08</span>
+        <div>
+          <h2 class="clause-title">Cloud Storage &amp; Data Security
+            <span>Firebase Firestore and your data</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>GameBill stores your billing data, company configurations, and session records in Google Firebase Firestore, a globally distributed, enterprise-grade cloud database service provided by Google LLC. By using the Service, you acknowledge and agree that your data will be stored and processed using Firebase infrastructure, which is subject to <a href="https://firebase.google.com/terms" target="_blank" rel="noopener">Google's Firebase Terms of Service</a> and <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</p>
+        <p>We implement industry-standard security measures to protect your data, including Firebase Authentication for access control, Firestore Security Rules to enforce user-level data isolation, HTTPS/TLS encryption for all data in transit, and role-based access controls. However, <strong>no method of electronic storage or transmission is 100% secure</strong>, and we cannot guarantee absolute data security against all possible threats.</p>
+        <p>In the event of a data breach that affects your account, we will take reasonable steps to investigate, contain, and remediate the breach, and notify you as required by applicable law. You are responsible for maintaining the security of your login credentials and for any unauthorized access that results from your failure to do so.</p>
+        <p>We are not responsible for data loss caused by events beyond our reasonable control, including Google Firebase service outages, natural disasters, cyberattacks that compromise Google's infrastructure, or your own deletion of data. We strongly encourage you to regularly export your data using GameBill's Excel report export feature as an additional backup measure.</p>
+        <div class="info-box">
+          <span class="i-icon">🛡️</span>
+          <p>Your billing data stored in Firestore is isolated to your account. Firestore Security Rules ensure that no other user can read or modify your data. GameBill staff access to user data is strictly limited and governed by internal access control policies.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §9 LIMITATION OF LIABILITY & DISCLAIMERS -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 09</span>
+        <div>
+          <h2 class="clause-title">Limitation of Liability &amp; Disclaimers
+            <span>The extent of our legal responsibility</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p><strong>Disclaimer of Warranties.</strong> THE SERVICE IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS WITHOUT ANY WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, GAMEBILL EXPRESSLY DISCLAIMS ALL WARRANTIES, INCLUDING BUT NOT LIMITED TO: IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT; WARRANTIES THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, VIRUS-FREE, OR SECURE; AND WARRANTIES AS TO THE ACCURACY, COMPLETENESS, RELIABILITY, OR CURRENCY OF ANY INFORMATION PROVIDED THROUGH THE SERVICE.</p>
+        <p><strong>Limitation of Liability.</strong> TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, GAMEBILL AND ITS OPERATORS, AFFILIATES, EMPLOYEES, AGENTS, LICENSORS, AND SERVICE PROVIDERS SHALL NOT BE LIABLE FOR ANY:</p>
+        <ul class="item-list">
+          <li><span class="bullet" style="background:var(--red);"></span>Indirect, incidental, special, consequential, or punitive damages of any kind.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Loss of profits, revenue, data, business, goodwill, or anticipated savings.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Damages arising from unauthorized access to or use of our servers or your personal data stored therein.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Damages arising from interruption, suspension, or termination of the Service.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Damages arising from your reliance on any billing data, report, calculation, or analytics provided by the Service.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Damages resulting from errors, inaccuracies, omissions, or any failure of the platform to produce correct results due to incorrect data input by the user.</li>
+        </ul>
+        <p>This limitation applies regardless of the legal theory under which such damages are claimed (contract, tort, strict liability, or otherwise), and even if GameBill has been advised of the possibility of such damages. In jurisdictions that do not allow the exclusion or limitation of incidental or consequential damages, our liability shall be limited to the maximum extent permitted by law.</p>
+        <p><strong>Cap on Liability.</strong> In all circumstances, GameBill's total aggregate liability to you for any claim arising out of or relating to the Service or these Terms shall not exceed the greater of (a) the amount you paid to us for the Service in the twelve (12) months preceding the claim, or (b) one hundred (100) units of your local currency, to the extent permitted by applicable law.</p>
+        <div class="warning-box">
+          <span class="w-icon">⚠️</span>
+          <p>Some jurisdictions do not allow limitations on implied warranties or exclusion of certain types of damages. If you reside in such a jurisdiction, some of the above limitations may not apply to you, but they shall apply to the fullest extent permitted by law in your jurisdiction.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §10 INDEMNIFICATION -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 10</span>
+        <div>
+          <h2 class="clause-title">Indemnification
+            <span>Your obligation to protect us</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>You agree to defend, indemnify, and hold harmless GameBill and its operators, affiliates, officers, directors, employees, contractors, agents, licensors, and service providers from and against any and all claims, liabilities, damages, judgments, awards, losses, costs, expenses, and fees (including reasonable attorneys' fees) arising out of or relating to:</p>
+        <ul class="item-list">
+          <li><span class="bullet" style="background:#c084fc;"></span>Your violation of these Terms or any applicable law or regulation.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>Your use or misuse of the Service, including any data you input, generate, or export.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>Your User Content, including any claim that your content infringes upon the rights of any third party.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>Your violation of any third party's rights, including intellectual property rights, privacy rights, or confidentiality obligations.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>Any fraudulent, deceptive, or harmful conduct by you in connection with the Service.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>Any dispute between you and any third party arising out of or in connection with your use of the Service.</li>
+        </ul>
+        <p>We reserve the right to assume the exclusive defense and control of any matter subject to indemnification by you, in which case you agree to cooperate with us fully in asserting any available defenses and to not settle any such claim without our prior written consent.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §11 TERMINATION & SUSPENSION -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 11</span>
+        <div>
+          <h2 class="clause-title">Termination &amp; Suspension
+            <span>Account bans and service access removal</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>We reserve the right to suspend, restrict, or permanently terminate your account and your access to the Service at any time, with or without prior notice, and without any liability to you, for any reason we deem appropriate in our sole and absolute discretion, including but not limited to the following:</p>
+        <ul class="item-list">
+          <li><span class="bullet" style="background:var(--red);"></span>Violation of any provision of these Terms, our policies, or applicable law.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Engaging in any prohibited activity as described in Section 4.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Submission of fraudulent, false, or misleading information during registration or use of the Service.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Conduct that we reasonably believe poses a risk to the security, integrity, or reputation of the Service or other users.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Receipt of a valid legal order, government mandate, or law enforcement request requiring us to terminate your account.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Prolonged inactivity, at our discretion, following reasonable advance notice where feasible.</li>
+          <li><span class="bullet" style="background:var(--red);"></span>Any other reason we deem necessary to protect the Service, its users, or the public interest.</li>
+        </ul>
+
+        <div class="sub-clause" style="border-color:rgba(255,179,0,0.25); background:rgba(255,179,0,0.05);">
+          <div class="sub-clause-title" style="color:var(--orange);">Suspension vs. Termination</div>
+          <p>A <strong style="color:var(--orange);">suspension</strong> is a temporary restriction of your account access pending investigation of a potential violation. During suspension, you may not access the Service but your data may be retained. A <strong style="color:var(--red);">termination</strong> is a permanent removal of your account. Upon termination, your right to use the Service ends immediately, and we may — at our discretion — delete your data in accordance with our data retention policies and applicable law.</p>
+        </div>
+
+        <p>Upon termination of your account for any reason: (a) your license to use the Service is immediately revoked; (b) you must cease all use of the Service; (c) we may delete or retain your User Content at our discretion and in accordance with applicable law; and (d) any outstanding obligations you have under these Terms shall survive termination.</p>
+        <p><strong>Voluntary Termination.</strong> You may terminate your account at any time by contacting us and requesting account deletion. We will process such requests within a reasonable timeframe and in accordance with applicable data protection laws. Note that some data may be retained for a period after deletion as required by law or for legitimate business purposes.</p>
+        <p>GameBill shall not be liable to you or any third party for any termination or suspension of your account or access to the Service. Termination of your account does not relieve you of any obligations or liabilities incurred prior to termination.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §12 THIRD-PARTY SERVICES -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 12</span>
+        <div>
+          <h2 class="clause-title">Third-Party Services &amp; Dependencies
+            <span>Google Firebase, Chart.js, and other integrations</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>GameBill integrates and depends upon certain third-party services and libraries to deliver its functionality. Your use of GameBill constitutes your acknowledgment of and agreement with the terms governing these third-party services, to the extent they apply to your use. The primary third-party dependencies include:</p>
+        <ul class="item-list">
+          <li><span class="bullet" style="background:#4d9fff;"></span><strong>Google Firebase (Firestore, Authentication):</strong> Provides cloud database storage and user authentication. Governed by <a href="https://firebase.google.com/terms" target="_blank" rel="noopener">Google Firebase Terms of Service</a>.</li>
+          <li><span class="bullet" style="background:#4d9fff;"></span><strong>Google Fonts:</strong> Provides typography (Orbitron, Rajdhani, Exo 2). Governed by Google's standard font API terms.</li>
+          <li><span class="bullet" style="background:#4d9fff;"></span><strong>Chart.js:</strong> Open-source charting library used for analytics visualizations, provided under the MIT License.</li>
+          <li><span class="bullet" style="background:#4d9fff;"></span><strong>SheetJS / xlsx Library:</strong> Used to generate Excel export reports, provided under applicable open-source licensing.</li>
+        </ul>
+        <p>We are not responsible for the availability, reliability, terms, or practices of any third-party service. We do not endorse or make any representations about third-party services. If any third-party service becomes unavailable, changes its terms, or alters its behavior in a way that affects GameBill's functionality, we will not be liable for any resulting disruption to the Service.</p>
+        <p>Links or references within GameBill to third-party websites or resources do not constitute endorsements by us. You access such third-party resources at your own risk and subject to the terms of those third parties.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §13 PRIVACY POLICY REFERENCE -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 13</span>
+        <div>
+          <h2 class="clause-title">Privacy Policy Reference
+            <span>How your personal data is handled</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>Your use of GameBill involves the collection, processing, and storage of certain personal and business data. The manner in which we collect, use, store, share, and protect your information is governed by our <a href="privacy.html"><strong>Privacy Policy</strong></a>, which is incorporated into these Terms by reference and forms an integral part of this Agreement.</p>
+        <p>By agreeing to these Terms, you also acknowledge and agree to the terms of our Privacy Policy. We strongly encourage you to read the Privacy Policy carefully before using the Service. The Privacy Policy explains, among other things:</p>
+        <ul class="item-list">
+          <li><span class="bullet" style="background:#c084fc;"></span>What categories of personal and business data we collect, including account information, billing records, usage data, and device information.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>The legal bases on which we process your data and the purposes for which it is used.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>How your data is stored within Google Firebase Firestore and the security measures we apply.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>Under what circumstances we may share your data with third parties, including legal authorities where required by law.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>Your rights with respect to your personal data, including rights of access, correction, deletion, and data portability.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>How we handle data from users in different regions and jurisdictions, including compliance with applicable data protection regulations.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>Cookie usage and other tracking technologies employed by the Service.</li>
+          <li><span class="bullet" style="background:#c084fc;"></span>How to contact us regarding data privacy concerns, requests, or complaints.</li>
+        </ul>
+        <p>If there is any conflict between these Terms and the Privacy Policy on matters relating to personal data, the Privacy Policy shall take precedence with respect to data privacy matters. You can view the full Privacy Policy at: <a href="privacy.html">privacy.html</a>.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §14 GOVERNING LAW & DISPUTE RESOLUTION -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 14</span>
+        <div>
+          <h2 class="clause-title">Governing Law &amp; Dispute Resolution
+            <span>Jurisdiction, arbitration, and legal proceedings</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p><strong>Governing Law.</strong> These Terms and all matters arising out of or relating to your use of GameBill shall be governed by and construed in accordance with the laws of Nepal, without regard to its conflict of law principles. If you access the Service from a different jurisdiction, you are responsible for compliance with local laws. The application of the United Nations Convention on Contracts for the International Sale of Goods (CISG) is expressly excluded.</p>
+
+        <div class="sub-clause" style="border-color:rgba(0,229,255,0.2); background:rgba(0,229,255,0.04);">
+          <div class="sub-clause-title" style="color:var(--cyan);">Step 1 — Informal Resolution (Mandatory First Step)</div>
+          <p>Before initiating any formal dispute proceeding, you agree to first contact us in good faith and provide a written description of the dispute, the relief sought, and your contact information. We will attempt to resolve the dispute informally within <strong>thirty (30) calendar days</strong> of receiving your notice. This informal resolution process is a mandatory prerequisite to any formal dispute proceeding.</p>
+        </div>
+
+        <div class="sub-clause" style="border-color:rgba(0,229,255,0.2); background:rgba(0,229,255,0.04); margin-top:10px;">
+          <div class="sub-clause-title" style="color:var(--cyan);">Step 2 — Binding Arbitration</div>
+          <p>If the dispute is not resolved informally within thirty (30) days, <strong>both parties agree to resolve the dispute exclusively through binding arbitration</strong> administered under the applicable rules of a mutually agreed arbitration body, or as otherwise required under the laws of Nepal. The arbitration shall be conducted in the English language and shall take place in Kathmandu, Nepal, unless both parties mutually agree otherwise. The decision of the arbitrator shall be final and binding, and judgment upon the arbitrator's award may be entered in any court of competent jurisdiction.</p>
+        </div>
+
+        <div class="sub-clause" style="border-color:rgba(0,229,255,0.2); background:rgba(0,229,255,0.04); margin-top:10px;">
+          <div class="sub-clause-title" style="color:var(--cyan);">Step 3 — Court Proceedings (Where Arbitration Is Unavailable)</div>
+          <p>Where binding arbitration is not legally available or enforceable under applicable law, both parties irrevocably submit to the exclusive jurisdiction of the courts located in Kathmandu, Nepal for the resolution of any dispute. You waive any objection to the laying of venue of any such proceeding in Kathmandu, Nepal.</p>
+        </div>
+
+        <p><strong>Class Action Waiver.</strong> TO THE EXTENT PERMITTED BY APPLICABLE LAW, YOU AGREE THAT ANY DISPUTE RESOLUTION PROCEEDING — WHETHER IN ARBITRATION OR IN COURT — SHALL BE CONDUCTED ONLY ON AN INDIVIDUAL BASIS AND NOT AS A CLASS ACTION, COLLECTIVE ACTION, OR REPRESENTATIVE ACTION. You waive your right to participate in any class action lawsuit or class-wide arbitration against GameBill.</p>
+        <p><strong>Injunctive Relief.</strong> Notwithstanding the arbitration agreement above, either party may seek emergency injunctive or equitable relief from a court of competent jurisdiction to prevent irreparable harm, protect intellectual property rights, or enforce confidentiality obligations, without waiving the right to arbitrate the underlying dispute.</p>
+        <p><strong>Limitation Period.</strong> Any claim or cause of action arising out of or related to your use of the Service or these Terms must be commenced within <strong>one (1) year</strong> after the cause of action accrues, or it shall be permanently barred.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §15 FORCE MAJEURE -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 15</span>
+        <div>
+          <h2 class="clause-title">Force Majeure
+            <span>Events beyond our control</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p>GameBill shall not be liable for any failure or delay in performing its obligations under these Terms if such failure or delay is caused by circumstances beyond our reasonable control, including but not limited to: natural disasters, earthquakes, floods, or severe weather events; acts of war, terrorism, or civil unrest; governmental actions, regulations, or orders; power outages or telecommunications failures; cyberattacks, distributed denial-of-service attacks, or other malicious third-party actions against our infrastructure; outages or disruptions to Google Firebase or other third-party services we depend upon; epidemics, pandemics, or public health emergencies; or any other event constituting force majeure under applicable law.</p>
+        <p>In the event of a force majeure, we will take reasonable steps to resume normal service operations as promptly as practicable and will notify users of significant outages through available communication channels. Force majeure events shall not relieve you of your payment obligations, if any, unless the disruption prevents you from accessing the paid aspects of the Service entirely.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §16 CHANGES TO TERMS & SERVICE -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 16</span>
+        <div>
+          <h2 class="clause-title">Changes to Terms &amp; Service
+            <span>How and when this agreement may be updated</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p><strong>Right to Modify.</strong> We reserve the right to modify, update, revise, or replace any provision of these Terms at any time and for any reason, including to reflect changes in applicable law, new platform features, changes in business practices, or responses to evolving security threats. All modifications are effective immediately upon publication unless a later effective date is specified.</p>
+        <p><strong>How You Will Be Notified.</strong> When we make material changes to these Terms, we will notify you through one or more of the following methods:</p>
+        <ul class="item-list">
+          <li><span class="bullet" style="background:#00f59b;"></span>A prominent notice displayed within the GameBill application interface upon your next login.</li>
+          <li><span class="bullet" style="background:#00f59b;"></span>An email notification sent to the email address associated with your account.</li>
+          <li><span class="bullet" style="background:#00f59b;"></span>An updated "Last Modified" date at the top of this Terms of Use page.</li>
+          <li><span class="bullet" style="background:#00f59b;"></span>An announcement on the GameBill platform's notice area or footer.</li>
+        </ul>
+        <p><strong>Deemed Acceptance.</strong> Your continued use of the Service following the effective date of any modification constitutes your acceptance of the updated Terms in their entirety. If you do not agree with the modified Terms, your sole and exclusive remedy is to stop using the Service and, if applicable, request account deletion. We encourage you to review these Terms periodically.</p>
+        <p><strong>Right to Modify the Service.</strong> In addition to modifying these Terms, we reserve the right to modify, suspend, restrict, or permanently discontinue any feature, functionality, or aspect of the Service at any time, with or without prior notice, and without liability to you. We may add new features, remove existing ones, change pricing, or alter the Service's design, architecture, or integrations at our sole discretion.</p>
+        <div class="info-box">
+          <span class="i-icon">🔔</span>
+          <p>We recommend bookmarking this page and checking it periodically. The most current version of these Terms will always be accessible from the footer of the GameBill application. The "Last Updated" date at the top of this page indicates when the most recent revision was made.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- §17 GENERAL PROVISIONS -->
+    <div class="clause reveal">
+      <div class="clause-header">
+        <span class="clause-number">§ 17</span>
+        <div>
+          <h2 class="clause-title">General Provisions
+            <span>Severability, waiver, and other legal matters</span>
+          </h2>
+        </div>
+      </div>
+      <div class="clause-body">
+        <p><strong>Entire Agreement.</strong> These Terms, together with the Privacy Policy and any other legal notices published by us on the Service, constitute the entire agreement between you and GameBill concerning the Service and supersede all prior and contemporaneous agreements, negotiations, representations, and understandings, whether oral or written, relating to its subject matter.</p>
+        <p><strong>Severability.</strong> If any provision of these Terms is found by a court of competent jurisdiction to be invalid, illegal, or unenforceable under applicable law, that provision shall be modified to the minimum extent necessary to make it enforceable, or severed from these Terms if modification is not possible. The remainder of the Terms shall continue in full force and effect.</p>
+        <p><strong>Waiver.</strong> Our failure to enforce any right or provision of these Terms shall not constitute a waiver of such right or provision. Any waiver of a specific provision must be made in writing and signed by an authorized representative of GameBill to be effective. A waiver on one occasion does not constitute a waiver on any future occasion.</p>
+        <p><strong>Assignment.</strong> You may not assign, transfer, or delegate any of your rights or obligations under these Terms without our prior written consent. We may freely assign, transfer, or delegate our rights and obligations under these Terms — including in connection with a merger, acquisition, reorganization, or sale of assets — without restriction or notice to you, to the extent permitted by applicable law.</p>
+        <p><strong>No Third-Party Beneficiaries.</strong> These Terms are for the benefit of you and GameBill only. Nothing in these Terms shall create or be deemed to create any rights enforceable by any third party.</p>
+        <p><strong>Headings.</strong> Section headings in these Terms are provided for convenience only and shall not affect the interpretation or legal effect of any provision.</p>
+        <p><strong>Language.</strong> These Terms are drafted in the English language, which shall be the governing language for all interpretive purposes. Any translation provided is for convenience only and shall not be legally binding.</p>
+        <p><strong>Contact Information.</strong> If you have any questions, concerns, or complaints regarding these Terms or the Service, please contact us through the GameBill application interface or via the contact information provided within the platform. We will make reasonable efforts to respond to all inquiries within a timely manner.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- CLOSING -->
+    <div class="tos-footer reveal">
+      <p style="font-family:'Orbitron',monospace; font-size:14px; color:var(--purpleLight); margin-bottom:12px; letter-spacing:1px;">GAMEBILL TERMS OF USE</p>
+      <p>These Terms of Use are effective as of <strong>July 1, 2025</strong> and were last updated on <strong>July 1, 2025</strong>. By accessing or using GameBill, you confirm that you are at least 18 years of age, that you have read and understood these Terms, and that you agree to be legally bound by them.</p>
+      <p style="margin-top:12px;">For questions about these Terms, please contact us via the GameBill platform. For data privacy inquiries, refer to our <a href="privacy.html" style="color:var(--cyan); text-decoration:none; border-bottom:1px solid rgba(0,229,255,0.35);">Privacy Policy</a>.</p>
+      <p style="margin-top:16px; font-size:12px; color:var(--border);">© 2025 GameBill. All rights reserved. Unauthorized reproduction or distribution of any portion of this document is prohibited.</p>
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <p>GameBill — Points Manager &amp; Business Analytics</p>
+    <div class="footer-links">
+      <a href="https://gamepointsmanager.github.io/Game/">App</a>
+      <a href="https://gamepointsmanager.github.io/About/">About</a>
+      <a href="https://gamepointsmanager.github.io/Terms-of-Use/">Terms of Use</a>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // Scroll reveal
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.06 });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
