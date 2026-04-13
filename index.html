@@ -1824,7 +1824,7 @@
             </p>
           </div>
           <p style="margin-top:24px;font-size:11px;color:#d8d0f2;letter-spacing:0.5px">Secure cloud-synced access across all devices</p>
-          <div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:10px"><a href="https://gamepointsmanager.github.io/Game/about/" target="_blank" style="font-size:15px;color:#e0daf0;text-decoration:none;font-weight:500" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">About</a><span style="color:#555;font-size:11px">|</span><a href="https://gamepointsmanager.github.io/Game/terms/" target="_blank" style="font-size:15px;color:#e0daf0;text-decoration:none;font-weight:500" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Terms of Use</a></div>
+          <div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:10px"><a href="https://gamepointsmanager.github.io/About/index.html" target="_blank" style="font-size:15px;color:#e0daf0;text-decoration:none;font-weight:500" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">About</a><span style="color:#555;font-size:11px">|</span><a href="https://gamepointsmanager.github.io/Terms-of-Use/" target="_blank" style="font-size:15px;color:#e0daf0;text-decoration:none;font-weight:500" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Terms of Use</a></div>
         </div>
       </div>`;
     }
@@ -5527,16 +5527,53 @@
         balanceCard.onclick = function() {
           document.getElementById('globalDetailModal')?.remove();
           var dov = document.createElement('div'); dov.className = 'modal-overlay'; dov.id = 'globalDetailModal'; dov.style.zIndex = '1001';
-          var rows = tC.map(function(c) {
-            var compDue = c[1].due || 0;
-            var comp = companies.find(function(cc) { return cc._id === c[1].compId; });
-            var compCredit = comp ? getCompanyCreditBalance(comp) : 0;
-            var netDue = compDue - compCredit;
-            var statusColor = netDue > 0 ? '#ef4444' : (netDue < 0 ? '#34d399' : '#6b7280');
-            var statusText = netDue > 0 ? 'Due: $' + netDue.toFixed(2) : (netDue < 0 ? 'Credit: $' + Math.abs(netDue).toFixed(2) : 'Settled');
-            return '<div class="analytics-detail-item"><span style="flex:1;font-weight:600">' + esc(c[0]) + '</span><span style="color:#34d399;font-weight:700">$' + c[1].rev.toFixed(2) + '</span><span style="color:#22d3ee;font-size:11px">' + c[1].pts.toFixed(0) + ' PTS</span><span style="color:' + statusColor + ';font-size:11px;font-weight:600">' + statusText + '</span></div>';
-          }).join('');
-          dov.innerHTML = '<div class="modal fade-in" style="max-width:500px"><div class="modal-header"><h3 class="modal-title">BALANCE BY COMPANY</h3><button class="btn btn-ghost btn-sm" onclick="this.closest(\'.modal-overlay\').remove()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div style="max-height:60vh;overflow-y:auto">' + rows + '</div></div>';
+          
+          var hasCredit = gCredit > 0;
+          var hasOutstanding = gDue > 0;
+          var title = hasCredit && hasOutstanding ? (gCredit > gDue ? 'CREDIT BALANCE' : 'BALANCE DUE') :
+                      hasCredit ? 'CREDIT BALANCE' : hasOutstanding ? 'BALANCE DUE' : 'BALANCE';
+          
+          var creditRows = '';
+          var outstandingRows = '';
+          
+          // Companies with credit
+          if (hasCredit) {
+            var creditComps = tC.filter(function(c) {
+              var comp = companies.find(function(cc) { return cc._id === c[1].compId; });
+              return comp && getCompanyCreditBalance(comp) > 0;
+            }).map(function(c) {
+              var comp = companies.find(function(cc) { return cc._id === c[1].compId; });
+              var compCredit = comp ? getCompanyCreditBalance(comp) : 0;
+              return '<div class="analytics-detail-item"><span style="flex:1;font-weight:600">' + esc(c[0]) + '</span><span style="color:#34d399;font-weight:700">Credit $' + compCredit.toFixed(2) + '</span></div>';
+            }).join('');
+            creditRows = (hasCredit && hasOutstanding ? '<h4 style="font-family:Orbitron,monospace;font-size:11px;color:#34d399;margin:10px 0 6px">COMPANIES WITH CREDIT</h4>' : '') + creditComps;
+          }
+          
+          // Companies with outstanding
+          if (hasOutstanding) {
+            var outstandingComps = tC.filter(function(c) {
+              return c[1].due > 0;
+            }).map(function(c) {
+              return '<div class="analytics-detail-item"><span style="flex:1;font-weight:600">' + esc(c[0]) + '</span><span style="color:#f472b6;font-weight:700">Due $' + c[1].due.toFixed(2) + '</span></div>';
+            }).join('');
+            outstandingRows = (hasCredit && hasOutstanding ? '<h4 style="font-family:Orbitron,monospace;font-size:11px;color:#f472b6;margin:10px 0 6px">COMPANIES WITH OUTSTANDING</h4>' : '') + outstandingComps;
+          }
+          
+          var rows = creditRows + outstandingRows;
+          if (!rows) rows = '<div class="analytics-nodata">All settled</div>';
+          
+          var footer = '';
+          if (hasCredit && hasOutstanding) {
+            footer = '<div style="padding:12px;border-top:1px solid rgba(120,100,200,0.15);font-weight:700;display:flex;gap:16px;justify-content:space-between"><span style="color:#34d399">Credit: $' + gCredit.toFixed(2) + '</span><span style="color:#f472b6">Due: $' + gDue.toFixed(2) + '</span></div>';
+          } else if (hasCredit) {
+            footer = '<div style="padding:12px;border-top:1px solid rgba(120,100,200,0.15);font-weight:700;color:#34d399">Total Credit: $' + gCredit.toFixed(2) + '</div>';
+          } else if (hasOutstanding) {
+            footer = '<div style="padding:12px;border-top:1px solid rgba(120,100,200,0.15);font-weight:700;color:#f472b6">Total Due: $' + gDue.toFixed(2) + '</div>';
+          } else {
+            footer = '<div style="padding:12px;border-top:1px solid rgba(120,100,200,0.15);font-weight:700;color:#34d399">All Settled</div>';
+          }
+          
+          dov.innerHTML = '<div class="modal fade-in" style="max-width:500px"><div class="modal-header"><h3 class="modal-title">' + title + '</h3><button class="btn btn-ghost btn-sm" onclick="this.closest(\'.modal-overlay\').remove()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div style="max-height:60vh;overflow-y:auto">' + rows + '</div>' + footer + '</div>';
           document.body.appendChild(dov); dov.onclick = function(e) { if (e.target === dov) dov.remove(); };
         };
       }
