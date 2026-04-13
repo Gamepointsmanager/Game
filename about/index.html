@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>GameBill – About & How It Works</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #07071a;
+      --bgCard: rgba(22,14,52,0.82);
+      --bgInput: rgba(28,16,58,0.88);
+      --bgHover: rgba(38,22,72,0.88);
+      --purple: #9333ea;
+      --purpleLight: #c084fc;
+      --purpleDark: #2e0a6e;
+      --cyan: #00e5ff;
+      --green: #00f59b;
+      --red: #ff4d6a;
+      --orange: #ffb300;
+      --pink: #ff3eb5;
+      --blue: #4d9fff;
+      --lime: #b0f000;
+      --textPrimary: #ffffff;
+      --textSecondary: #e8d8ff;
+      --textMuted: #c4aaff;
+      --border: rgba(160,100,255,0.45);
+      --borderLight: rgba(180,120,255,0.35);
+      --glass: rgba(22,10,55,0.72);
+      --glassBorder: rgba(180,100,255,0.28);
+      --glassHover: rgba(40,18,80,0.82);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--textPrimary);
+      font-family: 'Rajdhani', 'Exo 2', sans-serif;
+      font-weight: 500;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 15% 50%, rgba(147,51,234,0.22) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 15%, rgba(0,229,255,0.14) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 85%, rgba(255,62,181,0.12) 0%, transparent 40%),
+        radial-gradient(ellipse at 60% 40%, rgba(176,240,0,0.07) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Animated grid background */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(147,51,234,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(147,51,234,0.07) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    #app { position: relative; z-index: 1; }
+
+    h1, h2, h3, h4, .heading { font-family: 'Orbitron', monospace; letter-spacing: 1px; }
+    input, select, textarea, button { font-family: 'Rajdhani', sans-serif; font-weight: 500; }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+
+    @keyframes fadeIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeInLeft { from { opacity:0; transform:translateX(-20px); } to { opacity:1; transform:translateX(0); } }
+    @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
+    @keyframes floatY { 0%,100%{ transform:translateY(0px); } 50%{ transform:translateY(-8px); } }
+    @keyframes glowPulse { 0%,100%{ filter: drop-shadow(0 0 8px rgba(147,51,234,0.6)); } 50%{ filter: drop-shadow(0 0 28px rgba(147,51,234,1)) drop-shadow(0 0 50px rgba(0,229,255,0.5)); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes scanline { 0%{ transform:translateY(-100%); } 100%{ transform:translateY(100vh); } }
+    @keyframes blink { 0%,100%{ opacity:1; } 50%{ opacity:0; } }
+
+    .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+    .fade-in-delay-1 { animation: fadeIn 0.5s 0.1s ease-out both; }
+    .fade-in-delay-2 { animation: fadeIn 0.5s 0.2s ease-out both; }
+    .fade-in-delay-3 { animation: fadeIn 0.5s 0.3s ease-out both; }
+    .fade-in-delay-4 { animation: fadeIn 0.5s 0.4s ease-out both; }
+    .fade-in-delay-5 { animation: fadeIn 0.5s 0.5s ease-out both; }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--glass);
+      border-bottom: 1px solid rgba(180,100,255,0.25);
+      padding: 0 20px;
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(20px) saturate(1.3);
+      -webkit-backdrop-filter: blur(20px) saturate(1.3);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+
+    .header-logo-icon {
+      width: 36px; height: 36px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 18px;
+      box-shadow: 0 0 22px rgba(147,51,234,0.7), 0 0 44px rgba(0,229,255,0.25);
+    }
+
+    .header-logo-text {
+      font-family: 'Orbitron', monospace;
+      font-size: 15px;
+      font-weight: 900;
+      color: var(--purpleLight);
+      letter-spacing: 2px;
+    }
+
+    .header-badge {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: rgba(124,58,237,0.18);
+      border: 1px solid rgba(124,58,237,0.35);
+      color: var(--purpleLight);
+      font-family: 'Orbitron', monospace;
+      letter-spacing: 1px;
+    }
+
+    /* ── SEARCH BAR ── */
+    .search-section {
+      padding: 20px 20px 10px;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .search-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      color: var(--textMuted);
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+    }
+
+    #searchInput {
+      width: 100%;
+      padding: 12px 14px 12px 44px;
+      background: var(--bgInput);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--textPrimary);
+      font-size: 15px;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 500;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    #searchInput::placeholder { color: var(--textMuted); }
+
+    #searchInput:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px rgba(147,51,234,0.25), 0 0 24px rgba(147,51,234,0.18);
+    }
+
+    #searchClear {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      color: var(--textMuted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 6px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+    }
+
+    #searchClear:hover { color: var(--textPrimary); }
+    #searchClear.visible { display: flex; }
+
+    #searchResults {
+      margin-top: 8px;
+      display: none;
+    }
+
+    #searchResults.visible { display: block; }
+
+    .search-result-item {
+      padding: 10px 14px;
+      background: var(--bgCard);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .search-result-item:hover {
+      border-color: var(--purple);
+      background: var(--bgHover);
+    }
+
+    .search-result-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 12px;
+      color: var(--purpleLight);
+      margin-bottom: 3px;
+    }
+
+    .search-result-snippet {
+      font-size: 13px;
+      color: var(--textMuted);
+      line-height: 1.4;
+    }
+
+    .search-no-results {
+      text-align: center;
+      color: var(--textMuted);
+      font-size: 14px;
+      padding: 20px;
+    }
+
+    /* ── MAIN CONTAINER ── */
+    .main { max-width: 900px; margin: 0 auto; padding: 0 20px 60px; }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 60px 20px 40px;
+      position: relative;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-family: 'Orbitron', monospace;
+      letter-spacing: 3px;
+      color: var(--cyan);
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      padding: 6px 16px;
+      border: 1px solid rgba(6,182,212,0.3);
+      border-radius: 20px;
+      background: rgba(6,182,212,0.06);
+    }
+
+    .hero-title {
+      font-size: clamp(32px, 6vw, 58px);
+      font-weight: 900;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #fff 0%, var(--purpleLight) 40%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: glowPulse 4s ease-in-out infinite;
+    }
+
+    .hero-subtitle {
+      font-size: 18px;
+      color: var(--textSecondary);
+      max-width: 600px;
+      margin: 0 auto 32px;
+      line-height: 1.6;
+    }
+
+    .hero-cta-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 11px 22px;
+      font-size: 13px;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      font-family: 'Rajdhani', sans-serif;
+      text-decoration: none;
+    }
+
+    .btn:hover { transform: translateY(-2px); filter: brightness(1.15); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .btn:active { transform: translateY(0); }
+    .btn-purple { background: var(--purple); color: #fff; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--textSecondary);
+    }
+    .btn-outline:hover { border-color: var(--purple); background: rgba(124,58,237,0.1); color: var(--purpleLight); }
+
+    /* ── STATS ROW ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+      margin: 40px 0;
+    }
+
+    .stat-card {
+      background: var(--bgCard);
+      border: 1px solid var(--glassBorder);
+      border-radius: 14px;
+      padding: 20px 16px;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .stat-card:hover { border-color: var(--purple); transform: translateY(-3px); box-shadow: 0 8px 30px rgba(147,51,234,0.25); }
+
+    .stat-value {
+      font-family: 'Orbitron', monospace;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--textMuted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* ── SECTION ── */
+    .section {
+      margin-bottom: 60px;
+      scroll-margin-top: 80px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .section-icon {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .section-subtitle {
+      font-size: 14px;
+      color: var(--textMuted);
+      margin-top: 2px;
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--bgCard);
+      border: 1px solid var(--glassBorder);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(10px);
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+      border-color: rgba(147,51,234,0.55);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 40px rgba(147,51,234,0.14);
+    }
+
+    .card p {
+      color: var(--textSecondary);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .card p + p { margin-top: 12px; }
+
+    /* ── FEATURE GRID ── */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .feature-card {
+      background: var(--bgCard);
+      border: 1px solid var(--glassBorder);
+      border-radius: 16px;
+      padding: 22px;
+      backdrop-filter: blur(10px);
+      transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent-color, var(--purple)), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.35), 0 0 32px rgba(147,51,234,0.18);
+    }
+
+    .feature-card:hover::before { opacity: 1; }
+
+    .feature-card-icon {
+      font-size: 28px;
+      margin-bottom: 12px;
+      animation: floatY 3s ease-in-out infinite;
+    }
+
+    .feature-card-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--textPrimary);
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .feature-card-desc {
+      font-size: 14px;
+      color: var(--textMuted);
+      line-height: 1.6;
+    }
+
+    /* ── HOW IT WORKS STEPS ── */
+    .steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 18px;
+      padding: 20px;
+      background: var(--bgCard);
+      border: 1px solid var(--glassBorder);
+      border-radius: 14px;
+      backdrop-filter: blur(10px);
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .step-item:hover { border-color: rgba(124,58,237,0.3); transform: translateX(4px); }
+
+    .step-number {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Orbitron', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+      box-shadow: 0 4px 18px rgba(147,51,234,0.5), 0 0 30px rgba(0,229,255,0.2);
+    }
+
+    .step-content { flex: 1; }
+
+    .step-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--purpleLight);
+      margin-bottom: 6px;
+    }
+
+    .step-desc {
+      font-size: 14px;
+      color: var(--textMuted);
+      line-height: 1.6;
+    }
+
+    /* ── HIGHLIGHT BANNER ── */
+    .highlight-banner {
+      background: linear-gradient(135deg, rgba(147,51,234,0.22), rgba(0,229,255,0.12));
+      border: 1px solid rgba(147,51,234,0.45);
+      border-radius: 16px;
+      padding: 28px 28px;
+      position: relative;
+      overflow: hidden;
+      margin: 20px 0;
+    }
+
+    .highlight-banner::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba(147,51,234,0.22) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .highlight-banner-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--purpleLight);
+      margin-bottom: 10px;
+    }
+
+    .highlight-banner p {
+      color: var(--textSecondary);
+      font-size: 15px;
+      line-height: 1.7;
+      max-width: 700px;
+    }
+
+    /* ── QUOTE CALLOUT ── */
+    .quote-callout {
+      border-left: 3px solid var(--cyan);
+      padding: 16px 20px;
+      background: rgba(0,229,255,0.08);
+      border-radius: 0 12px 12px 0;
+      font-size: 15px;
+      color: #d0f8ff;
+      font-style: italic;
+      line-height: 1.7;
+      margin: 16px 0;
+    }
+
+    /* ── TAG ROW ── */
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .tag {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      border: 1px solid;
+      white-space: nowrap;
+    }
+
+    .tag-purple { background: rgba(147,51,234,0.25); border-color: rgba(192,132,252,0.6); color: #d8a8ff; }
+    .tag-cyan { background: rgba(0,229,255,0.15); border-color: rgba(0,229,255,0.5); color: #00e5ff; }
+    .tag-green { background: rgba(0,245,155,0.15); border-color: rgba(0,245,155,0.5); color: #00f59b; }
+    .tag-orange { background: rgba(255,179,0,0.15); border-color: rgba(255,179,0,0.5); color: #ffb300; }
+    .tag-pink { background: rgba(255,62,181,0.15); border-color: rgba(255,62,181,0.5); color: #ff3eb5; }
+
+    /* ── TWO COL ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media(max-width: 600px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* ── CHECK LIST ── */
+    .check-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .check-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--textSecondary);
+      line-height: 1.5;
+    }
+
+    .check-list li::before {
+      content: '✓';
+      color: var(--green);
+      font-weight: 700;
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+
+    /* ── FORMULA BLOCK ── */
+    .formula-block {
+      background: rgba(6, 2, 22, 0.85);
+      border: 1px solid rgba(0,229,255,0.3);
+      border-radius: 12px;
+      padding: 18px 20px;
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+      color: #00e5ff;
+      letter-spacing: 1px;
+      margin: 12px 0;
+      line-height: 2;
+      box-shadow: inset 0 0 30px rgba(0,229,255,0.04);
+    }
+
+    .formula-block span.yellow { color: #ffb300; }
+    .formula-block span.green { color: #00f59b; }
+    .formula-block span.red { color: #ff4d6a; }
+    .formula-block span.comment { color: #8888cc; font-size: 11px; letter-spacing: 0.5px; }
+
+    /* ── SECURITY GRID ── */
+    .security-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .security-item {
+      padding: 18px;
+      background: rgba(0,245,155,0.07);
+      border: 1px solid rgba(0,245,155,0.28);
+      border-radius: 14px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .security-item:hover { border-color: rgba(0,245,155,0.6); box-shadow: 0 6px 24px rgba(0,245,155,0.1); }
+
+    .security-item-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 12px;
+      color: #00f59b;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .security-item-desc {
+      font-size: 13px;
+      color: #b8f0d8;
+      line-height: 1.5;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 40px 0;
+    }
+
+    /* ── CTA SECTION ── */
+    .cta-section {
+      text-align: center;
+      padding: 60px 20px;
+      background: linear-gradient(135deg, rgba(147,51,234,0.18), rgba(0,229,255,0.1));
+      border: 1px solid rgba(147,51,234,0.35);
+      border-radius: 20px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(147,51,234,0.12), 0 0 100px rgba(0,229,255,0.06);
+    }
+
+    .cta-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 50%, rgba(147,51,234,0.16) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--textPrimary), var(--purpleLight));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .cta-sub { color: var(--textMuted); font-size: 15px; margin-bottom: 28px; }
+
+    /* ── FOOTER ── */
+    .footer {
+      text-align: center;
+      padding: 24px 20px;
+      color: var(--textMuted);
+      font-size: 13px;
+      border-top: 1px solid var(--glassBorder);
+      margin-top: 40px;
+    }
+
+    .footer a { color: var(--purpleLight); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 10px 20px;
+      overflow-x: auto;
+      border-bottom: 1px solid rgba(180,100,255,0.22);
+      background: rgba(10,4,32,0.55);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 58px;
+      z-index: 98;
+      scrollbar-width: none;
+    }
+
+    .nav-tabs::-webkit-scrollbar { display: none; }
+
+    .nav-tab {
+      padding: 7px 16px;
+      font-size: 12px;
+      font-family: 'Orbitron', monospace;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #b090e0;
+      background: none;
+      white-space: nowrap;
+    }
+
+    .nav-tab:hover { color: #ffffff; border-color: rgba(180,100,255,0.4); background: rgba(147,51,234,0.12); }
+    .nav-tab.active { background: rgba(147,51,234,0.28); border-color: rgba(192,132,252,0.6); color: #d8a8ff; text-shadow: 0 0 12px rgba(192,132,252,0.6); }
+
+    /* ── HIGHLIGHT MATCH ── */
+    .highlight { background: rgba(147,51,234,0.45); border-radius: 3px; padding: 0 2px; color: #fff; }
+
+    /* ── MOBILE ── */
+    @media(max-width: 640px) {
+      .hero { padding: 40px 0 28px; }
+      .hero-title { font-size: 28px; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <a href="index.html" class="header-logo">
+      <div class="header-logo-icon">🎮</div>
+      <span class="header-logo-text">GAMEBILL</span>
+    </a>
+    <span class="header-badge">ABOUT</span>
+  </header>
+
+  <!-- NAV TABS -->
+  <nav class="nav-tabs" id="navTabs">
+    <button class="nav-tab active" onclick="scrollToSection('overview')">Overview</button>
+    <button class="nav-tab" onclick="scrollToSection('how-it-works')">How It Works</button>
+    <button class="nav-tab" onclick="scrollToSection('billing')">Billing Engine</button>
+    <button class="nav-tab" onclick="scrollToSection('analytics')">Analytics</button>
+    <button class="nav-tab" onclick="scrollToSection('reports')">Reports</button>
+    <button class="nav-tab" onclick="scrollToSection('cloud')">Cloud & Security</button>
+    <button class="nav-tab" onclick="scrollToSection('multidevice')">Multi-Device</button>
+    <button class="nav-tab" onclick="scrollToSection('revenue')">Revenue & P&L</button>
+  </nav>
+
+  <!-- SEARCH -->
+  <div class="search-section fade-in">
+    <div class="search-wrapper">
+      <span class="search-icon">
+        <svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </span>
+      <input type="text" id="searchInput" placeholder="Search topics — billing, analytics, security, reports…" autocomplete="off" />
+      <button id="searchClear" onclick="clearSearch()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="searchResults"></div>
+  </div>
+
+  <main class="main">
+
+    <!-- HERO -->
+    <section class="hero fade-in" id="overview">
+      <div class="hero-eyebrow">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        The Smart Game Points Manager
+      </div>
+      <h1 class="hero-title">Stop Counting.<br/>Start Selling.</h1>
+      <p class="hero-subtitle">
+        GameBill is your all-in-one intelligent billing and analytics platform designed specifically for your online casino, game arcades, gaming lounges, and points-based game centers. Forget calculators, forget messy Excel sheets — GameBill does it all, instantly, accurately, and from anywhere.
+      </p>
+      <div class="hero-cta-row fade-in-delay-2">
+        <a href="https://gamepointsmanager.github.io/Game/" class="btn btn-purple">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
+          Launch App
+        </a>
+        <a href="#how-it-works" class="btn btn-outline">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          Learn More
+        </a>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <div class="stats-row fade-in-delay-3">
+      <div class="stat-card">
+        <div class="stat-value" style="color:#b060ff">∞</div>
+        <div class="stat-label">Games Supported</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:#00e5ff">100%</div>
+        <div class="stat-label">Cloud Synced</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:#00f59b">Real‑time</div>
+        <div class="stat-label">Analytics</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:#ffb300">Excel</div>
+        <div class="stat-label">Report Export</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:#ff3eb5">Multi</div>
+        <div class="stat-label">Device Access</div>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- WHAT IS GAMEBILL -->
+    <section class="section" id="what-is">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.3);">🎯</div>
+        <div>
+          <div class="section-title">What Is GameBill?</div>
+          <div class="section-subtitle">The complete solution for game point management & Analytics</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <p>
+          <strong style="color:var(--purpleLight)">GameBill</strong> is a powerful, cloud-connected game billing and business analytics platform built for anyone who runs a points-based gaming operation. It replaces error-prone manual billing, scattered Excel files, and guesswork with a sleek, real-time dashboard that handles everything automatically.
+        </p>
+        <p>
+          Whether you're tracking which players used which games, how many points were consumed, what each session cost, or how your business is performing month over month — GameBill captures, stores, and visualizes it all in one place.
+        </p>
+        <p>
+          Think of it as your dedicated accountant, analyst, and billing clerk — wrapped in a fast, beautiful interface that works on your phone, tablet, or desktop, 24/7, from anywhere in the world.
+        </p>
+      </div>
+
+      <div class="quote-callout">
+        "No need to take out a calculator to calculate your bill — if you use GameBill, the math is done the moment you type the digits. No more manual long Excel sheets. This is your one-stop shop for data, billing, and analytics."
+      </div>
+
+      <div class="tag-row">
+        <span class="tag tag-purple">Game Arcades</span>
+        <span class="tag tag-cyan">Online Casino</span>
+        <span class="tag tag-green">Gaming Lounges</span>
+        <span class="tag tag-orange">Points Centers</span>
+        <span class="tag tag-pink">Multi-location Businesses</span>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="section" id="how-it-works">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(6,182,212,0.1); border:1px solid rgba(6,182,212,0.25);">⚙️</div>
+        <div>
+          <div class="section-title">How It Works</div>
+          <div class="section-subtitle">From setup to billing in minutes</div>
+        </div>
+      </div>
+
+      <div class="steps-list">
+        <div class="step-item fade-in-delay-1">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <div class="step-title">Register Your Company</div>
+            <div class="step-desc">Create a company profile inside GameBill. Give it a name, and toggle it active. You can manage multiple companies from a single account — perfect for business owners who sell to more than one company.</div>
+          </div>
+        </div>
+
+        <div class="step-item fade-in-delay-2">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <div class="step-title">Configure Your Games & Rate Cards</div>
+            <div class="step-desc">Add all the games you offer — any game type, any name. For each game, define a cost rate per point in percentage(%) (e.g., 10% for 100 points). You can set different rates for different games, giving you full pricing flexibility. Change rates anytime and future bills will automatically reflect the new pricing.</div>
+          </div>
+        </div>
+
+        <div class="step-item fade-in-delay-3">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <div class="step-title">Generate a Bill &amp; Copy a Bill</div>
+            <div class="step-desc">When a customer plays, open GameBill, select the company, pick the game(s), and enter the points or amount value. GameBill instantly computes the exact bill amount/point — no manual calculation required. Review, confirm and save the bill with a single tap.</div>
+          </div>
+        </div>
+
+        <div class="step-item fade-in-delay-4">
+          <div class="step-number">4</div>
+          <div class="step-content">
+            <div class="step-title">Bill is Saved to the Cloud</div>
+            <div class="step-desc">Every confirmed bill is automatically saved to Google Firestore — a secure, globally distributed cloud database. You never lose a record. View any past bill from any device, at any time, instantly.</div>
+          </div>
+        </div>
+
+        <div class="step-item fade-in-delay-5">
+          <div class="step-number">5</div>
+          <div class="step-content">
+            <div class="step-title">Analyze & Export Reports</div>
+            <div class="step-desc">Head to the Analytics dashboard to see revenue trends, profit/loss, game-by-game performance, and billing history. When you need a formal record, export a detailed Excel report for a specific company or all companies at once — ready to share with your accountant or team.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BILLING ENGINE -->
+    <section class="section" id="billing">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.25);">🧾</div>
+        <div>
+          <div class="section-title">The Billing Engine</div>
+          <div class="section-subtitle">Precise, automatic, multi-game billing</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <p>
+          GameBill's billing engine is the core of the platform. It's designed to handle real-world game center complexity: multiple games, different rates, plus you can even add an extra fee to your already existing rates from the company settings — all in a single bill.
+        </p>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <h4 style="font-family:'Orbitron',monospace; font-size:13px; color:var(--orange); margin-bottom:12px;">MULTIPLE GAME TYPES</h4>
+          <p>Set up as many game types as your center offers. Each game has its own name and its own cost rate per point. Whether it's at $ 1/pt or at $ 0.50/pt, you define the rules.</p>
+        </div>
+        <div class="card">
+          <h4 style="font-family:'Orbitron',monospace; font-size:13px; color:var(--orange); margin-bottom:12px;">FLEXIBLE RATE CARDS</h4>
+          <p>Update pricing at any time without disrupting historical records. Past bills retain the original rate they were generated at, giving you accurate historical data while always using the current rate for new sessions.</p>
+        </div>
+      </div>
+
+      <div class="highlight-banner" style="margin-top:16px">
+        <div class="highlight-banner-title">💡 How a Bill is Calculated</div>
+        <p>Each bill is generated the moment you enter the points. The system looks up the cost rate for each selected game and multiplies it by the points entered. For multiple games, each game's sub-total is computed separately and summed for the final bill amount.</p>
+      </div>
+
+      <div class="formula-block">
+        <span class="comment">// Bill Calculation Formula</span><br/>
+        <span class="yellow">Bill Amount</span> = <span class="green">Points Used</span> × <span class="cyan">Cost Rate Per Point</span><br/><br/>
+        <span class="comment">// For multi-game sessions:</span><br/>
+        <span class="yellow">Total Bill</span> = Σ ( <span class="green">Pointsᵢ</span> × <span class="cyan">Rateᵢ</span> ) <span class="comment">for each game i</span>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h4 style="font-family:'Orbitron',monospace; font-size:13px; color:var(--purpleLight); margin-bottom:12px;">NO MORE MANUAL MATH</h4>
+        <p>Before GameBill, calculating a bill meant pulling out a calculator, multiplying points by rates, adding up multi-game totals, and then writing or typing it somewhere. One mistake and everything is wrong. With GameBill, <strong style="color:var(--textPrimary)">you enter the points and the bill appears instantly</strong> — correct every time, every session.</p>
+      </div>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section class="section" id="analytics">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(236,72,153,0.1); border:1px solid rgba(236,72,153,0.25);">📊</div>
+        <div>
+          <div class="section-title">Analytics Dashboard</div>
+          <div class="section-subtitle">Your business intelligence, visualized</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <p>GameBill's analytics section transforms your raw billing data into actionable business intelligence. Rather than staring at a wall of numbers, you see beautiful charts and KPI cards that instantly tell you what's working, what's not, and where the money is going.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="feature-card" style="--accent-color:var(--pink)">
+          <div class="feature-card-icon">📈</div>
+          <div class="feature-card-title">Revenue Trends</div>
+          <div class="feature-card-desc">See your daily, weekly, or monthly revenue visualized as charts. Identify peak periods, seasonal trends, and growth patterns at a glance.</div>
+        </div>
+        <div class="feature-card" style="--accent-color:var(--cyan)">
+          <div class="feature-card-icon">🎮</div>
+          <div class="feature-card-title">Game Performance</div>
+          <div class="feature-card-desc">Discover which games are most played and most profitable. Make informed decisions about which games to expand, promote, or retire.</div>
+        </div>
+        <div class="feature-card" style="--accent-color:var(--green)">
+          <div class="feature-card-icon">💰</div>
+          <div class="feature-card-title">Revenue vs. Cost</div>
+          <div class="feature-card-desc">Track total revenue against cost, giving you a clear picture of your margin. Know exactly where each rupee is coming from and going to.</div>
+        </div>
+        <div class="feature-card" style="--accent-color:var(--orange)">
+          <div class="feature-card-icon">🏢</div>
+          <div class="feature-card-title">Per-Company Breakdown</div>
+          <div class="feature-card-desc">If you run multiple companies or locations, compare their performance side-by-side. Identify your most profitable location instantly.</div>
+        </div>
+        <div class="feature-card" style="--accent-color:var(--purple)">
+          <div class="feature-card-icon">🕐</div>
+          <div class="feature-card-title">Session History</div>
+          <div class="feature-card-desc">Browse a complete history of every billing session — searchable, filterable, and always available. Never wonder "what did we bill last Tuesday?" again.</div>
+        </div>
+        <div class="feature-card" style="--accent-color:var(--blue)">
+          <div class="feature-card-icon">📉</div>
+          <div class="feature-card-title">Profit & Loss Summary</div>
+          <div class="feature-card-desc">See whether your business is growing or declining in real time. Profit and loss figures are calculated automatically and displayed clearly.</div>
+        </div>
+      </div>
+
+      <div class="quote-callout">
+        Analytics in GameBill isn't a reporting afterthought — it's a central dashboard that gives owners real intelligence about their business, presented in clean charts without needing any spreadsheet skills.
+      </div>
+    </section>
+
+    <!-- REPORTS -->
+    <section class="section" id="reports">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(132,204,22,0.1); border:1px solid rgba(132,204,22,0.25);">📋</div>
+        <div>
+          <div class="section-title">Excel Report Generation</div>
+          <div class="section-subtitle">Detailed, exportable records on demand</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <h4 style="font-family:'Orbitron',monospace; font-size:13px; color:var(--lime); margin-bottom:12px;">COMPANY-SPECIFIC REPORT</h4>
+          <p>Generate a comprehensive Excel report for any single company. Get every bill ever raised, broken down by date, game, points, rate, and amount — all in a clean spreadsheet you can share with your team or accountant.</p>
+        </div>
+        <div class="card">
+          <h4 style="font-family:'Orbitron',monospace; font-size:13px; color:var(--lime); margin-bottom:12px;">ALL-COMPANY REPORT</h4>
+          <p>Generate a combined report across all your companies simultaneously. Perfect for business owners selling to multiple companies who need a single unified view of their entire operation's performance.</p>
+        </div>
+      </div>
+
+      <div class="highlight-banner" style="margin-top:16px">
+        <div class="highlight-banner-title">📁 Why Excel Reports Matter</div>
+        <p>Excel reports from GameBill give owners, managers, and accountants a structured, professional document they can archive, share with tax advisors, use for audits, or analyze further. No more copying numbers from a screen into a spreadsheet manually — GameBill exports a beautifully formatted sheet in one click, including totals, per-game breakdowns, and date ranges.</p>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <ul class="check-list">
+          <li>Full billing history with dates, times, games, and amounts</li>
+          <li>Per-game subtotals and point consumption summaries</li>
+          <li>Revenue, cost, and profit/loss totals per period</li>
+          <li>Filter by company, date range, or game type</li>
+          <li>Instantly downloadable — no waiting, no email</li>
+          <li>Share with accountants, partners, or stakeholders</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- CLOUD & SECURITY -->
+    <section class="section" id="cloud">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25);">🔐</div>
+        <div>
+          <div class="section-title">Cloud Storage & Security</div>
+          <div class="section-subtitle">Your data, safe and always accessible</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <p>GameBill uses <strong style="color:var(--green)">Google Firebase Firestore</strong> — one of the world's most trusted, enterprise-grade cloud database platforms — to store all your billing data. Every bill you generate is instantly and automatically saved to the cloud. You don't have to "remember to save" or worry about losing data when you close the app.</p>
+        <p>Because bills are stored in the cloud and not just on your device, you can view any past bill from any device, at any time — even if your original device is lost, replaced, or switched off.</p>
+      </div>
+
+      <div class="security-grid">
+        <div class="security-item">
+          <div class="security-item-title">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Firebase Firestore
+          </div>
+          <div class="security-item-desc">Backed by Google's infrastructure. Firestore is used by millions of apps worldwide and offers 99.999% uptime guarantees.</div>
+        </div>
+        <div class="security-item">
+          <div class="security-item-title">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Authentication
+          </div>
+          <div class="security-item-desc">Firebase Authentication ensures only authorized users can access your company's data. Your bills belong to you, and only you.</div>
+        </div>
+        <div class="security-item">
+          <div class="security-item-title">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+            Security Rules
+          </div>
+          <div class="security-item-desc">Firestore Security Rules enforce that users can only read and write their own data — built-in isolation at the database level.</div>
+        </div>
+        <div class="security-item">
+          <div class="security-item-title">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            Encrypted Transit
+          </div>
+          <div class="security-item-desc">All data between your device and Firestore is encrypted in transit over HTTPS/TLS — impossible to intercept on the network.</div>
+        </div>
+        <div class="security-item">
+          <div class="security-item-title">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+            Auto Sync
+          </div>
+          <div class="security-item-desc">Data is synced automatically in real time. A bill saved on one device appears instantly on all other connected devices — no manual sync needed.</div>
+        </div>
+        <div class="security-item">
+          <div class="security-item-title">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Persistent History
+          </div>
+          <div class="security-item-desc">Every bill is permanently stored. There's no expiry. Access bills from a year ago just as easily as bills from today.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MULTI DEVICE -->
+    <section class="section" id="multidevice">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.25);">📱</div>
+        <div>
+          <div class="section-title">Multi-Device Operation</div>
+          <div class="section-subtitle">One account. Every screen.</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <p>GameBill is a Progressive Web App (PWA) — meaning it works perfectly in any modern browser on any device. Install it on your phone, open it on a tablet at the counter, manage it from a laptop in your office. It's all the same app, the same data, in real time.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="feature-card" style="--accent-color:var(--blue)">
+          <div class="feature-card-icon">📱</div>
+          <div class="feature-card-title">Phone</div>
+          <div class="feature-card-desc">Create bills on the floor from your phone. The interface is fully responsive and touch-optimized for fast one-handed operation.</div>
+        </div>
+        <div class="feature-card" style="--accent-color:var(--blue)">
+          <div class="feature-card-icon">💻</div>
+          <div class="feature-card-title">Laptop / Desktop</div>
+          <div class="feature-card-desc">Manage your companies, review analytics, and generate reports from a desktop browser. Bigger screens give you more at a glance.</div>
+        </div>
+        <div class="feature-card" style="--accent-color:var(--blue)">
+          <div class="feature-card-icon">🖥️</div>
+          <div class="feature-card-title">Shared Counter Device</div>
+          <div class="feature-card-desc">Install GameBill as a PWA on a shared counter tablet or desktop — it works like a native app with offline caching for uninterrupted service.</div>
+        </div>
+      </div>
+
+      <div class="highlight-banner" style="margin-top:16px">
+        <div class="highlight-banner-title">🔄 Real-Time Sync Across Devices</div>
+        <p>When a bill is created on one device, it appears on all others within seconds — thanks to Firestore's real-time listeners. This means your manager can be viewing analytics on a laptop while your counter staff is generating bills on a phone, and both are always seeing the same up-to-date data.</p>
+      </div>
+    </section>
+
+    <!-- REVENUE & P&L -->
+    <section class="section" id="revenue">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25);">💹</div>
+        <div>
+          <div class="section-title">Revenue & Profit / Loss</div>
+          <div class="section-subtitle">Know your numbers, grow your business</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <p>Revenue and profit/loss tracking is built directly into GameBill — no separate accounting software needed for basic business health monitoring. The moment bills are generated, revenue is tracked. Configure your cost inputs and GameBill will automatically calculate profit and loss for any time period.</p>
+      </div>
+
+      <div class="formula-block">
+        <span class="comment">// Revenue Calculation</span><br/>
+        <span class="yellow">Total Revenue</span> = Σ Bill Amounts for selected period<br/><br/>
+        <span class="comment">// Profit / Loss</span><br/>
+        <span class="green">Profit</span> = <span class="yellow">Total Revenue</span> − <span class="red">Total Cost</span><br/><br/>
+        <span class="comment">// Profit Margin</span><br/>
+        <span class="cyan">Margin %</span> = ( <span class="green">Profit</span> ÷ <span class="yellow">Revenue</span> ) × 100
+      </div>
+
+      <div class="two-col" style="margin-top:16px">
+        <div class="card">
+          <h4 style="font-family:'Orbitron',monospace; font-size:13px; color:var(--green); margin-bottom:12px;">WHY P&L MATTERS</h4>
+          <p>Profit and loss data helps owners understand not just how much they're earning, but how much they're keeping. A busy business that spends more than it earns is still losing money. GameBill's P&L visibility helps you course-correct before it's too late.</p>
+        </div>
+        <div class="card">
+          <h4 style="font-family:'Orbitron',monospace; font-size:13px; color:var(--green); margin-bottom:12px;">ACTIONABLE INSIGHTS</h4>
+          <p>Compare revenue across games, companies, and time periods. Identify which games produce the most revenue per session, which days are most profitable, and where you should focus your marketing and investment.</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <ul class="check-list">
+          <li>Daily, weekly, and monthly revenue summaries</li>
+          <li>Per-game revenue breakdown — see which games earn the most</li>
+          <li>Automatic profit calculation when cost data is configured</li>
+          <li>Trend charts showing growth or decline over time</li>
+          <li>Compare performance across multiple companies</li>
+          <li>Export P&L data directly to Excel for accounting use</li>
+        </ul>
+      </div>
+    </section>
+
+    <hr class="divider" />
+
+    <!-- WHY GAMEBILL OVER MANUAL -->
+    <section class="section" id="why">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.25);">⚡</div>
+        <div>
+          <div class="section-title">Why GameBill Over Manual Methods?</div>
+          <div class="section-subtitle">The old way vs. the smart way</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card" style="border-color:rgba(239,68,68,0.2)">
+          <h4 style="font-family:'Orbitron',monospace; font-size:13px; color:var(--red); margin-bottom:14px;">❌ THE OLD WAY</h4>
+          <ul class="check-list" style="--before-color:var(--red)">
+            <li style="--check-color:var(--red)">Take out a calculator for every bill</li>
+            <li>Manually update Excel sheets with each transaction</li>
+            <li>Risk of calculation errors and transcription mistakes</li>
+            <li>Billing data stored only on one device — lose the device, lose the data</li>
+            <li>No real-time business visibility</li>
+            <li>Hours spent compiling monthly reports manually</li>
+            <li>Can't access data while away from the desk</li>
+          </ul>
+        </div>
+        <div class="card" style="border-color:rgba(16,185,129,0.2)">
+          <h4 style="font-family:'Orbitron',monospace; font-size:13px; color:var(--green); margin-bottom:14px;">✅ THE GAMEBILL WAY</h4>
+          <ul class="check-list">
+            <li>Instant automatic bill calculation — no calculator needed</li>
+            <li>All data saved to cloud automatically — zero manual entry</li>
+            <li>Zero calculation errors — math is always right</li>
+            <li>Data is in the cloud — access from any device, anytime</li>
+            <li>Live analytics dashboard always available</li>
+            <li>One-click Excel export — professional reports in seconds</li>
+            <li>Works on your phone, tablet, or desktop from anywhere</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta-section">
+      <div class="cta-title">Ready to Transform Your Game Center?</div>
+      <div class="cta-sub">Join the smarter way to manage points, billing, and business analytics. No setup fee. No calculator required.</div>
+      <div class="hero-cta-row">
+        <a href="https://gamepointsmanager.github.io/Game/" class="btn btn-purple">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg>
+          Open GameBill
+        </a>
+        <a href="#how-it-works" class="btn btn-outline" onclick="scrollToSection('how-it-works'); return false;">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          How It Works
+        </a>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <p>GameBill — Points Manager &amp; Business Analytics</p>
+    <p style="margin-top:6px; font-size:12px;">Powered by Google Firebase Firestore · Built for Game Centers</p>
+  </footer>
+
+</div>
+
+<script>
+  // ── SEARCH DATA ──
+  const SECTIONS = [
+    {
+      id: 'overview',
+      title: 'Overview — What is GameBill?',
+      keywords: ['what is gamebill', 'overview', 'game billing', 'points manager', 'game center', 'arcade', 'online casino', 'one stop'],
+      snippet: 'GameBill is your all-in-one intelligent billing and analytics platform for game arcades, online casino, and gaming lounges.'
+    },
+    {
+      id: 'how-it-works',
+      title: 'How It Works',
+      keywords: ['how it works', 'setup', 'steps', 'register', 'company', 'get started', 'workflow', 'session', 'record'],
+      snippet: 'From registering your company to generating your first bill — a step-by-step walkthrough of the GameBill workflow.'
+    },
+    {
+      id: 'billing',
+      title: 'Billing Engine — How Bills are Generated',
+      keywords: ['billing', 'bill', 'calculate', 'calculator', 'points', 'rate', 'cost rate', 'formula', 'generate bill', 'multi-game', 'session'],
+      snippet: 'Bills are generated automatically from the points entered and the cost rate per point — no calculator needed, ever.'
+    },
+    {
+      id: 'analytics',
+      title: 'Analytics Dashboard',
+      keywords: ['analytics', 'dashboard', 'charts', 'revenue', 'performance', 'KPI', 'game performance', 'trends', 'business intelligence'],
+      snippet: 'The analytics dashboard gives you real-time charts for revenue trends, game performance, session history, and profit/loss.'
+    },
+    {
+      id: 'reports',
+      title: 'Excel Report Generation',
+      keywords: ['excel', 'report', 'export', 'download', 'spreadsheet', 'accountant', 'billing history', 'all companies'],
+      snippet: 'Generate detailed Excel reports for a single company or all companies — formatted, downloadable, and ready for your accountant.'
+    },
+    {
+      id: 'cloud',
+      title: 'Cloud Storage & Security',
+      keywords: ['cloud', 'firestore', 'firebase', 'security', 'safe', 'secure', 'authentication', 'encryption', 'sync', 'access anywhere'],
+      snippet: 'All bills are stored in Google Firebase Firestore — secure, encrypted, and accessible from any device at any time.'
+    },
+    {
+      id: 'multidevice',
+      title: 'Multi-Device Operation',
+      keywords: ['multi device', 'multiple devices', 'phone', 'tablet', 'desktop', 'laptop', 'pwa', 'progressive web app', 'sync', 'real time'],
+      snippet: 'Use GameBill on any device — phone, tablet, or desktop. Data syncs in real time across all connected devices.'
+    },
+    {
+      id: 'revenue',
+      title: 'Revenue & Profit / Loss Tracking',
+      keywords: ['revenue', 'profit', 'loss', 'profit and loss', 'P&L', 'margin', 'income', 'earnings', 'financial', 'business health'],
+      snippet: 'Track revenue automatically. Compare profit and loss across games, companies, and time periods — no accounting software needed.'
+    },
+    {
+      id: 'why',
+      title: 'Why GameBill Over Manual Methods?',
+      keywords: ['why gamebill', 'vs manual', 'excel replacement', 'no calculator', 'benefits', 'comparison', 'advantages'],
+      snippet: 'See exactly how GameBill replaces the old way — no more manual calculations, scattered Excel files, or device-locked data.'
+    }
+  ];
+
+  const searchInput = document.getElementById('searchInput');
+  const searchResults = document.getElementById('searchResults');
+  const searchClear = document.getElementById('searchClear');
+
+  searchInput.addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    if (q.length === 0) {
+      searchResults.classList.remove('visible');
+      searchClear.classList.remove('visible');
+      return;
+    }
+    searchClear.classList.add('visible');
+    const matches = SECTIONS.filter(s =>
+      s.title.toLowerCase().includes(q) ||
+      s.snippet.toLowerCase().includes(q) ||
+      s.keywords.some(k => k.includes(q))
+    );
+    renderResults(matches, q);
+  });
+
+  function renderResults(matches, q) {
+    searchResults.innerHTML = '';
+    searchResults.classList.add('visible');
+    if (matches.length === 0) {
+      searchResults.innerHTML = `<div class="search-no-results">No results for "<strong>${q}</strong>" — try another keyword</div>`;
+      return;
+    }
+    matches.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'search-result-item';
+      div.innerHTML = `
+        <div class="search-result-title">${highlight(m.title, q)}</div>
+        <div class="search-result-snippet">${highlight(m.snippet, q)}</div>
+      `;
+      div.addEventListener('click', () => {
+        scrollToSection(m.id);
+        clearSearch();
+      });
+      searchResults.appendChild(div);
+    });
+  }
+
+  function highlight(text, q) {
+    if (!q) return text;
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return text.replace(new RegExp(`(${escaped})`, 'gi'), '<span class="highlight">$1</span>');
+  }
+
+  function clearSearch() {
+    searchInput.value = '';
+    searchResults.innerHTML = '';
+    searchResults.classList.remove('visible');
+    searchClear.classList.remove('visible');
+  }
+
+  // ── NAV TABS ──
+  function scrollToSection(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Update active tab
+    document.querySelectorAll('.nav-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${id}'`));
+    });
+  }
+
+  // Update active tab on scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        document.querySelectorAll('.nav-tab').forEach(btn => {
+          btn.classList.toggle('active', btn.getAttribute('onclick')?.includes(`'${id}'`));
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+
+  ['overview','how-it-works','billing','analytics','reports','cloud','multidevice','revenue'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) observer.observe(el);
+  });
+
+  // ── REVEAL ON SCROLL ──
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.style.opacity = '1';
+        entry.target.style.transform = 'translateY(0)';
+        revealObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+
+  document.querySelectorAll('.section, .card, .feature-card, .step-item, .stat-card').forEach(el => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(18px)';
+    el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+    revealObserver.observe(el);
+  });
+
+  // ── CHECK LIST COLOR ──
+  document.querySelectorAll('.check-list li').forEach(li => {
+    const colorVar = li.style.getPropertyValue('--check-color');
+    if (colorVar) {
+      li.style.setProperty('--before-color', colorVar);
+    }
+  });
+</script>
+</body>
+</html>
