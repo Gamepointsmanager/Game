@@ -5492,10 +5492,19 @@
         }
       }
       
-      // Calculate total credit across all companies
+      // Calculate credit and outstanding using SAME logic as individual company analytics
+      // Also update cM with correct per-company credit/due values
       companies.forEach(function(cc) {
-        var compCredit = getCompanyCreditBalance(cc);
-        gCredit += compCredit;
+        var compData = computeAnalyticsData(cc, null, null);
+        var bal = compData.totalBalance;
+        var cn = cc.name || 'Unknown';
+        if (bal < 0) {
+          gCredit += Math.abs(bal);
+          if (cM[cn]) { cM[cn].credit = Math.abs(bal); cM[cn].due = 0; }
+        } else if (bal > 0) {
+          gDue += bal;
+          if (cM[cn]) { cM[cn].due = bal; cM[cn].credit = 0; }
+        }
       });
       
       var tC = Object.entries(cM).sort(function(a, b) { return b[1].rev - a[1].rev; });
@@ -5559,23 +5568,22 @@
           var creditRows = '';
           var outstandingRows = '';
           
-          // Companies with credit — scan ALL companies (not just those in tC)
+          // Companies with credit — from cM.credit set by computeAnalyticsData
           if (hasCredit) {
-            var creditComps = companies.filter(function(cc) {
-              return getCompanyCreditBalance(cc) > 0;
-            }).map(function(cc) {
-              var crBal = getCompanyCreditBalance(cc);
-              return '<div class="analytics-detail-item"><span style="flex:1;font-weight:600;color:var(--text)">' + esc(cc.name||'Unknown') + '</span><span style="color:#34d399;font-weight:700">Credit $' + crBal.toFixed(2) + '</span></div>';
+            var creditComps = tC.filter(function(c) {
+              return (c[1].credit || 0) > 0;
+            }).map(function(c) {
+              return '<div class="analytics-detail-item"><span style="flex:1;font-weight:600;color:var(--text)">' + esc(c[0]) + '</span><span style="color:#34d399;font-weight:700">Credit $' + (c[1].credit||0).toFixed(2) + '</span></div>';
             }).join('');
             creditRows = (hasCredit && hasOutstanding ? '<h4 style="font-family:Orbitron,monospace;font-size:11px;color:#34d399;margin:10px 0 6px">COMPANIES WITH CREDIT BALANCE</h4>' : '') + creditComps;
           }
           
-          // Companies with outstanding — use cM which has correct per-company due totals
+          // Companies with outstanding — from cM.due set by computeAnalyticsData
           if (hasOutstanding) {
-            var outstandingComps = Object.entries(cM).filter(function(e) {
-              return (e[1].due || 0) > 0;
-            }).sort(function(a,b){ return b[1].due - a[1].due; }).map(function(e) {
-              return '<div class="analytics-detail-item"><span style="flex:1;font-weight:600;color:var(--text)">' + esc(e[0]) + '</span><span style="color:#f87171;font-weight:700">Due $' + e[1].due.toFixed(2) + '</span></div>';
+            var outstandingComps = tC.filter(function(c) {
+              return (c[1].due || 0) > 0;
+            }).map(function(c) {
+              return '<div class="analytics-detail-item"><span style="flex:1;font-weight:600;color:var(--text)">' + esc(c[0]) + '</span><span style="color:#f87171;font-weight:700">Due $' + (c[1].due||0).toFixed(2) + '</span></div>';
             }).join('');
             outstandingRows = (hasCredit && hasOutstanding ? '<h4 style="font-family:Orbitron,monospace;font-size:11px;color:#f87171;margin:10px 0 6px">COMPANIES WITH OUTSTANDING BALANCE</h4>' : '') + outstandingComps;
           }
@@ -5673,15 +5681,26 @@
       var tG=Object.entries(gM).sort(function(a,b){return b[1].rev-a[1].rev});
       var tU=Object.values(uM).sort(function(a,b){return b.pts-a.pts});
       var dPts=dLab.map(function(k){return (aggMap[k]||{ld:0,rd:0}).ld+(aggMap[k]||{ld:0,rd:0}).rd});
-      // Track BOTH credit and outstanding separately (don't mix them)
+      // Track BOTH credit and outstanding separately using the SAME logic as individual company analytics
+      // computeAnalyticsData returns totalBalance: negative = credit available, positive = outstanding
       var _globalCreditTotal = 0;
       var _globalOutstandingTotal = 0;
-      companies.forEach(function(cc){ 
-        var cr = getCompanyCreditBalance(cc);
-        if (cr > 0) _globalCreditTotal += cr;
+      companies.forEach(function(cc) {
+        var compData = computeAnalyticsData(cc, fromDate, toDate);
+        var bal = compData.totalBalance;
+        if (bal < 0) {
+          // Negative balance = credit available for this company
+          _globalCreditTotal += Math.abs(bal);
+          // Also add to cM so detail modal can show it
+          var cn2 = cc.name || 'Unknown';
+          if (cM[cn2]) { cM[cn2].credit = Math.abs(bal); }
+        } else if (bal > 0) {
+          // Positive balance = outstanding for this company
+          _globalOutstandingTotal += bal;
+          var cn2 = cc.name || 'Unknown';
+          if (cM[cn2]) { cM[cn2].due = bal; }
+        }
       });
-      // gBal already has outstanding from line 5581, keep it
-      _globalOutstandingTotal = Math.max(0, gBal);
       // Net balance for backwards compatibility
       var gBalNet = _globalOutstandingTotal - _globalCreditTotal;
       return {gL:gL,gR:gR,gRv:gRv,gBal:gBalNet,gCredit:_globalCreditTotal,gOutstanding:_globalOutstandingTotal,gPr:gPr,gCost:gCost,tC:tC,tG:tG,tU:tU,dLab:dLab,dRev:dRev,dPr:dPr,dPts:dPts,bills:filtered.length,totalDol:filtered.reduce(function(s,b){return s+(b.totalDollars||0)},0)};
@@ -5856,19 +5875,17 @@
         var creditRows = '';
         var outstandingRows = '';
         
-        // Build credit companies list — scan ALL companies, not just those in tC
+        // Build credit companies list — from cM.credit set by computeAnalyticsData
         if (hasCredit) {
-          var allCompanies = Object.values(state.companies);
-          var creditCompanies = allCompanies.filter(function(cc){
-            return getCompanyCreditBalance(cc) > 0;
-          }).map(function(cc){
-            var crBal = getCompanyCreditBalance(cc);
-            return '<div class="analytics-detail-item"><span style="flex:1;font-weight:600;color:var(--text)">'+esc(cc.name||'Unknown')+'</span><span style="color:#34d399;font-weight:700">Credit $'+crBal.toFixed(2)+'</span></div>';
+          var creditCompanies = d.tC.filter(function(c){
+            return (c[1].credit||0) > 0;
+          }).map(function(c){
+            return '<div class="analytics-detail-item"><span style="flex:1;font-weight:600;color:var(--text)">'+esc(c[0])+'</span><span style="color:#34d399;font-weight:700">Credit $'+(c[1].credit||0).toFixed(2)+'</span></div>';
           }).join('');
           creditRows = (hasCredit && hasOutstanding ? '<h4 style="font-family:Orbitron,monospace;font-size:11px;color:#34d399;margin:10px 0 6px">COMPANIES WITH CREDIT BALANCE</h4>' : '') + creditCompanies;
         }
         
-        // Build outstanding companies list
+        // Build outstanding companies list — from cM.due set by computeAnalyticsData
         if (hasOutstanding) {
           var outstandingCompanies = d.tC.filter(function(c){
             return (c[1].due||0) > 0;
