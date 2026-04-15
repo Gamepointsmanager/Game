@@ -1559,7 +1559,7 @@
       var c = state.companies[state.selectedCompanyId];
       if(!c) return;
       // Re-render just the bill history HTML using same logic as renderBilling
-      var companyBills = state.bills.filter(function(b){return b.companyId === c._id}).sort(function(a,b){return new Date(b.date)-new Date(a.date)});
+      var companyBills = state.bills.filter(function(b){return b.companyId === c._id}).sort(function(a,b){return toLocalDate(b.date)-toLocalDate(a.date)});
       if(companyBills.length === 0) {
         histEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--textMuted);font-size:13px">No bills yet</div>';
       } else {
@@ -1578,7 +1578,7 @@
           var stCol = b.creditApplied>0?'#60a5fa':b.paymentStatus==='received'?'#34d399':b.paymentStatus==='partial'?'#fbbf24':'#f87171';
           var refNum = b.referenceNumber || '';
           var searchData = (b.items||[]).map(function(i){return (i.gameName||'')+(i.username||'')}).join(' ').toLowerCase() + ' ' + refNum.toLowerCase();
-          return '<div class="bill-hist-wrap" data-date="'+b.date+'" data-billid="'+b._id+'" data-search="'+searchData+'" data-ref="'+refNum.toLowerCase()+'">'
+          return '<div class="bill-hist-wrap" data-date="'+toLocalDate(b.date).toISOString()+'" data-billid="'+b._id+'" data-search="'+searchData+'" data-ref="'+refNum.toLowerCase()+'">'
             +'<div class="bill-history-item" style="cursor:pointer;flex-wrap:wrap" onclick="this.nextElementSibling.classList.toggle(\'hidden\')">'
             +'<div style="flex:1;min-width:0"><div style="font-size:11px;color:var(--textSecondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+dateStr+(refNum?' · <span class="bh-ref-desktop" style="color:#a78bfa;font-family:monospace;font-size:10px">'+esc(refNum)+'</span>':'')+'</div>'
             +'<div style="font-size:10px;color:var(--textMuted)">'+(b.items||[]).length+' items · <span style="color:'+(totalPL>=0?'#34d399':'var(--red)')+'">P/L $'+totalPL.toFixed(2)+'</span></div></div>'
@@ -2137,7 +2137,7 @@
           var fv=document.getElementById('clearRangeFrom').value,tv=document.getElementById('clearRangeTo').value;
           if(!fv||!tv){alert('Select both dates');return}
           var fd=new Date(fv+'T00:00:00');var td=localEndOfDay(tv);
-          var toDelete=state.bills.filter(function(b){var bd=new Date(b.date);return bd>=fd&&bd<=td});
+          var toDelete=state.bills.filter(function(b){var bd=toLocalDate(b.date);return bd>=fd&&bd<=td});
           if(!toDelete.length){alert('No bills in this range');return}
           if(!confirm('Delete '+toDelete.length+' bills across all companies?'))return;
           for(var i=0;i<toDelete.length;i++){if(toDelete[i]._id)await db.doc(userPath()+'/bills/'+toDelete[i]._id).delete()}
@@ -3112,7 +3112,7 @@
       const items = state.billItems;
       const assignedGames = c.assignedGames || [];
       const usernames = c.usernames || [];
-      const companyBills = state.bills.filter(b => b.companyId === c._id).sort((a,b) => new Date(b.date)-new Date(a.date));
+      const companyBills = state.bills.filter(b => b.companyId === c._id).sort((a,b) => toLocalDate(b.date)-toLocalDate(a.date));
       const _histToday = (function(){var n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')})();
       const _histFirstOfMonth = _histToday.slice(0,8) + '01';
 
@@ -3257,10 +3257,10 @@
                 return { ...i, sp, cp, pl: sp-cp };
               });
               const totalPL = plItems.reduce((s,i)=>s+i.pl,0) + (b.extraFeeProfit||0);
-              return `<div class="bill-hist-wrap" data-date="${b.date}" data-billid="${b._id}" data-search="${(b.items||[]).map(i=>(i.gameName||'')+(i.username||'')).join(' ').toLowerCase()} ${(b.referenceNumber||'').toLowerCase()}" data-ref="${(b.referenceNumber||'').toLowerCase()}">
+              return `<div class="bill-hist-wrap" data-date="${toLocalDate(b.date).toISOString()}" data-billid="${b._id}" data-search="${(b.items||[]).map(i=>(i.gameName||'')+(i.username||'')).join(' ').toLowerCase()} ${(b.referenceNumber||'').toLowerCase()}" data-ref="${(b.referenceNumber||'').toLowerCase()}">
               <div class="bill-history-item" style="cursor:pointer;flex-wrap:wrap" onclick="this.nextElementSibling.classList.toggle('hidden')">
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:11px;color:var(--textSecondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(function(){var dd=b.date&&b.date.seconds?new Date(b.date.seconds*1000):new Date(b.date);return dd.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'})+' '+dd.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true})})()}${b.referenceNumber?` · <span class="bh-ref-desktop" style="color:#a78bfa;font-family:monospace;font-size:10px">${esc(b.referenceNumber)}</span>`:''}</div>
+                  <div style="font-size:11px;color:var(--textSecondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(function(){var dd=toLocalDate(b.date);return dd.toLocaleDateString('en-US',{month:'2-digit',day:'2-digit',year:'2-digit'})+' '+dd.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true})})()}${b.referenceNumber?` · <span class="bh-ref-desktop" style="color:#a78bfa;font-family:monospace;font-size:10px">${esc(b.referenceNumber)}</span>`:''}</div>
                   <div style="font-size:10px;color:var(--textMuted)">${(b.items||[]).length} items · <span style="color:${totalPL>=0?'#34d399':'var(--red)'}">P/L $${totalPL.toFixed(2)}</span></div>
                 </div>
                 <div style="text-align:right;flex-shrink:0">
@@ -3413,6 +3413,14 @@
       if (d && d.seconds) return new Date(d.seconds * 1000);
       if (d && d.toDate) return d.toDate();
       return new Date(d);
+    }
+
+    // Reusable helper: accepts any date value (Firestore Timestamp or ISO string)
+    // and returns a valid JS Date object in local time.
+    function toLocalDate(dateValue) {
+      if (!dateValue) return new Date();
+      if (dateValue && dateValue.seconds) return new Date(dateValue.seconds * 1000);
+      return new Date(dateValue);
     }
 
     // Local date string "YYYY-MM-DD" from any bill date value
@@ -3862,7 +3870,7 @@
           var toD = toV ? (toV.length<=10 ? localEndOfDay(toV) : new Date(toV)) : null;
           var compBills = state.bills.filter(function(b) {
             if (b.companyId !== c._id) return false;
-            var bd = new Date(b.date);
+            var bd = toLocalDate(b.date);
             if (fromD && bd < fromD) return false;
             if (toD && bd > toD) return false;
             return true;
@@ -4121,11 +4129,11 @@
         else {
           bills = state.bills.filter(b => {
             if (b.companyId !== comp._id) return false;
-            const bd = new Date(b.date);
+            const bd = toLocalDate(b.date);
             if (fromD && bd < fromD) return false;
             if (toD   && bd > toD)   return false;
             return true;
-          }).sort((a,b) => new Date(a.date) - new Date(b.date));
+          }).sort((a,b) => toLocalDate(a.date) - toLocalDate(b.date));
         }
         if (!bills.length) { alert('No bills found for the selected range.'); return; }
 
@@ -5326,13 +5334,13 @@
         if (isCredit) {
           title = 'CREDIT BALANCE LEDGER';
           var compBillsLedger = state.bills.filter(function(b){ return b.companyId === c._id; })
-            .sort(function(a,b2){ return new Date(a.date)-new Date(b2.date); });
+            .sort(function(a,b2){ return toLocalDate(a.date)-toLocalDate(b2.date); });
           var ledgerEntries = [];
           compBillsLedger.forEach(function(b) {
-            var bd = b.date && b.date.seconds ? new Date(b.date.seconds*1000) : new Date(b.date);
+            var bd = toLocalDate(b.date);
             var billRef = bd.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'});
             (b.extraPayments||[]).forEach(function(ep) {
-              var epDate = ep.date ? new Date(ep.date) : bd;
+              var epDate = ep.date ? toLocalDate(ep.date) : bd;
               ledgerEntries.push({ ts: epDate, type: 'add', amount: ep.amount||0, ref: 'Bill '+billRef, billId: b._id });
             });
             if ((b.creditApplied||0) > 0) {
@@ -5382,8 +5390,8 @@
     function showPaymentDetailModal(c,d){document.getElementById('paymentRecordModal')?.remove();var obs=d.compBills.filter(function(b){return true});var opts=obs.map(function(b){var ex=(b.extraPayments||[]).reduce(function(s,p){return s+(p.amount||0)},0);var rem=(b.balanceDue||0)-ex;return '<option value="'+b._id+'">'+billToDate(b.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' — '+(rem>0?'Bal: $'+rem.toFixed(2):rem<0?'Credit: $'+Math.abs(rem).toFixed(2):'Paid')+'</option>'}).join('');opts = '<option value="__general__">General Company Payment</option>' + opts;
       if(!opts)opts='<option value="__general__">General Company Payment</option>';
       var creditBal=d.totalBalance<0?Math.abs(d.totalBalance):0;
-      var hist=[];d.receivedDetails.forEach(function(r){if(r.amount>0)hist.push({date:r.date,amount:r.amount,status:r.status,extra:false});(r.extraPayments||[]).forEach(function(ep,epi){hist.push({date:ep.date,amount:ep.amount,status:'extra',billDate:r.date,extra:true,billId:r.billId,payIdx:epi})})});hist.sort(function(a,b){return new Date(b.date)-new Date(a.date)});
-      var tg2=function(t,c2){return '<span class="ad-tag" style="background:rgba(0,0,0,0.2);color:'+c2+'">'+t+'</span>'};var hH=hist.length?hist.map(function(h,hi){var st=h.extra?tg2('EXTRA','#22d3ee'):h.status==='received'?tg2('FULL','#34d399'):tg2('PARTIAL','#fbbf24');return '<div class="analytics-detail-item" style="padding:8px 10px;font-size:12px"><span style="color:var(--green);font-weight:700;min-width:55px">$'+h.amount.toFixed(2)+'</span>'+st+(h.billDate?'<span style="color:var(--textMuted);font-size:10px">for '+new Date(h.billDate).toLocaleDateString()+'</span>':'')+'<span style="color:var(--textMuted);font-size:10px;margin-left:auto">'+new Date(h.date).toLocaleDateString()+'</span>'+(h.extra&&h.billId?'<button class="pay-edit-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" data-amt="'+h.amount+'" data-date="'+h.date+'" style="color:#a78bfa;padding:1px 3px;margin-left:4px" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button><button class="pay-del-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" style="color:var(--red);padding:1px 3px" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>':'')+'</div>'}).join(''):'<div style="padding:14px;text-align:center;color:var(--textMuted);font-size:12px">No payments yet</div>';
+      var hist=[];d.receivedDetails.forEach(function(r){if(r.amount>0)hist.push({date:r.date,amount:r.amount,status:r.status,extra:false});(r.extraPayments||[]).forEach(function(ep,epi){hist.push({date:ep.date,amount:ep.amount,status:'extra',billDate:r.date,extra:true,billId:r.billId,payIdx:epi})})});hist.sort(function(a,b){return toLocalDate(b.date)-toLocalDate(a.date)});
+      var tg2=function(t,c2){return '<span class="ad-tag" style="background:rgba(0,0,0,0.2);color:'+c2+'">'+t+'</span>'};var hH=hist.length?hist.map(function(h,hi){var st=h.extra?tg2('EXTRA','#22d3ee'):h.status==='received'?tg2('FULL','#34d399'):tg2('PARTIAL','#fbbf24');return '<div class="analytics-detail-item" style="padding:8px 10px;font-size:12px"><span style="color:var(--green);font-weight:700;min-width:55px">$'+h.amount.toFixed(2)+'</span>'+st+(h.billDate?'<span style="color:var(--textMuted);font-size:10px">for '+toLocalDate(h.billDate).toLocaleDateString()+'</span>':'')+'<span style="color:var(--textMuted);font-size:10px;margin-left:auto">'+toLocalDate(h.date).toLocaleDateString()+'</span>'+(h.extra&&h.billId?'<button class="pay-edit-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" data-amt="'+h.amount+'" data-date="'+h.date+'" style="color:#a78bfa;padding:1px 3px;margin-left:4px" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button><button class="pay-del-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" style="color:var(--red);padding:1px 3px" onclick="event.stopPropagation()"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg></button>':'')+'</div>'}).join(''):'<div style="padding:14px;text-align:center;color:var(--textMuted);font-size:12px">No payments yet</div>';
       var ov=document.createElement('div');ov.className='modal-overlay';ov.id='paymentRecordModal';ov.innerHTML='<div class="modal fade-in" style="max-width:480px"><div class="modal-header"><h3 class="modal-title">PAYMENTS</h3><button class="btn btn-ghost btn-sm" id="closePayM"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div style="display:flex;gap:10px;padding:14px;border-radius:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.12);margin-bottom:14px;flex-wrap:wrap"><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:#22d3ee;text-transform:uppercase;font-weight:700;margin-bottom:2px">Received</div><div style="font-size:18px;font-weight:800;color:#34d399;font-family:Orbitron,monospace">$'+d.totalReceived.toFixed(2)+'</div></div><div style="width:1px;background:rgba(120,100,200,0.12)"></div><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';text-transform:uppercase;font-weight:700;margin-bottom:2px">'+(d.totalBalance<0?'Credit':'Balance')+'</div><div style="font-size:18px;font-weight:800;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';font-family:Orbitron,monospace">'+'$'+Math.abs(d.totalBalance).toFixed(2)+'</div></div>'+(d.totalRedeemedDollars>0?'<div style="width:100%;padding:6px 10px;border-radius:8px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.1);font-size:11px;display:flex;justify-content:space-between"><span style="color:#fbbf24;font-weight:600">Redeemed Value</span><span style="color:#fbbf24;font-weight:700">$'+d.totalRedeemedDollars.toFixed(2)+'</span></div><div style="width:100%;padding:4px 10px;font-size:11px;display:flex;justify-content:space-between"><span style="color:var(--textMuted)">Net Received</span><span style="color:#22d3ee;font-weight:700">$'+(d.totalReceived-d.totalRedeemedDollars).toFixed(2)+'</span></div>':'')+'</div>'+(creditBal>0?'<div style="padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);margin-bottom:14px;display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg><span style="font-size:12px;color:#34d399;font-weight:700">Available Credit: $'+creditBal.toFixed(2)+'</span><span style="font-size:10px;color:var(--textMuted);margin-left:auto">Auto-applied to future bills</span></div>':'')+'<div style="margin-bottom:14px"><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:8px">RECORD PAYMENT</h4><div style="margin-bottom:8px"><span class="label" style="font-size:9px">Bill</span><select class="input styled-select" id="payBill" style="font-size:12px;background-color:var(--bgInput)">'+opts+'</select></div><div style="display:flex;gap:8px"><div style="flex:1"><span class="label" style="font-size:9px">Amount ($)</span><input class="input" type="number" id="payAmt" placeholder="0.00" step="0.01" min="0"/></div><div style="flex:1"><span class="label" style="font-size:9px">Date</span><input class="input" type="date" id="payDt" value="'+new Date().toISOString().slice(0,10)+'"/></div></div><button class="btn btn-green btn-full btn-sm" id="paySave" style="margin-top:10px;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Record</button></div><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:6px">HISTORY</h4><div style="max-height:200px;overflow-y:auto;border-radius:10px;background:rgba(15,12,28,0.4);border:1px solid rgba(120,100,200,0.08)">'+hH+'</div></div>';
       document.body.appendChild(ov);ov.onclick=function(e){if(e.target===ov)ov.remove()};document.getElementById('closePayM').onclick=function(){ov.remove()};
       ov.querySelectorAll('.pay-edit-btn').forEach(function(eb){eb.onclick=function(){
@@ -5419,7 +5427,7 @@
             var payDate = dt || new Date().toISOString().slice(0,10);
             // Get ALL unpaid bills for this company (not just in date range), oldest first
             var allCompBills = state.bills.filter(function(b){ return b.companyId===c._id; })
-              .sort(function(a,b){ return new Date(a.date)-new Date(b.date); });
+              .sort(function(a,b){ return toLocalDate(a.date)-toLocalDate(b.date); });
             var unpaidBills = allCompBills.filter(function(b){ return (b.balanceDue||0) > 0.01; });
 
             if(allCompBills.length===0){
@@ -6104,9 +6112,9 @@
           +'</div></div>';
       }).join('');
       // Convert bill date to local datetime-local format
-      var bd = billToDate(bill.date);
+      var bd = toLocalDate(bill.date);
       // Use local time for the datetime-local input (not UTC)
-      var dateVal=bd.getFullYear()+'-'+String(bd.getMonth()+1).padStart(2,'0')+'-'+String(bd.getDate()).padStart(2,'0')+'T'+String(bd.getHours()).padStart(2,'0')+':'+String(bd.getMinutes()).padStart(2,'0');
+      var dateVal=bd.toISOString().slice(0,16);
       ov.innerHTML='<div class="modal fade-in" style="max-width:520px"><div class="modal-header"><h3 class="modal-title">EDIT BILL</h3><button class="btn btn-ghost btn-sm" id="beClose"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>'
         +'<div style="margin-bottom:10px"><span class="label" style="font-size:9px">Date</span><input class="input" type="datetime-local" id="beDate" value="'+dateVal+'" style="font-size:12px" /></div>'
         +'<div id="beItems">'+items+'</div>'
@@ -6441,7 +6449,7 @@
     // COMPANY SETTINGS (legacy render - kept for backward compat)
     function renderCompanySettings(c) {
       const isActive = c.active !== false;
-      const compBills = state.bills.filter(b => b.companyId === c._id).sort((a,b) => new Date(b.date)-new Date(a.date));
+      const compBills = state.bills.filter(b => b.companyId === c._id).sort((a,b) => toLocalDate(b.date)-toLocalDate(a.date));
       return `
         <div class="card" style="margin-bottom:14px">
           <h4 style="font-family:'Orbitron',monospace;font-size:13px;margin-bottom:12px">COMPANY NAME</h4>
