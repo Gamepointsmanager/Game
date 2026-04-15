@@ -4529,10 +4529,22 @@
       if (state.paymentStatus === 'received') cashReceived = grandTotal;
       else if (state.paymentStatus === 'partial') cashReceived = parseFloat(state.partialAmount) || 0;
       var s = calcSettlement(grandTotal, cashReceived, credit, applyCredit);
+      // ── Commit and validate the datetime-local input before reading ──
+      var _dpEl = document.getElementById('billDatePicker');
+      if (_dpEl) _dpEl.blur(); // force browser to finalise the selected value
+      var _dpRaw = _dpEl ? _dpEl.value : '';
+      var _dpParsed = _dpRaw ? new Date(_dpRaw) : null;
+      if (!_dpParsed || isNaN(_dpParsed.getTime())) {
+        // Fall back to current date/time if input is empty or invalid
+        console.warn('billDatePicker value was empty or invalid ("' + _dpRaw + '"); falling back to current date/time.');
+        _dpParsed = new Date();
+      }
+      const billDateUTC = _dpParsed.toISOString(); // single source of truth, stored as UTC
+
       // Build extraPayments array for overpayment → credit
       var extraPaymentsArr = [];
       if (s.extraPayment > 0) {
-        var epDate = (function(){var dp=document.getElementById('billDatePicker');return dp&&dp.value?new Date(dp.value).toISOString().slice(0,10):new Date().toISOString().slice(0,10)})();
+        var epDate = billDateUTC.slice(0, 10); // YYYY-MM-DD portion of the UTC ISO string
         extraPaymentsArr.push({ amount: s.extraPayment, date: epDate });
       }
       // Derive paymentStatus for the saved bill
@@ -4546,8 +4558,8 @@
       if (savedPayStatus === 'received') { savedPartialAmount = grandTotal; }
       else { savedPartialAmount = s.creditUsed + cashReceived; }
       
-      // Generate reference number
-      const billDate = (function(){var dp=document.getElementById('billDatePicker');return dp&&dp.value?new Date(dp.value).toISOString():new Date().toISOString()})();
+      // Generate reference number (uses billDateUTC — already committed and validated above)
+      const billDate = billDateUTC;
       const companyCode = c.companyCode || await generateCompanyCode();
       const referenceNumber = await generateReferenceNumber(companyCode, billDate);
       
