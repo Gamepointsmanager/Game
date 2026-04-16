@@ -1136,6 +1136,7 @@
       paymentStatus: 'received',
       partialAmount: '',
       recentUsernames: [],
+      billDateOverride: null,
       masterGamesModalOpen: false,
       companyLastUsed: _persisted.companyLastUsed || {},
       analyticsAgg: _persisted.analyticsAgg || 'D',
@@ -1530,23 +1531,12 @@
       if(state.companyTab !== 'billing') { render(); return; }
       var billingEl = document.getElementById('billingContent');
       if(billingEl) {
-        // Preserve the current date picker value before refresh
-        var currentDatePickerValue = null;
-        var datePickerEl = document.getElementById('billDatePicker');
-        if(datePickerEl && datePickerEl.value) {
-          currentDatePickerValue = datePickerEl.value;
-        }
-        
         billingEl.innerHTML = renderBilling(c);
         bindBilling();
-        
-        // Restore the date picker value after refresh
-        if(currentDatePickerValue) {
-          var newDatePickerEl = document.getElementById('billDatePicker');
-          if(newDatePickerEl) {
-            newDatePickerEl.value = currentDatePickerValue;
-          }
-        }
+        // Auto-apply the history date filter after every panel refresh
+        // so newly saved bills (including custom-dated ones) are visible
+        var filterBtn = document.getElementById('billHistFilter');
+        if(filterBtn) filterBtn.click();
       } else {
         render();
       }
@@ -1931,7 +1921,7 @@
     setInterval(updateUtilClock, 10000);
 
     function bindHeader() {
-      $('#headerLogo').onclick = () => { state.view = 'companies'; state.selectedCompanyId = null; render(); };
+      $('#headerLogo').onclick = () => { state.view = 'companies'; state.selectedCompanyId = null; state.billDateOverride = null; render(); };
       $('#btnMasterGames').onclick = () => { state.masterGamesModalOpen = true; render(); };
 
       // Slide-in account panel — inject into body (not in header flow)
@@ -3037,6 +3027,7 @@
           state.paymentStatus = 'received';
           state._paymentStatusChosen = false;
           state.partialAmount = '';
+          state.billDateOverride = null; // Reset custom date when opening a new company
           render();
         };
       });
@@ -3081,9 +3072,9 @@
     }
 
     function bindCompanyScreen() {
-      $('#backBtn').onclick = () => { state.view = 'companies'; state.selectedCompanyId = null; var _f=document.getElementById('fabAddGame'); if(_f)_f.remove(); render(); };
+      $('#backBtn').onclick = () => { state.view = 'companies'; state.selectedCompanyId = null; state.billDateOverride = null; var _f=document.getElementById('fabAddGame'); if(_f)_f.remove(); render(); };
       $$('.tab').forEach(t => {
-        t.onclick = () => { state.companyTab = t.dataset.tab; render(); };
+        t.onclick = () => { if(t.dataset.tab !== 'billing') state.billDateOverride = null; state.companyTab = t.dataset.tab; render(); };
       });
       // Settings gear opens settings modal
       const gear = $('#companySettingsGear');
@@ -3131,9 +3122,10 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:6px;flex-wrap:wrap">
           <span class="label" style="margin:0;font-size:12px">Default Mode</span>
           <div style="display:flex;align-items:center;gap:6px">
-            <div style="position:relative;display:inline-flex;align-items:center">
-              <svg id="billDateIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" style="cursor:pointer;flex-shrink:0" onclick="var p=document.getElementById('billDatePicker');if(p.showPicker)p.showPicker();else p.focus()"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <input type="datetime-local" id="billDatePicker" value="${(function(){var n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')+'T'+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')})()}" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;pointer-events:none" />
+            <div style="position:relative;display:inline-flex;align-items:center;gap:4px">
+              <svg id="billDateIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${state.billDateOverride?'#22d3ee':'#a78bfa'}" stroke-width="2" style="cursor:pointer;flex-shrink:0" title="${state.billDateOverride?'Custom date active — click to change':'Set custom bill date'}" onclick="var p=document.getElementById('billDatePicker');if(p.showPicker)p.showPicker();else p.focus()"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              ${state.billDateOverride ? '<span id="billDateOverrideLabel" style="font-size:10px;color:#22d3ee;font-family:Rajdhani,sans-serif;cursor:pointer;white-space:nowrap" title="Click to clear custom date" onclick="state.billDateOverride=null;refreshBillingPanel()">'+(function(){var d=new Date(state.billDateOverride);return String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0")+" "+d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:true})})()+" ×</span>" : ""}
+              <input type="datetime-local" id="billDatePicker" value="${(function(){if(state.billDateOverride){var d=new Date(state.billDateOverride);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T"+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}var n=new Date();return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0")+"T"+String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")})()}" style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;pointer-events:none" />
             </div>
             <div id="convToggle" style="display:inline-flex;align-items:center;gap:0;cursor:pointer;user-select:none">
             <div style="padding:6px 12px;border-radius:6px 0 0 6px;font-family:'Orbitron',monospace;font-size:11px;font-weight:700;line-height:1;
@@ -3498,6 +3490,19 @@
       const c = state.companies[state.selectedCompanyId];
       if (!c) return;
 
+      // Wire date picker: when user picks a custom date, store it in state so it survives panel refreshes
+      var _dp = document.getElementById('billDatePicker');
+      if (_dp) {
+        _dp.onchange = function() {
+          if (this.value) {
+            // Parse as local time (datetime-local values are local, not UTC)
+            state.billDateOverride = new Date(this.value).toISOString();
+            // Refresh panel so the cyan label appears without rebuilding bill items
+            refreshBillingPanel();
+          }
+        };
+      }
+
       $('#convToggle').onclick = () => {
         state.convMode = state.convMode === 'pts2dollar' ? 'dollar2pts' : 'pts2dollar';
         // Sync ALL bill items to new default mode
@@ -3835,12 +3840,8 @@
             state.paymentStatus = 'received';
             state._paymentStatusChosen = false;
             state.partialAmount = '';
-            // Reset date picker to current date/time for next bill
-            var datePickerEl = document.getElementById('billDatePicker');
-            if(datePickerEl) {
-              var now = new Date();
-              datePickerEl.value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'T'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-            }
+            // Clear custom date override after save — next bill defaults to current time
+            state.billDateOverride = null;
             saveBtn.disabled = false;
             saveBtn.innerHTML = origHTML;
             _saveBillInProgress = false;
@@ -3848,6 +3849,12 @@
             setTimeout(() => { try { $('#billSavedMsg')?.classList.add('hidden'); } catch(e){} }, 2000);
             // Refresh billing panel and invalidate analytics cache so all views update
             invalidateAnalyticsCache();
+            // Before refreshing, clear the date filter so the newly saved bill
+            // (which may have a custom date outside the default month range) is visible
+            var _fromEl = document.getElementById('billHistFrom');
+            var _toEl   = document.getElementById('billHistTo');
+            if (_fromEl) _fromEl.value = '';
+            if (_toEl)   _toEl.value   = '';
             refreshBillingPanel();
           } catch(e) {
             console.error('Save bill error:', e);
@@ -3877,10 +3884,14 @@
           const q = ($('#billHistSearch')?.value||'').toLowerCase().trim();
           const from = $('#billHistFrom')?.value;
           const to = $('#billHistTo')?.value;
+          // Parse filter bounds: datetime-local strings are local time, so new Date() treats them as local — correct
           const fromD = from ? new Date(from) : null;
           const toD = to ? (to.length<=10 ? localEndOfDay(to) : new Date(to)) : null;
           $$('.bill-hist-wrap').forEach(el => {
-            const d = new Date(el.dataset.date);
+            // data-date is a UTC ISO string (ends in Z) — parse it as UTC, then compare
+            // fromD/toD are already in local-time milliseconds via new Date(localString)
+            // Both are ms-since-epoch so the comparison is correct regardless of zone
+            const d = new Date(el.dataset.date); // ISO Z string → UTC ms — correct for comparison
             const matchDate = (!fromD || d>=fromD) && (!toD || d<=toD);
             // Support searching by reference number (exact or partial match)
             const refNum = (el.dataset.ref || '').toLowerCase();
@@ -4635,7 +4646,7 @@
       // Build extraPayments array for overpayment → credit
       var extraPaymentsArr = [];
       if (s.extraPayment > 0) {
-        var epDate = (function(){var dp=document.getElementById('billDatePicker');return dp&&dp.value?new Date(dp.value).toISOString().slice(0,10):new Date().toISOString().slice(0,10)})();
+        var epDate = (state.billDateOverride ? new Date(state.billDateOverride) : new Date()).toISOString().slice(0,10);
         extraPaymentsArr.push({ amount: s.extraPayment, date: epDate });
       }
       // Derive paymentStatus for the saved bill
@@ -4650,7 +4661,7 @@
       else { savedPartialAmount = s.creditUsed + cashReceived; }
       
       // Generate reference number
-      const billDate = (function(){var dp=document.getElementById('billDatePicker');return dp&&dp.value?new Date(dp.value).toISOString():new Date().toISOString()})();
+      const billDate = state.billDateOverride || new Date().toISOString();
       const companyCode = c.companyCode || await generateCompanyCode();
       const referenceNumber = await generateReferenceNumber(companyCode, billDate);
       
@@ -6551,7 +6562,7 @@
           for (var d2 of unSnap.docs) await d2.ref.delete();
           await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).delete(); });
           overlay.remove();
-          state.view = 'companies'; state.selectedCompanyId = null; render();
+          state.view = 'companies'; state.selectedCompanyId = null; state.billDateOverride = null; render();
         } catch (e) { alert('Delete failed: ' + e.message); }
       };
 
