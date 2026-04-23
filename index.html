@@ -4221,7 +4221,7 @@
             if(bill.extraPayments && bill.extraPayments.length > 0) {
               var _epTotal = bill.extraPayments.reduce(function(s,p){return s+(p.amount||0)},0);
               if(_epTotal > 0.001) {
-                var _epDate = bill.extraPayments[0].date || new Date().toISOString().slice(0,10);
+                var _epDate = bill.extraPayments[0].date || localDateStr();
                 // Clear legacy bills; returns true credit leftover after all dues settled
                 var _trueCreditLeftover = await applyExtraPaymentToLegacyBills(c, _epTotal, _epDate);
                 // Correct the new bill:
@@ -6016,7 +6016,7 @@
         var poolBadge='<span style="color:#a78bfa;font-size:9px;background:rgba(124,58,237,0.12);padding:1px 5px;border-radius:4px;margin-left:4px">pool $'+h._poolAfter.toFixed(2)+'</span>';
         return '<div class="analytics-detail-item" style="padding:8px 10px;font-size:12px;flex-wrap:wrap;gap:4px"><span style="color:'+amtColor+';font-weight:700;min-width:60px">'+sign+h.amount.toFixed(2)+'</span>'+tag+billRef+poolBadge+'<span style="color:var(--textMuted);font-size:10px;margin-left:auto">'+toLocalDate(h.date).toLocaleDateString()+'</span></div>';
       }).join(''):'<div style="padding:14px;text-align:center;color:var(--textMuted);font-size:12px">No payments yet</div>';
-      var ov=document.createElement('div');ov.className='modal-overlay';ov.id='paymentRecordModal';ov.innerHTML='<div class="modal fade-in" style="max-width:480px"><div class="modal-header"><h3 class="modal-title">PAYMENTS</h3><button class="btn btn-ghost btn-sm" id="closePayM"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div style="display:flex;gap:10px;padding:14px;border-radius:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.12);margin-bottom:14px;flex-wrap:wrap"><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:#22d3ee;text-transform:uppercase;font-weight:700;margin-bottom:2px">Received</div><div style="font-size:18px;font-weight:800;color:#34d399;font-family:Orbitron,monospace">$'+d.totalReceived.toFixed(2)+'</div></div><div style="width:1px;background:rgba(120,100,200,0.12)"></div><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';text-transform:uppercase;font-weight:700;margin-bottom:2px">'+(d.totalBalance<0?'Credit':'Balance')+'</div><div style="font-size:18px;font-weight:800;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';font-family:Orbitron,monospace">'+'$'+Math.abs(d.totalBalance).toFixed(2)+'</div></div>'+(d.totalRedeemedDollars>0?'<div style="width:100%;padding:6px 10px;border-radius:8px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.1);font-size:11px;display:flex;justify-content:space-between"><span style="color:#fbbf24;font-weight:600">Redeemed Value</span><span style="color:#fbbf24;font-weight:700">$'+d.totalRedeemedDollars.toFixed(2)+'</span></div><div style="width:100%;padding:4px 10px;font-size:11px;display:flex;justify-content:space-between"><span style="color:var(--textMuted)">Net Received</span><span style="color:#22d3ee;font-weight:700">$'+(d.totalReceived-d.totalRedeemedDollars).toFixed(2)+'</span></div>':'')+'</div>'+(creditBal>0?'<div style="padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);margin-bottom:14px;display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg><span style="font-size:12px;color:#34d399;font-weight:700">Available Credit: $'+creditBal.toFixed(2)+'</span><span style="font-size:10px;color:var(--textMuted);margin-left:auto">Auto-applied to future bills</span></div>':'')+'<div style="margin-bottom:14px"><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:8px">RECORD PAYMENT</h4><div style="margin-bottom:8px"><span class="label" style="font-size:9px">Bill</span><select class="input styled-select" id="payBill" style="font-size:12px;background-color:var(--bgInput)">'+opts+'</select></div><div style="display:flex;gap:8px"><div style="flex:1"><span class="label" style="font-size:9px">Amount ($)</span><input class="input" type="number" id="payAmt" placeholder="0.00" step="0.01" min="0"/></div><div style="flex:1"><span class="label" style="font-size:9px">Date</span><input class="input" type="date" id="payDt" value="'+new Date().toISOString().slice(0,10)+'"/></div></div><button class="btn btn-green btn-full btn-sm" id="paySave" style="margin-top:10px;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Record</button></div><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:6px">HISTORY</h4><div style="max-height:200px;overflow-y:auto;border-radius:10px;background:rgba(15,12,28,0.4);border:1px solid rgba(120,100,200,0.08)">'+hH+'</div></div>';
+      var ov=document.createElement('div');ov.className='modal-overlay';ov.id='paymentRecordModal';ov.innerHTML='<div class="modal fade-in" style="max-width:480px"><div class="modal-header"><h3 class="modal-title">PAYMENTS</h3><button class="btn btn-ghost btn-sm" id="closePayM"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div style="display:flex;gap:10px;padding:14px;border-radius:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.12);margin-bottom:14px;flex-wrap:wrap"><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:#22d3ee;text-transform:uppercase;font-weight:700;margin-bottom:2px">Received</div><div style="font-size:18px;font-weight:800;color:#34d399;font-family:Orbitron,monospace">$'+d.totalReceived.toFixed(2)+'</div></div><div style="width:1px;background:rgba(120,100,200,0.12)"></div><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';text-transform:uppercase;font-weight:700;margin-bottom:2px">'+(d.totalBalance<0?'Credit':'Balance')+'</div><div style="font-size:18px;font-weight:800;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';font-family:Orbitron,monospace">'+'$'+Math.abs(d.totalBalance).toFixed(2)+'</div></div>'+(d.totalRedeemedDollars>0?'<div style="width:100%;padding:6px 10px;border-radius:8px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.1);font-size:11px;display:flex;justify-content:space-between"><span style="color:#fbbf24;font-weight:600">Redeemed Value</span><span style="color:#fbbf24;font-weight:700">$'+d.totalRedeemedDollars.toFixed(2)+'</span></div><div style="width:100%;padding:4px 10px;font-size:11px;display:flex;justify-content:space-between"><span style="color:var(--textMuted)">Net Received</span><span style="color:#22d3ee;font-weight:700">$'+(d.totalReceived-d.totalRedeemedDollars).toFixed(2)+'</span></div>':'')+'</div>'+(creditBal>0?'<div style="padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);margin-bottom:14px;display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg><span style="font-size:12px;color:#34d399;font-weight:700">Available Credit: $'+creditBal.toFixed(2)+'</span><span style="font-size:10px;color:var(--textMuted);margin-left:auto">Auto-applied to future bills</span></div>':'')+'<div style="margin-bottom:14px"><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:8px">RECORD PAYMENT</h4><div style="margin-bottom:8px"><span class="label" style="font-size:9px">Bill</span><select class="input styled-select" id="payBill" style="font-size:12px;background-color:var(--bgInput)">'+opts+'</select></div><div style="display:flex;gap:8px"><div style="flex:1"><span class="label" style="font-size:9px">Amount ($)</span><input class="input" type="number" id="payAmt" placeholder="0.00" step="0.01" min="0"/></div><div style="flex:1"><span class="label" style="font-size:9px">Date</span><input class="input" type="date" id="payDt" value="'+localDateStr()+'"/></div></div><button class="btn btn-green btn-full btn-sm" id="paySave" style="margin-top:10px;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Record</button></div><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:6px">HISTORY</h4><div style="max-height:200px;overflow-y:auto;border-radius:10px;background:rgba(15,12,28,0.4);border:1px solid rgba(120,100,200,0.08)">'+hH+'</div></div>';
       document.body.appendChild(ov);ov.onclick=function(e){if(e.target===ov)ov.remove()};document.getElementById('closePayM').onclick=function(){ov.remove()};
       ov.querySelectorAll('.pay-edit-btn').forEach(function(eb){eb.onclick=function(){
         var bid=eb.dataset.billid,pidx=parseInt(eb.dataset.payidx),oldAmt=eb.dataset.amt,oldDate=eb.dataset.date;
@@ -6048,7 +6048,7 @@
       document.getElementById('paySave').onclick=async function(){var bid=document.getElementById('payBill').value,amt=parseFloat(document.getElementById('payAmt').value)||0,dt=document.getElementById('payDt').value;if(!bid||amt<=0){alert('Enter an amount');return}
         try{
           if(bid==='__general__'){
-            var payDate = dt || new Date().toISOString().slice(0,10);
+            var payDate = dt || localDateStr();
             // Get ALL unpaid bills for this company (not just in date range), oldest first
             var allCompBills = state.bills.filter(function(b){ return b.companyId===c._id; })
               .sort(function(a,b){ return toLocalDate(a.date)-toLocalDate(b.date); });
@@ -6123,7 +6123,7 @@
             var ref=db.doc(userPath()+'/bills/'+bid);
             var sn=await ref.get(); var bData=sn.data();
             var ep=(bData.extraPayments||[]);
-            var payDate2=dt||new Date().toISOString().slice(0,10);
+            var payDate2=dt||localDateStr();
             ep.push({amount:amt,date:payDate2});
             var curDue = bData.balanceDue||0;
             var newDue2 = parseFloat(Math.max(0, curDue - amt).toFixed(2));
@@ -7958,10 +7958,12 @@
 
     // Default date range: 1st of current month → today
     function empDefaultFrom() {
-      const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10);
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-01';
     }
     function empDefaultTo() {
-      return new Date().toISOString().slice(0,10);
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
     }
     // State for cashier page date range
     if (!state.empDateFrom) state.empDateFrom = empDefaultFrom();
@@ -8139,13 +8141,15 @@
       // getPeriodKey: returns a string key for what period a shift belongs to
       function getPeriodKey(shift) {
         const d = shift.startTime?.toDate ? shift.startTime.toDate() : new Date(shift.startTime);
-        if (type === 'hourly') return d.toISOString().slice(0,10); // group by day for hourly
-        if (type === 'daily')  return d.toISOString().slice(0,10);
+        // Use local date components — toISOString() gives UTC which mis-buckets late-night shifts
+        const localDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+        if (type === 'hourly') return localDate; // group by local day for hourly
+        if (type === 'daily')  return localDate;
         if (type === 'weekly') {
-          // ISO week: Monday-based
+          // ISO week: Monday-based, use local date
           const day = d.getDay() === 0 ? 6 : d.getDay() - 1;
           const mon = new Date(d); mon.setDate(d.getDate() - day); mon.setHours(0,0,0,0);
-          return mon.toISOString().slice(0,10);
+          return mon.getFullYear() + '-' + String(mon.getMonth()+1).padStart(2,'0') + '-' + String(mon.getDate()).padStart(2,'0');
         }
         if (type === 'biweekly') {
           // Bi-week: epoch / 14 days
@@ -8154,7 +8158,7 @@
           return 'bw_' + biWeekNum;
         }
         if (type === 'monthly') return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-        return d.toISOString().slice(0,10);
+        return localDate;
       }
 
       function getPeriodLabel(key, shift) {
@@ -8414,7 +8418,7 @@
             const weekNum = Math.floor((weekStart - monthStart) / (7*24*3600000));
             return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-fn'+Math.floor(weekNum/2);
           }
-          return weekStart.toISOString().slice(0,10);
+          return weekStart.getFullYear()+'-'+String(weekStart.getMonth()+1).padStart(2,'0')+'-'+String(weekStart.getDate()).padStart(2,'0');
         }
         return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
       }
@@ -8451,7 +8455,7 @@
             const fortnightNum = Math.floor(weekNum / 2);
             return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-fn'+fortnightNum;
           }
-          return weekStart.toISOString().slice(0,10);
+          return weekStart.getFullYear()+'-'+String(weekStart.getMonth()+1).padStart(2,'0')+'-'+String(weekStart.getDate()).padStart(2,'0');
         } else { // monthly
           return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
         }
@@ -8586,8 +8590,11 @@
       const snap = await q.get();
       return snap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(s => {
         if (!s.startTime) return false;
+        if (!fromDate && !toDate) return true;
         const t = s.startTime.toDate ? s.startTime.toDate() : new Date(s.startTime);
-        return t >= fromDate && t <= toDate;
+        if (fromDate && t < fromDate) return false;
+        if (toDate && t > toDate) return false;
+        return true;
       });
     }
 
@@ -8716,7 +8723,9 @@
                           : activeCount  >  1 ? activeCount + ' cashiers' : null;
       const activeStartMs = activeShift?.startTime?.toDate ? activeShift.startTime.toDate().getTime() : 0;
 
-      // Total hours & unpaid salary per cashier this month
+      // Total hours & unpaid salary per cashier
+      // "Unpaid" = total ever earned (all shifts) − total ever paid (all payments)
+      // so last month's carry-over is always included.
       let totalHours = 0, totalUnpaid = 0, totalPaid = 0;
       _empCashierList = cashiers; // store for card click access
       const empSummaries = await Promise.all(cashiers.map(async emp => {
@@ -8725,16 +8734,30 @@
         const earned = calcEarnings(emp, ms);
         totalHours += hoursFromMs(ms);
 
-        // Check paid amount this month
+        // Fetch ALL payments ever (no date filter) so carry-over from last month is included
         let payments = [];
         try { payments = await fetchSalaryPayments(emp._id); } catch(e) { console.warn('pay fetch:', e.code); }
+
+        // Total ever paid (all time, not just this range)
+        const allTimePaid = payments
+          .filter(p => p.paidByOwner)
+          .reduce((s, p) => s + (p.amount||0), 0);
+
+        // Payments within current filter window (for "Paid" column display)
         const paidThisRange = payments
           .filter(p => p.paidByOwner && p.paidAt?.toDate && p.paidAt.toDate() >= fromDate && p.paidAt.toDate() <= toDate)
           .reduce((s, p) => s + (p.amount||0), 0);
-        const unpaid = Math.max(0, earned - paidThisRange);
+
+        // Unpaid = all-time earned (within date range for hours shown) minus all-time paid
+        // But we need all-time shifts to compute total ever earned for accurate balance
+        let allTimeShifts = [];
+        try { allTimeShifts = await fetchShifts(null, null, emp._id); } catch(e) { allTimeShifts = empShifts; }
+        const allTimeEarned = calcEarnings(emp, allTimeShifts.reduce((s, sh) => s + (sh.durationMs||0), 0));
+        const unpaid = Math.max(0, allTimeEarned - allTimePaid);
+
         totalUnpaid += unpaid;
         totalPaid += paidThisRange;
-        return { emp, ms, earned, unpaid, paidThisRange };
+        return { emp, ms, earned, unpaid, paidThisRange, allTimeEarned, allTimePaid };
       }));
 
       const dateStr = fromDate.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + toDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
@@ -8874,12 +8897,19 @@
       if (unpaidCard) unpaidCard.onclick = () => {
         const unpaidEmps = _empSummaries.filter(s=>s.unpaid>0);
         if (!unpaidEmps.length) { showStatModal('UNPAID SALARY','<div style="padding:18px;text-align:center;color:#34d399">All cashiers fully paid!</div>'); return; }
-        const rows = unpaidEmps.sort((a,b)=>b.unpaid-a.unpaid).map(({emp, unpaid}) =>
-          '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(120,100,200,0.1)">'
-          +'<div><div style="font-weight:700;font-size:13px">'+esc(emp.name||'')+'</div>'
-          +'<div style="font-size:11px;color:#94a3b8">'+esc(emp.role||'Cashier')+'</div></div>'
-          +'<div style="font-family:Orbitron,monospace;font-size:13px;color:#f87171;font-weight:800">$'+unpaid.toFixed(2)+'</div></div>'
-        ).join('');
+        const rows = unpaidEmps.sort((a,b)=>b.unpaid-a.unpaid).map(({emp, unpaid, allTimeEarned, allTimePaid}) => {
+          const hasCarryOver = allTimePaid > 0 || allTimeEarned !== unpaid;
+          return '<div style="padding:10px 14px;border-bottom:1px solid rgba(120,100,200,0.1)">'
+            +'<div style="display:flex;align-items:center;justify-content:space-between">'
+            +'<div><div style="font-weight:700;font-size:13px">'+esc(emp.name||'')+'</div>'
+            +'<div style="font-size:11px;color:#94a3b8">'+esc(emp.role||'Cashier')+'</div></div>'
+            +'<div style="text-align:right">'
+            +'<div style="font-family:Orbitron,monospace;font-size:13px;color:#f87171;font-weight:800">$'+unpaid.toFixed(2)+'</div>'
+            +(hasCarryOver ? '<div style="font-size:9px;color:var(--textMuted);margin-top:2px">Earned all-time: $'+allTimeEarned.toFixed(2)+' &minus; Paid: $'+allTimePaid.toFixed(2)+'</div>' : '')
+            +'</div>'
+            +'</div>'
+            +'</div>';
+        }).join('');
         showStatModal('UNPAID SALARY', rows);
       };
 
@@ -9311,8 +9341,9 @@
       if (!emp) return;
 
       // Default date range: start of month → today
-      const todayStr = new Date().toISOString().slice(0,10);
-      const monthStartStr = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10);
+      const _now = new Date();
+      const todayStr = _now.getFullYear() + '-' + String(_now.getMonth()+1).padStart(2,'0') + '-' + String(_now.getDate()).padStart(2,'0');
+      const monthStartStr = _now.getFullYear() + '-' + String(_now.getMonth()+1).padStart(2,'0') + '-01';
 
       let modal = document.getElementById('empDetailModal');
       if (modal) modal.remove();
@@ -9348,10 +9379,11 @@
         const body = document.getElementById('empDetailBody');
         body.innerHTML = '<div style="padding:20px;text-align:center;color:var(--textMuted)">Loading…</div>';
 
-        const [shifts, payments, activeShift] = await Promise.all([
+        const [shifts, payments, activeShift, allTimeShifts] = await Promise.all([
           fetchShifts(from, to, emp._id),
           fetchSalaryPayments(emp._id),
           getActiveShift().catch(()=>null),
+          fetchShifts(null, null, emp._id),
         ]);
         const myActiveShift = activeShift && activeShift.employeeId === emp._id ? activeShift : null;
         const liveMs = myActiveShift?.startTime?.toDate ? Date.now() - myActiveShift.startTime.toDate().getTime() : 0;
@@ -9359,6 +9391,12 @@
         const totalMs  = shifts.reduce((s, sh) => s + (sh.durationMs||0), 0) + liveBonusMs;
         const earnings = calcEarnings(emp, totalMs);
         const slLabel  = {hourly:'Hourly',daily:'Daily',weekly:'Weekly',biweekly:'Bi-Weekly',monthly:'Monthly'}[emp.salaryType]||emp.salaryType;
+
+        // All-time unpaid balance (includes carry-over from previous periods)
+        const allTimeMs      = allTimeShifts.reduce((s, sh) => s + (sh.durationMs||0), 0);
+        const allTimeEarned  = calcEarnings(emp, allTimeMs);
+        const allTimePaid    = payments.filter(p => p.paidByOwner).reduce((s, p) => s + (p.amount||0), 0);
+        const totalUnpaidBal = Math.max(0, allTimeEarned - allTimePaid);
 
         body.innerHTML = `
           ${myActiveShift ? `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25);border-radius:10px;margin-bottom:12px">
@@ -9374,9 +9412,16 @@
           </div>` : ''}
           <div class="emp-stat-grid" style="margin-bottom:14px">
             <div class="emp-stat"><div class="es-label">Hours</div><div class="es-value">${hoursFromMs(totalMs).toFixed(1)}h</div></div>
-            <div class="emp-stat"><div class="es-label">Earnings</div><div class="es-value" style="color:#fbbf24" id="detailTotalEarn">$${earnings.toFixed(2)}</div></div>
+            <div class="emp-stat"><div class="es-label">Earnings (Period)</div><div class="es-value" style="color:#fbbf24" id="detailTotalEarn">$${earnings.toFixed(2)}</div></div>
             <div class="emp-stat"><div class="es-label">Shifts</div><div class="es-value">${shifts.length}</div></div>
           </div>
+          ${totalUnpaidBal > 0 ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.22);border-radius:10px;margin-bottom:14px">
+            <div>
+              <div style="font-size:11px;color:#f87171;font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Total Unpaid Balance</div>
+              <div style="font-size:10px;color:var(--textMuted);margin-top:2px">All-time earned $${allTimeEarned.toFixed(2)} &minus; paid $${allTimePaid.toFixed(2)}</div>
+            </div>
+            <div style="font-family:Orbitron,monospace;font-size:16px;font-weight:800;color:#f87171">$${totalUnpaidBal.toFixed(2)}</div>
+          </div>` : `<div style="padding:8px 14px;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.22);border-radius:10px;margin-bottom:14px;font-size:11px;color:#34d399;font-weight:700;text-align:center">✓ Fully Paid — No outstanding balance</div>`}
           <div class="emp-section-title" style="margin-top:0">SALARY PERIODS</div>
           <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px">
             ${(function(){
