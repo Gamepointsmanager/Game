@@ -2703,7 +2703,7 @@
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `points_manager_backup_${new Date().toISOString().slice(0,10)}.json`;
+      a.download = `sweepAdmin_backup_${new Date().toISOString().slice(0,10)}.json`;
       a.click();
     }
 
@@ -10141,56 +10141,155 @@
     // ── Cached cashier salary data for CF (fetched async on CF page open) ──
     var _cfSalaryCache = null; // { total, paid, unpaid, employees, fromDate, toDate }
 
-    // ── Compute cash flow summary (sync, uses cached salary) ──
+    // ── Compute cash flow summary — derived directly from state.bills (same as computeAnalyticsData) ──
+    // fromDate / toDate: YYYY-MM-DD or YYYY-MM-DDThh:mm strings (local time)
     function cfComputeSummary(fromDate, toDate) {
-      // Handle both YYYY-MM-DD and YYYY-MM-DDThh:mm formats
+      // Parse bounds — same logic as the bill history and analytics date filters
+      // Accept YYYY-MM-DD (date-only) and YYYY-MM-DDThh:mm (datetime-local) formats
       var fD = fromDate ? new Date(fromDate.length === 10 ? fromDate + 'T00:00:00' : fromDate + ':00') : null;
       var tD = toDate   ? new Date(toDate.length   === 10 ? toDate   + 'T23:59:59' : toDate   + ':59') : null;
-      var filtered = cfTransactions.filter(t => {
-        var d = new Date(t.date);
-        if (fD && d < fD) return false;
-        if (tD && d > tD) return false;
-        return true;
-      });
-      var opFiltered = cfOperatingExpenses.filter(e => {
-        var d = new Date(e.date);
-        if (fD && d < fD) return false;
-        if (tD && d > tD) return false;
-        return true;
-      });
-      var inflow    = filtered.filter(t => t.type === 'income').reduce((s, t) => s + (t.amount || 0), 0);
-      var outflow   = filtered.filter(t => t.type === 'expense').reduce((s, t) => s + (t.amount || 0), 0);
-      var opExpTotal= opFiltered.reduce((s, e) => s + (e.amount || 0), 0);
-      // Include cashier salary from the existing employee management system
-      var salaryTotal = 0;
-      var salaryEmployees = [];
-      if (_cfSalaryCache && _cfSalaryCache.fromDate === fromDate && _cfSalaryCache.toDate === toDate) {
-        salaryTotal     = _cfSalaryCache.total || 0;
-        salaryEmployees = _cfSalaryCache.employees || [];
-      }
-      var totalOpEx   = opExpTotal + salaryTotal;
-      var totalOutflow= outflow + totalOpEx;
-      var netProfit   = inflow - totalOutflow;
-      // Breakdown by payment method (income only)
+
+      // ── INFLOW: exact same formula as computeAnalyticsData ──
+      // Cash received = bPaid (cash on bill excl. credit) + isCredit extraPayments
+      //               + isGeneral extraPayments on zero-dollar holder bills
+      // This matches the "RECEIVED" card in company analytics exactly.
+      var inflow = 0;
+      // Track per-method inflow for the breakdown panel
       var byMethod = {};
-      cfPaymentMethods.forEach(pm => { byMethod[pm.id] = { name: pm.name, total: 0, txs: [] }; });
-      filtered.filter(t => t.type === 'income').forEach(t => {
-        if (t.paymentMethodId && byMethod[t.paymentMethodId]) {
-          byMethod[t.paymentMethodId].total += t.amount || 0;
-          byMethod[t.paymentMethodId].txs.push(t);
+      cfPaymentMethods.forEach(function(pm) { byMethod[pm.id] = { name: pm.name, total: 0, txs: [] }; });
+
+      // For payment-method breakdown we use cfTransactions (which store the method used per bill).
+      // But the TOTALS must come from state.bills directly so they match analytics.
+      var filteredBills = (state.bills || []).filter(function(bill) {
+        var bd = billToDate(bill.date);
+        if (isNaN(bd.getTime())) return true; // keep malformed dates
+        if (fD && bd < fD) return false;
+        if (tD && bd > tD) return false;
+        return true;
+      });
+
+      // ── OUTFLOW: cost of redeemed points (negative-points items) ──
+      // Matches totalCost in computeAnalyticsData
+      var redemptionCost = 0;
+
+      filteredBills.forEach(function(bill) {
+        var bD   = bill.totalDollars || 0;
+        var bFull= bD + (bill.extraFeeAmount || 0);
+        var bCr  = bill.creditApplied || 0;
+        // Cash received on this bill (same formula as computeAnalyticsData)
+        var bPaid = bill.paymentStatus === 'received'
+          ? Math.max(0, bFull - bCr)
+          : (bill.paymentStatus === 'partial' ? Math.max(0, (bill.partialAmount || 0) - bCr) : 0);
+        // Extra payments: count isCredit:true (overpayment → credit) and isGeneral on holder bills
+        var exReal = 0;
+        var _isHolder = (bill.totalDollars || 0) === 0 && ((bill.totalPoints || 0) === 0);
+        (bill.extraPayments || []).forEach(function(ep) {
+          if (ep.isCredit)                        { exReal += (ep.amount || 0); }
+          else if (ep.isGeneral && _isHolder)     { exReal += (ep.amount || 0); }
+        });
+        var thisRec = bPaid + exReal;
+        inflow += thisRec;
+
+        // Point redemption cost (outflow): negative-point items
+        (bill.items || []).forEach(function(it) {
+          var pts = it.points || 0;
+          if (pts < 0) {
+            var absPts = Math.abs(pts);
+            var cR = (it.costRate != null ? it.costRate : null);
+            if (cR === null) cR = getCostRate(it.gameName);
+            redemptionCost += absPts * (cR / 100);
+          }
+        });
+
+        // Payment-method breakdown: look up the cfTransaction matching this bill's referenceNumber
+        if (thisRec > 0) {
+          var refId = bill.referenceNumber || bill._id;
+          var tx = cfTransactions.find(function(t) { return t.billId === refId; });
+          var pmId = (tx && tx.paymentMethodId) || bill.paymentMethodId || '';
+          if (pmId && byMethod[pmId]) {
+            byMethod[pmId].total  += thisRec;
+            byMethod[pmId].txs.push({
+              date: bill.date, amount: thisRec,
+              note: refId, companyName: (state.companies && state.companies[bill.companyId] && state.companies[bill.companyId].name) || bill.companyName || '',
+              paymentMethodId: pmId
+            });
+          }
         }
       });
-      return { inflow, outflow, opExpTotal, totalOpEx, totalOutflow, netProfit,
+
+      // ── OPERATING EXPENSES (manual entries) ──
+      var opFiltered = cfOperatingExpenses.filter(function(e) {
+        var d = new Date(e.date.length === 10 ? e.date + 'T00:00:00' : e.date);
+        if (fD && d < fD) return false;
+        if (tD && d > tD) return false;
+        return true;
+      });
+      var opExpTotal = opFiltered.reduce(function(s, e) { return s + (e.amount || 0); }, 0);
+
+      // ── CASHIER SALARY ──
+      var salaryTotal = 0, salaryEmployees = [];
+      if (_cfSalaryCache && _cfSalaryCache.fromDate === fromDate && _cfSalaryCache.toDate === toDate) {
+        salaryTotal     = _cfSalaryCache.total    || 0;
+        salaryEmployees = _cfSalaryCache.employees || [];
+      }
+
+      // ── TOTALS ──
+      // Outflow = point redemption cost + manual op expenses + cashier salaries
+      var totalOpEx    = opExpTotal + salaryTotal;
+      var totalOutflow = redemptionCost + totalOpEx;
+      var netProfit    = inflow - totalOutflow;
+
+      // filteredTxs: for the tracking tab transaction list, build a unified list from filteredBills
+      // so the list shows real data even before cfTransactions are fully synced
+      var filteredTxs = filteredBills
+        .filter(function(b) { return (b.paymentStatus === 'received' || b.paymentStatus === 'partial'); })
+        .map(function(b) {
+          var refId = bill_refId(b);
+          var tx = cfTransactions.find(function(t) { return t.billId === refId; });
+          var pmId = (tx && tx.paymentMethodId) || b.paymentMethodId || '';
+          var bFull2 = (b.totalDollars || 0) + (b.extraFeeAmount || 0);
+          var bCr2 = b.creditApplied || 0;
+          var bPaid2 = b.paymentStatus === 'received'
+            ? Math.max(0, bFull2 - bCr2)
+            : Math.max(0, (b.partialAmount || 0) - bCr2);
+          var exReal2 = 0;
+          var _isH2 = (b.totalDollars || 0) === 0 && ((b.totalPoints || 0) === 0);
+          (b.extraPayments || []).forEach(function(ep) {
+            if (ep.isCredit) exReal2 += (ep.amount || 0);
+            else if (ep.isGeneral && _isH2) exReal2 += (ep.amount || 0);
+          });
+          var amt = bPaid2 + exReal2;
+          if (amt <= 0) return null;
+          return {
+            id: b._id, type: 'income', category: 'bill',
+            amount: parseFloat(amt.toFixed(2)),
+            paymentMethodId: pmId,
+            companyId: b.companyId || '',
+            companyName: (state.companies && state.companies[b.companyId] && state.companies[b.companyId].name) || b.companyName || '',
+            date: b.date,
+            billId: refId,
+            note: refId
+          };
+        })
+        .filter(Boolean)
+        .sort(function(a, b) { return billToDate(b.date) - billToDate(a.date); });
+
+      return { inflow, redemptionCost, opExpTotal, totalOpEx, totalOutflow, netProfit,
                salaryTotal, salaryEmployees, byMethod,
-               filteredTxs: filtered, opFiltered, salaryLoaded: !!_cfSalaryCache };
+               filteredTxs: filteredTxs, opFiltered,
+               salaryLoaded: !!_cfSalaryCache };
     }
+
+    // Helper: get stable bill reference ID
+    function bill_refId(bill) { return bill.referenceNumber || bill._id; }
 
     // ── Async: fetch & cache cashier salary for CF date range ──
     async function cfFetchSalary(fromDate, toDate) {
       if (_cfSalaryCache && _cfSalaryCache.fromDate === fromDate && _cfSalaryCache.toDate === toDate) return;
       try {
-        var f = new Date(fromDate + 'T00:00:00');
-        var t = localEndOfDay(toDate);
+        // Handle both YYYY-MM-DD and YYYY-MM-DDThh:mm
+        var f = new Date(fromDate.length === 10 ? fromDate + 'T00:00:00' : fromDate + ':00');
+        var t = new Date(toDate.length   === 10 ? toDate   + 'T23:59:59' : toDate   + ':59');
         var result = await fetchOperatingExpenses(f, t);
         _cfSalaryCache = Object.assign({ fromDate, toDate }, result);
       } catch(e) {
@@ -10266,7 +10365,7 @@
             var outEl = document.getElementById('cfTotalOutflow');
             if (salEl) salEl.textContent = '$' + s.salaryTotal.toFixed(2);
             if (opExEl) opExEl.textContent = '$' + s.totalOpEx.toFixed(2);
-            if (outEl) outEl.textContent = '$' + s.totalOutflow.toFixed(2);
+            if (outEl) { outEl.textContent = '$' + s.totalOutflow.toFixed(2); }
             if (netEl) { netEl.textContent = (s.netProfit>=0?'+':'')+' $'+s.netProfit.toFixed(2); netEl.style.color = s.netProfit>=0?'#34d399':'#f87171'; }
             // For full re-render of expenses tab which shows salary detail
             var expSalaryWrap = document.getElementById('cfSalaryBreakdown');
@@ -10316,16 +10415,17 @@
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
           ${[
-            {label:'CASH INFLOW',  val:'$'+summary.inflow.toFixed(2),  color:'#34d399', bg:'rgba(16,185,129,0.08)', bc:'rgba(16,185,129,0.2)',  svgPath:'<polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/>', id:'cfInflowVal'},
-            {label:'CASH OUTFLOW', val:'$'+summary.totalOutflow.toFixed(2), color:'#f87171', bg:'rgba(239,68,68,0.08)', bc:'rgba(239,68,68,0.2)', svgPath:'<polyline points="23,18 13.5,8.5 8.5,13.5 1,6"/><polyline points="17,18 23,18 23,12"/>', id:'cfTotalOutflow'},
-            {label:'OP. EXPENSES', val:'$'+summary.totalOpEx.toFixed(2), color:'#fbbf24', bg:'rgba(245,158,11,0.08)', bc:'rgba(245,158,11,0.2)',  svgPath:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>', id:'cfTotalOpEx'},
-            {label:'NET PROFIT',   val:(summary.netProfit>=0?'+':'')+' $'+summary.netProfit.toFixed(2), color:summary.netProfit>=0?'#34d399':'#f87171', bg:summary.netProfit>=0?'rgba(16,185,129,0.08)':'rgba(239,68,68,0.08)', bc:summary.netProfit>=0?'rgba(16,185,129,0.2)':'rgba(239,68,68,0.2)', svgPath:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', id:'cfNetProfit'},
+            {label:'CASH INFLOW',  val:'$'+summary.inflow.toFixed(2),  sub:'All received payments',         color:'#34d399', bg:'rgba(16,185,129,0.08)', bc:'rgba(16,185,129,0.2)',  svgPath:'<polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/>', id:'cfInflowVal'},
+            {label:'CASH OUTFLOW', val:'$'+summary.totalOutflow.toFixed(2), sub:'Cost: $'+summary.redemptionCost.toFixed(2)+' · OpEx: $'+summary.totalOpEx.toFixed(2), color:'#f87171', bg:'rgba(239,68,68,0.08)', bc:'rgba(239,68,68,0.2)', svgPath:'<polyline points="23,18 13.5,8.5 8.5,13.5 1,6"/><polyline points="17,18 23,18 23,12"/>', id:'cfTotalOutflow'},
+            {label:'OP. EXPENSES', val:'$'+summary.totalOpEx.toFixed(2),   sub:'Manual + Salaries',              color:'#fbbf24', bg:'rgba(245,158,11,0.08)', bc:'rgba(245,158,11,0.2)',  svgPath:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>', id:'cfTotalOpEx'},
+            {label:'NET PROFIT',   val:(summary.netProfit>=0?'+':'')+' $'+summary.netProfit.toFixed(2), sub:'Inflow − Outflow',   color:summary.netProfit>=0?'#34d399':'#f87171', bg:summary.netProfit>=0?'rgba(16,185,129,0.08)':'rgba(239,68,68,0.08)', bc:summary.netProfit>=0?'rgba(16,185,129,0.2)':'rgba(239,68,68,0.2)', svgPath:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', id:'cfNetProfit'},
           ].map(c=>`<div style="padding:14px;border-radius:12px;background:${c.bg};border:1px solid ${c.bc}">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${c.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.svgPath}</svg>
               <div style="font-size:9px;color:var(--textMuted);text-transform:uppercase;letter-spacing:1px;font-weight:700">${c.label}</div>
             </div>
-            <div id="${c.id}" style="font-family:'Orbitron',monospace;font-size:16px;font-weight:800;color:${c.color}">${c.val}</div>
+            <div id="${c.id}" style="font-family:'Orbitron',monospace;font-size:15px;font-weight:800;color:${c.color};margin-bottom:3px">${c.val}</div>
+            <div style="font-size:9px;color:var(--textMuted)">${c.sub}</div>
           </div>`).join('')}
         </div>
         ${cfShareholders.length > 0 ? `
@@ -10377,13 +10477,40 @@
     }
 
     function renderCFTracking(summary, fromDate, toDate, fromDateD, toDateD) {
+      // Build unified transaction list:
+      // 1. Bill income transactions (from filteredTxs = derived from state.bills)
+      // 2. Manual operating expenses
+      // 3. Redemption cost (outflow — point redemptions per bill)
+      var _redemptionRows = [];
+      (state.bills || []).forEach(function(bill) {
+        var bd = billToDate(bill.date);
+        var fD2 = fromDate ? new Date(fromDate.length===10?fromDate+'T00:00:00':fromDate+':00') : null;
+        var tD2 = toDate   ? new Date(toDate.length===10  ?toDate  +'T23:59:59':toDate  +':59') : null;
+        if (fD2 && bd < fD2) return;
+        if (tD2 && bd > tD2) return;
+        (bill.items||[]).forEach(function(it) {
+          if ((it.points||0) < 0) {
+            var absPts = Math.abs(it.points);
+            var cR = (it.costRate!=null?it.costRate:getCostRate(it.gameName));
+            var cost = absPts*(cR/100);
+            if (cost>0) _redemptionRows.push({
+              id: bill._id+'_r_'+it.gameName, type:'expense', category:'redemption',
+              amount: parseFloat(cost.toFixed(2)), date: bill.date,
+              note: 'Redeem: '+(it.gameName||'')+(it.username?' ('+it.username+')':''),
+              paymentMethodId:null, companyId:bill.companyId,
+              companyName:(state.companies&&state.companies[bill.companyId]&&state.companies[bill.companyId].name)||''
+            });
+          }
+        });
+      });
       var allTx = summary.filteredTxs.concat(
-        summary.opFiltered.map(e => ({
+        summary.opFiltered.map(function(e) { return {
           id: e.id, type: 'expense', category: 'opex',
           amount: e.amount, date: e.date, note: e.title,
           paymentMethodId: null, companyId: null
-        }))
-      ).sort((a, b) => new Date(b.date) - new Date(a.date));
+        }; })
+      ).concat(_redemptionRows)
+       .sort((a, b) => billToDate(b.date) - billToDate(a.date));
 
       return `
         <div style="display:flex;gap:6px;margin-bottom:14px;align-items:flex-end;flex-wrap:wrap">
