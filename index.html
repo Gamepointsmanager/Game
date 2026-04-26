@@ -1469,6 +1469,8 @@
         
         _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
         invalidateAnalyticsCache();
+        // Sync any newly loaded bills into CF transactions if CF is already loaded
+        if (_cfLoaded && state.empRole !== 'employee') cfSyncBillsToTransactions();
         // Soft-refresh bill history without rebuilding entire page
         if(state.view === 'company' && state.companyTab === 'billing') {
           refreshBillHistory();
@@ -1776,6 +1778,30 @@
             // Update local bill + refresh just the select styling
             var lb = state.bills.find(function(b){return b._id===bid});
             if(lb){lb.paymentStatus=newStatus;if(updates.partialAmount!==undefined)lb.partialAmount=updates.partialAmount;if(updates.balanceDue!==undefined)lb.balanceDue=updates.balanceDue;}
+            // Re-sync CF: if bill now received/partial, ensure it has a CF transaction
+            if (_cfLoaded && state.empRole !== 'employee') {
+              if (newStatus !== 'not_received' && lb) {
+                // Remove old synced entry so cfSyncBillsToTransactions can recreate with correct amount
+                var _refId = lb.referenceNumber || lb._id;
+                var _exIdx = cfTransactions.findIndex(function(t){ return t.billId === _refId; });
+                if (_exIdx >= 0) {
+                  var _exTx = cfTransactions[_exIdx];
+                  if (_exTx.id && !_exTx.id.startsWith('_sync_')) {
+                    db.doc(cfPath('transactions') + '/' + _exTx.id).delete().catch(function(){});
+                  }
+                  cfTransactions.splice(_exIdx, 1);
+                }
+              } else if (newStatus === 'not_received' && lb) {
+                // Remove any CF transaction for this bill
+                var _refId2 = lb.referenceNumber || lb._id;
+                cfTransactions = cfTransactions.filter(function(t){
+                  if (t.billId !== _refId2) return true;
+                  if (t.id && !t.id.startsWith('_sync_')) db.doc(cfPath('transactions') + '/' + t.id).delete().catch(function(){});
+                  return false;
+                });
+              }
+              cfSyncBillsToTransactions();
+            }
             invalidateAnalyticsCache();
             _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
             // Update select appearance without full render
@@ -3650,7 +3676,7 @@
                   <input class="input" id="pmDropInput" value="${esc((cfPaymentMethods.find(pm=>pm.id===state.selectedPaymentMethodId)||cfPaymentMethods[0]||{name:''}).name)}" autocomplete="off" style="cursor:pointer;padding-right:28px;background:rgba(16,185,129,0.07);border-color:rgba(52,211,153,0.25);font-size:13px" readonly />
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2.5" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none"><polyline points="6,9 12,15 18,9"/></svg>
                   <input type="hidden" id="pmDropHidden" value="${esc(state.selectedPaymentMethodId||'')}"/>
-                  <div id="pmDropList" class="hidden" style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:rgba(16,13,30,0.97);border:1px solid var(--glassBorder);border-radius:10px;z-index:300;max-height:200px;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
+                  <div id="pmDropList" class="hidden" style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:rgba(16,13,30,0.97);border:1px solid var(--glassBorder);border-radius:10px;z-index:9999;max-height:200px;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
                     ${cfPaymentMethods.map(pm => `<div class="dropdown-item pm-drop-opt${state.selectedPaymentMethodId===pm.id?' selected':''}" data-pmid="${esc(pm.id)}" data-pmname="${esc(pm.name)}">${esc(pm.name)}</div>`).join('')}
                   </div>
                 </div>
@@ -10010,6 +10036,8 @@
         cfShareholders      = shSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
         cfOperatingExpenses = opSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
         cfDividendPayments  = divSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+        // Auto-sync historical bills that were never tracked as CF transactions
+        cfSyncBillsToTransactions();
       } catch(e) { console.warn('[CF] load error:', e.message); }
     }
 
@@ -10059,13 +10087,65 @@
       }
     }
 
+    // ── Sync all existing bills into cfTransactions (backfill) ──
+    // Called after both state.bills and cfTransactions are loaded.
+    // Creates a cfTransaction record for every bill that has received/partial payment
+    // but has no matching cfTransaction entry. Uses paymentMethodId stored on the bill if
+    // available, otherwise falls back to the most-used method for the company or cfPaymentMethods[0].
+    // Existing records (matched by billId = referenceNumber) are NOT overwritten.
+    function cfSyncBillsToTransactions() {
+      if (!state.bills || !state.bills.length) return;
+      var writes = [];
+      state.bills.forEach(function(bill) {
+        var status = bill.paymentStatus;
+        if (!status || status === 'not_received') return;
+        var refId = bill.referenceNumber || bill._id;
+        if (!refId) return;
+        // Check if a transaction already exists for this bill
+        var existing = cfTransactions.find(function(t){ return t.billId === refId; });
+        if (existing) return; // already tracked
+        var amount = 0;
+        if (status === 'received') amount = (bill.totalDollars || 0) + (bill.extraFeeAmount || 0);
+        else if (status === 'partial') amount = bill.partialAmount || 0;
+        if (amount <= 0) return;
+        // Determine payment method: prefer the one stored on the bill, then most-used for company, then first
+        var pmId = bill.paymentMethodId || cfGetMostUsedPaymentMethod(bill.companyId) || (cfPaymentMethods[0] && cfPaymentMethods[0].id) || '';
+        var companyObj = state.companies && state.companies[bill.companyId];
+        var tx = {
+          type: 'income',
+          category: 'bill',
+          amount: parseFloat(amount.toFixed(2)),
+          paymentMethodId: pmId,
+          companyId: bill.companyId || '',
+          companyName: (companyObj && companyObj.name) || bill.companyName || '',
+          date: bill.date || new Date().toISOString(),
+          billId: refId,
+          note: refId,
+          synced: true // mark as auto-synced
+        };
+        // Push locally immediately so UI updates
+        var localTx = Object.assign({ id: '_sync_' + refId }, tx);
+        cfTransactions.push(localTx);
+        // Persist to Firestore async, then update the local id
+        writes.push(
+          db.collection(cfPath('transactions')).add(tx).then(function(ref) {
+            localTx.id = ref.id;
+          }).catch(function(){})
+        );
+      });
+      if (writes.length > 0) {
+        Promise.all(writes).catch(function(){});
+      }
+    }
+
     // ── Cached cashier salary data for CF (fetched async on CF page open) ──
     var _cfSalaryCache = null; // { total, paid, unpaid, employees, fromDate, toDate }
 
     // ── Compute cash flow summary (sync, uses cached salary) ──
     function cfComputeSummary(fromDate, toDate) {
-      var fD = fromDate ? new Date(fromDate + 'T00:00:00') : null;
-      var tD = toDate   ? new Date(toDate   + 'T23:59:59') : null;
+      // Handle both YYYY-MM-DD and YYYY-MM-DDThh:mm formats
+      var fD = fromDate ? new Date(fromDate.length === 10 ? fromDate + 'T00:00:00' : fromDate + ':00') : null;
+      var tD = toDate   ? new Date(toDate.length   === 10 ? toDate   + 'T23:59:59' : toDate   + ':59') : null;
       var filtered = cfTransactions.filter(t => {
         var d = new Date(t.date);
         if (fD && d < fD) return false;
@@ -10163,13 +10243,20 @@
         { id: 'expenses',    label: 'Expenses'     },
         { id: 'shareholders',label: 'Shareholders' },
       ];
-      var fromDate = state.cfFromDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-      var toDate   = state.cfToDate   || new Date().toISOString().slice(0, 10);
-      var summary  = cfComputeSummary(fromDate, toDate);
+      // Default: first of current month 00:00 to today 23:59 (datetime-local format)
+      var _cfNow = new Date();
+      var _cfDefFrom = _cfNow.getFullYear()+'-'+String(_cfNow.getMonth()+1).padStart(2,'0')+'-01T00:00';
+      var _cfDefTo   = _cfNow.getFullYear()+'-'+String(_cfNow.getMonth()+1).padStart(2,'0')+'-'+String(_cfNow.getDate()).padStart(2,'0')+'T23:59';
+      var fromDate = state.cfFromDate || _cfDefFrom;
+      var toDate   = state.cfToDate   || _cfDefTo;
+      // Extract just the date part for summary computation (existing logic uses YYYY-MM-DD)
+      var fromDateD = fromDate.slice(0,10);
+      var toDateD   = toDate.slice(0,10);
+      var summary  = cfComputeSummary(fromDateD, toDateD);
 
       // Fetch salary async if not cached for this date range, then re-render
       if (!summary.salaryLoaded) {
-        cfFetchSalary(fromDate, toDate).then(() => {
+        cfFetchSalary(fromDateD, toDateD).then(() => {
           if (state.view === 'cashFlow') {
             var s = cfComputeSummary(fromDate, toDate);
             // Patch summary cards that show salary-affected numbers
@@ -10189,8 +10276,8 @@
       }
 
       var content = '';
-      if (tab === 'overview') content = renderCFOverview(summary, fromDate, toDate);
-      else if (tab === 'tracking') content = renderCFTracking(summary, fromDate, toDate);
+      if (tab === 'overview') content = renderCFOverview(summary, fromDate, toDate, fromDateD, toDateD);
+      else if (tab === 'tracking') content = renderCFTracking(summary, fromDate, toDate, fromDateD, toDateD);
       else if (tab === 'methods') content = renderCFMethods();
       else if (tab === 'expenses') content = renderCFExpenses(summary);
       else if (tab === 'shareholders') content = renderCFShareholders(summary.netProfit);
@@ -10211,14 +10298,21 @@
       </div>`;
     }
 
-    function renderCFOverview(summary, fromDate, toDate) {
+    function renderCFOverview(summary, fromDate, toDate, fromDateD, toDateD) {
       var divs = cfComputeDividends(summary.netProfit);
       var totalShareholder = divs.reduce((s,d) => s + d.percentage, 0);
       return `
-        <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
-          <div style="flex:1;min-width:100px"><span class="label" style="font-size:9px">From</span><input class="input" type="date" id="cfFrom" value="${fromDate}" style="font-size:12px;padding:6px 8px"/></div>
-          <div style="flex:1;min-width:100px"><span class="label" style="font-size:9px">To</span><input class="input" type="date" id="cfTo" value="${toDate}" style="font-size:12px;padding:6px 8px"/></div>
-          <button class="btn btn-sm btn-purple" id="cfApplyDate" style="align-self:flex-end">Apply</button>
+        <div style="display:flex;gap:6px;margin-bottom:14px;align-items:flex-end;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px">
+            <span class="label" style="font-size:10px">From</span>
+            <input class="input" type="datetime-local" id="cfFrom" value="${fromDate}" style="font-size:12px;padding:6px 8px"/>
+          </div>
+          <div style="flex:1;min-width:120px">
+            <span class="label" style="font-size:10px">To</span>
+            <input class="input" type="datetime-local" id="cfTo" value="${toDate}" style="font-size:12px;padding:6px 8px"/>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="cfApplyDate" style="font-size:11px">Filter</button>
+          <button class="btn btn-ghost btn-sm" id="cfResetDate" style="font-size:11px;color:var(--textMuted)">Reset</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
           ${[
@@ -10282,7 +10376,7 @@
       `;
     }
 
-    function renderCFTracking(summary, fromDate, toDate) {
+    function renderCFTracking(summary, fromDate, toDate, fromDateD, toDateD) {
       var allTx = summary.filteredTxs.concat(
         summary.opFiltered.map(e => ({
           id: e.id, type: 'expense', category: 'opex',
@@ -10292,10 +10386,17 @@
       ).sort((a, b) => new Date(b.date) - new Date(a.date));
 
       return `
-        <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
-          <div style="flex:1;min-width:100px"><span class="label" style="font-size:9px">From</span><input class="input" type="date" id="cfFrom" value="${fromDate}" style="font-size:12px;padding:6px 8px"/></div>
-          <div style="flex:1;min-width:100px"><span class="label" style="font-size:9px">To</span><input class="input" type="date" id="cfTo" value="${toDate}" style="font-size:12px;padding:6px 8px"/></div>
-          <button class="btn btn-sm btn-purple" id="cfApplyDate" style="align-self:flex-end">Apply</button>
+        <div style="display:flex;gap:6px;margin-bottom:14px;align-items:flex-end;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px">
+            <span class="label" style="font-size:10px">From</span>
+            <input class="input" type="datetime-local" id="cfFrom" value="${fromDate}" style="font-size:12px;padding:6px 8px"/>
+          </div>
+          <div style="flex:1;min-width:120px">
+            <span class="label" style="font-size:10px">To</span>
+            <input class="input" type="datetime-local" id="cfTo" value="${toDate}" style="font-size:12px;padding:6px 8px"/>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="cfApplyDate" style="font-size:11px">Filter</button>
+          <button class="btn btn-ghost btn-sm" id="cfResetDate" style="font-size:11px;color:var(--textMuted)">Reset</button>
         </div>
         <div style="font-size:11px;color:var(--textMuted);margin-bottom:10px">Payment method breakdown (click for details)</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:16px">
@@ -10502,12 +10603,23 @@
         btn.onclick = () => { state.cashFlowTab = btn.dataset.tab; render(); };
       });
 
-      // Date apply (overview + tracking share same IDs)
+      // Date filter apply/reset (overview + tracking share same IDs)
       if ($('#cfApplyDate')) {
         $('#cfApplyDate').onclick = () => {
-          state.cfFromDate = $('#cfFrom').value;
-          state.cfToDate   = $('#cfTo').value;
+          var fv = $('#cfFrom').value || '';
+          var tv = $('#cfTo').value || '';
+          // Accept both datetime-local (YYYY-MM-DDThh:mm) and date (YYYY-MM-DD) values
+          state.cfFromDate = fv;
+          state.cfToDate   = tv;
           _cfSalaryCache = null; // invalidate salary cache for new date range
+          render();
+        };
+      }
+      if ($('#cfResetDate')) {
+        $('#cfResetDate').onclick = () => {
+          state.cfFromDate = null;
+          state.cfToDate   = null;
+          _cfSalaryCache = null;
           render();
         };
       }
@@ -10558,9 +10670,10 @@
           var pmId = card.dataset.pmid;
           var pm = cfPaymentMethods.find(p => p.id === pmId);
           if (!pm) return;
-          var fromDate = state.cfFromDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-          var toDate   = state.cfToDate   || new Date().toISOString().slice(0, 10);
-          var summary  = cfComputeSummary(fromDate, toDate);
+          var _cfN=new Date();
+          var _fd=(state.cfFromDate||(_cfN.getFullYear()+'-'+String(_cfN.getMonth()+1).padStart(2,'0')+'-01T00:00')).slice(0,10);
+          var _td=(state.cfToDate||(_cfN.getFullYear()+'-'+String(_cfN.getMonth()+1).padStart(2,'0')+'-'+String(_cfN.getDate()).padStart(2,'0')+'T23:59')).slice(0,10);
+          var summary  = cfComputeSummary(_fd, _td);
           var md = summary.byMethod[pmId] || { total: 0, txs: [] };
           var ov = document.createElement('div');
           ov.className = 'modal-overlay';
@@ -10694,9 +10807,10 @@
       // CSV Export
       if ($('#cfExportBtn')) {
         $('#cfExportBtn').onclick = () => {
-          var fromDate = state.cfFromDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
-          var toDate   = state.cfToDate   || new Date().toISOString().slice(0, 10);
-          var summary  = cfComputeSummary(fromDate, toDate);
+          var _cfN=new Date();
+          var _fd=(state.cfFromDate||(_cfN.getFullYear()+'-'+String(_cfN.getMonth()+1).padStart(2,'0')+'-01T00:00')).slice(0,10);
+          var _td=(state.cfToDate||(_cfN.getFullYear()+'-'+String(_cfN.getMonth()+1).padStart(2,'0')+'-'+String(_cfN.getDate()).padStart(2,'0')+'T23:59')).slice(0,10);
+          var summary  = cfComputeSummary(_fd, _td);
           var rows = [['Date','Type','Category','Amount','PaymentMethod','Company','Note']];
           summary.filteredTxs.forEach(t => {
             var pm = cfPaymentMethods.find(p => p.id === t.paymentMethodId);
@@ -10709,7 +10823,7 @@
           var blob = new Blob([csv], { type: 'text/csv' });
           var url = URL.createObjectURL(blob);
           var a = document.createElement('a'); a.href = url;
-          a.download = 'cashflow_' + fromDate + '_to_' + toDate + '.csv';
+          a.download = 'cashflow_' + _fd2 + '_to_' + _td2 + '.csv';
           a.click(); URL.revokeObjectURL(url);
         };
       }
