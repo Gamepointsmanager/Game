@@ -10149,11 +10149,17 @@
       var fD = fromDate ? new Date(fromDate.length === 10 ? fromDate + 'T00:00:00' : fromDate + ':00') : null;
       var tD = toDate   ? new Date(toDate.length   === 10 ? toDate   + 'T23:59:59' : toDate   + ':59') : null;
 
-      // ── INFLOW: exact same formula as computeAnalyticsData ──
-      // Cash received = bPaid (cash on bill excl. credit) + isCredit extraPayments
-      //               + isGeneral extraPayments on zero-dollar holder bills
-      // This matches the "RECEIVED" card in company analytics exactly.
-      var inflow = 0;
+      // ── INFLOW: final bill amounts + live credit balances across all companies ──
+      var billInflow = 0;   // sum of (totalDollars + extraFeeAmount) per bill in range
+      var creditInflow = 0; // sum of current credit balances across all companies (dynamic)
+
+      // Accumulate live credit balance from every company
+      if (state.companies) {
+        Object.values(state.companies).forEach(function(comp) {
+          creditInflow += getCompanyCreditBalance(comp);
+        });
+      }
+
       // Track per-method inflow for the breakdown panel
       var byMethod = {};
       cfPaymentMethods.forEach(function(pm) { byMethod[pm.id] = { name: pm.name, total: 0, txs: [] }; });
@@ -10168,18 +10174,17 @@
         return true;
       });
 
-      // ── OUTFLOW: cost of redeemed points (negative-points items) ──
-      // Matches totalCost in computeAnalyticsData
+      // ── OUTFLOW: cost basis calculated from all bill items ──
       var redemptionCost = 0;
 
       filteredBills.forEach(function(bill) {
         var bD   = bill.totalDollars || 0;
         var bFull= bD + (bill.extraFeeAmount || 0);
 
-        // ── INFLOW: final bill amount (totalDollars + extraFeeAmount) per company ──
-        inflow += bFull;
+        // INFLOW: final bill amount per bill in date range
+        billInflow += bFull;
 
-        // ── OUTFLOW: cost basis calculated from bill items (costRate * points) ──
+        // OUTFLOW: cost basis from all bill items (costRate * |points|)
         (bill.items || []).forEach(function(it) {
           var pts = it.points || 0;
           if (pts !== 0) {
@@ -10190,7 +10195,7 @@
           }
         });
 
-        // Payment-method breakdown: attribute inflow to payment method per bill
+        // Payment-method breakdown: attribute bill inflow to payment method
         if (bFull > 0) {
           var refId = bill.referenceNumber || bill._id;
           var tx = cfTransactions.find(function(t) { return t.billId === refId; });
@@ -10205,6 +10210,9 @@
           }
         }
       });
+
+      // Total inflow = bill revenue + live credit pool
+      var inflow = billInflow + creditInflow;
 
       // ── OPERATING EXPENSES (manual entries) ──
       var opFiltered = cfOperatingExpenses.filter(function(e) {
@@ -10252,7 +10260,7 @@
         .filter(Boolean)
         .sort(function(a, b) { return billToDate(b.date) - billToDate(a.date); });
 
-      return { inflow, redemptionCost, opExpTotal, totalOpEx, totalOutflow, grossProfit,
+      return { inflow, billInflow, creditInflow, redemptionCost, opExpTotal, totalOpEx, totalOutflow, grossProfit,
                salaryTotal, salaryEmployees, byMethod,
                filteredTxs: filteredTxs, opFiltered,
                salaryLoaded: !!_cfSalaryCache };
@@ -10393,7 +10401,7 @@
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
           ${[
-            {label:'CASH INFLOW',  val:'$'+summary.inflow.toFixed(2),  sub:'Total final bill amounts',         color:'#34d399', bg:'rgba(16,185,129,0.08)', bc:'rgba(16,185,129,0.2)',  svgPath:'<polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/>', id:'cfInflowVal'},
+            {label:'CASH INFLOW',  val:'$'+summary.inflow.toFixed(2),  sub:'Bills: $'+summary.billInflow.toFixed(2)+' · Credit: $'+summary.creditInflow.toFixed(2),         color:'#34d399', bg:'rgba(16,185,129,0.08)', bc:'rgba(16,185,129,0.2)',  svgPath:'<polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/>', id:'cfInflowVal'},
             {label:'CASH OUTFLOW', val:'$'+summary.totalOutflow.toFixed(2), sub:'Cost: $'+summary.redemptionCost.toFixed(2)+' · OpEx: $'+summary.totalOpEx.toFixed(2), color:'#f87171', bg:'rgba(239,68,68,0.08)', bc:'rgba(239,68,68,0.2)', svgPath:'<polyline points="23,18 13.5,8.5 8.5,13.5 1,6"/><polyline points="17,18 23,18 23,12"/>', id:'cfTotalOutflow'},
             {label:'OP. EXPENSES', val:'$'+summary.totalOpEx.toFixed(2),   sub:'Manual + Salaries',              color:'#fbbf24', bg:'rgba(245,158,11,0.08)', bc:'rgba(245,158,11,0.2)',  svgPath:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>', id:'cfTotalOpEx'},
             {label:'GROSS PROFIT', val:(summary.grossProfit>=0?'+':'')+' $'+summary.grossProfit.toFixed(2), sub:'Inflow − Outflow',   color:summary.grossProfit>=0?'#34d399':'#f87171', bg:summary.grossProfit>=0?'rgba(16,185,129,0.08)':'rgba(239,68,68,0.08)', bc:summary.grossProfit>=0?'rgba(16,185,129,0.2)':'rgba(239,68,68,0.2)', svgPath:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', id:'cfGrossProfit'},
