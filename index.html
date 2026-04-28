@@ -5226,9 +5226,19 @@
           <span style="font-size:13px;font-weight:700;color:#059669">$${fmtDol(totalReceived)}</span>
         </div>`;
       }
+      // Show credit applied if any
+      if (summaryTotalCredit > 0) {
+        summaryRowsHTML += `<div style="display:flex;justify-content:space-between">
+          <span style="font-size:13px;color:#2563eb">Credit Applied</span>
+          <span style="font-size:13px;font-weight:700;color:#2563eb">−$${fmtDol(summaryTotalCredit)}</span>
+        </div>`;
+      }
       summaryRowsHTML += `<div style="height:1px;background:#e5e7eb;margin-top:4px"></div>`;
       // For single-bill or live-bill invoices, show prior outstanding and total balance due
-      const _invPendingDue = getCompanyOutstandingBalance(comp);
+      const _invPendingDueRaw = getCompanyOutstandingBalance(comp);
+      // Subtract the current invoice's own balance from the outstanding total to avoid double-counting.
+      // For a single bill, totalBalance IS this bill's balanceDue, which is already in _invPendingDueRaw.
+      const _invPendingDue = isLiveBill ? _invPendingDueRaw : Math.max(0, _invPendingDueRaw - totalBalance);
       const _isSingleOrLive = isLiveBill || (singleBill != null) || (billsOverride && billsOverride.length === 1);
       const _showPending = _invPendingDue > 0.001 && _isSingleOrLive;
       // Only show balance due if there's actually a balance
@@ -6485,7 +6495,14 @@
         var tag=h.kind==='general'?tg2('RECEIVED','#34d399'):h.kind==='credit'?tg2('CREDIT +','#22d3ee'):h.kind==='applied'?tg2('CREDIT USED','#f472b6'):h.status==='received'?tg2('FULL','#34d399'):tg2('PARTIAL','#fbbf24');
         var billRef=h.billTotal!==undefined?'<span style="color:var(--textMuted);font-size:10px">bill $'+h.billTotal.toFixed(2)+'</span>':'';
         var poolBadge='<span style="color:#a78bfa;font-size:9px;background:rgba(124,58,237,0.12);padding:1px 5px;border-radius:4px;margin-left:4px">pool $'+h._poolAfter.toFixed(2)+'</span>';
-        return '<div class="analytics-detail-item" style="padding:8px 10px;font-size:12px;flex-wrap:wrap;gap:4px"><span style="color:'+amtColor+';font-weight:700;min-width:60px">'+sign+h.amount.toFixed(2)+'</span>'+tag+billRef+poolBadge+'<span style="color:var(--textMuted);font-size:10px;margin-left:auto">'+toLocalDate(h.date).toLocaleDateString()+'</span></div>';
+        // Only show edit/delete for extraPayment entries (general, credit) that have a billId+payIdx
+        var actionBtns='';
+        if((h.kind==='general'||h.kind==='credit')&&h.billId!=null&&h.payIdx!=null){
+          var epDate=(h.date&&typeof h.date==='string')?h.date:(h.date instanceof Date?h.date.toISOString().slice(0,10):localDateStr());
+          actionBtns='<button class="pay-edit-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" data-amt="'+h.amount.toFixed(2)+'" data-date="'+epDate+'" style="padding:2px 7px;font-size:10px;margin-left:4px" title="Edit">✏️</button>'
+            +'<button class="pay-del-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" style="padding:2px 7px;font-size:10px;color:#f87171" title="Delete">🗑️</button>';
+        }
+        return '<div class="analytics-detail-item" style="padding:8px 10px;font-size:12px;flex-wrap:wrap;gap:4px;align-items:center"><span style="color:'+amtColor+';font-weight:700;min-width:60px">'+sign+h.amount.toFixed(2)+'</span>'+tag+billRef+poolBadge+'<span style="color:var(--textMuted);font-size:10px;margin-left:auto">'+toLocalDate(h.date).toLocaleDateString()+'</span>'+actionBtns+'</div>';
       }).join(''):'<div style="padding:14px;text-align:center;color:var(--textMuted);font-size:12px">No payments yet</div>';
       var ov=document.createElement('div');ov.className='modal-overlay';ov.id='paymentRecordModal';ov.innerHTML='<div class="modal fade-in" style="max-width:480px"><div class="modal-header"><h3 class="modal-title">PAYMENTS</h3><button class="btn btn-ghost btn-sm" id="closePayM"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div style="display:flex;gap:10px;padding:14px;border-radius:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.12);margin-bottom:14px;flex-wrap:wrap"><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:#22d3ee;text-transform:uppercase;font-weight:700;margin-bottom:2px">Received</div><div style="font-size:18px;font-weight:800;color:#34d399;font-family:Orbitron,monospace">$'+d.totalReceived.toFixed(2)+'</div></div><div style="width:1px;background:rgba(120,100,200,0.12)"></div><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';text-transform:uppercase;font-weight:700;margin-bottom:2px">'+(d.totalBalance<0?'Credit':'Balance')+'</div><div style="font-size:18px;font-weight:800;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';font-family:Orbitron,monospace">'+'$'+Math.abs(d.totalBalance).toFixed(2)+'</div></div>'+(d.totalRedeemedDollars>0?'<div style="width:100%;padding:6px 10px;border-radius:8px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.1);font-size:11px;display:flex;justify-content:space-between"><span style="color:#fbbf24;font-weight:600">Redeemed Value</span><span style="color:#fbbf24;font-weight:700">$'+d.totalRedeemedDollars.toFixed(2)+'</span></div><div style="width:100%;padding:4px 10px;font-size:11px;display:flex;justify-content:space-between"><span style="color:var(--textMuted)">Net Received</span><span style="color:#22d3ee;font-weight:700">$'+(d.totalReceived-d.totalRedeemedDollars).toFixed(2)+'</span></div>':'')+'</div>'+(creditBal>0?'<div style="padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);margin-bottom:14px;display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg><span style="font-size:12px;color:#34d399;font-weight:700">Available Credit: $'+creditBal.toFixed(2)+'</span><span style="font-size:10px;color:var(--textMuted);margin-left:auto">Auto-applied to future bills</span></div>':'')+'<div style="margin-bottom:14px"><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:8px">RECORD PAYMENT</h4><div style="margin-bottom:8px"><span class="label" style="font-size:9px">Bill</span><select class="input styled-select" id="payBill" style="font-size:12px;background-color:var(--bgInput)">'+opts+'</select></div><div style="display:flex;gap:8px"><div style="flex:1"><span class="label" style="font-size:9px">Amount ($)</span><input class="input" type="number" id="payAmt" placeholder="0.00" step="0.01" min="0"/></div><div style="flex:1"><span class="label" style="font-size:9px">Date</span><input class="input" type="date" id="payDt" value="'+localDateStr()+'"/></div></div><button class="btn btn-green btn-full btn-sm" id="paySave" style="margin-top:10px;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Record</button></div><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:6px">HISTORY</h4><div style="max-height:200px;overflow-y:auto;border-radius:10px;background:rgba(15,12,28,0.4);border:1px solid rgba(120,100,200,0.08)">'+hH+'</div></div>';
       document.body.appendChild(ov);ov.onclick=function(e){if(e.target===ov)ov.remove()};document.getElementById('closePayM').onclick=function(){ov.remove()};
@@ -6509,12 +6526,36 @@
         };
       }});
       ov.querySelectorAll('.pay-del-btn').forEach(function(pb){pb.onclick=async function(){
-        if(!confirm('Delete this payment?'))return;
         var bid=pb.dataset.billid,pidx=parseInt(pb.dataset.payidx);
-        try{var ref=db.doc(userPath()+'/bills/'+bid);var snap=await ref.get();var eps=(snap.data().extraPayments||[]);
-        eps.splice(pidx,1);await trackedWrite(function(){return ref.update({extraPayments:eps})});
-        var lb=state.bills.find(function(bb){return bb._id===bid});if(lb)lb.extraPayments=eps;
-        invalidateAnalyticsCache();ov.remove();render();}catch(e){alert('Error: '+e.message)}
+        // Find the payment being deleted so we know its amount and kind
+        var _delBill=state.bills.find(function(bb){return bb._id===bid});
+        var _delEp=_delBill&&(_delBill.extraPayments||[])[pidx];
+        var _delAmt=_delEp?(_delEp.amount||0):0;
+        var _isCredit=_delEp&&(_delEp.isCredit||false);
+        var _isGeneral=_delEp&&(_delEp.isGeneral||false);
+        // Ask user whether to restore credit balance (only relevant if this payment added to credit)
+        var _restoreCredit=false;
+        if(_delAmt>0&&(_isCredit||_isGeneral)){
+          var _choice=confirm('This payment of $'+_delAmt.toFixed(2)+' added to the credit balance.\n\nClick OK to restore (subtract) this amount from the credit balance after deleting.\nClick Cancel to delete the payment record only (keep credit balance unchanged).');
+          _restoreCredit=_choice;
+        } else {
+          if(!confirm('Delete this payment record?'))return;
+        }
+        try{
+          var ref=db.doc(userPath()+'/bills/'+bid);
+          var snap=await ref.get();var eps=(snap.data().extraPayments||[]);
+          eps.splice(pidx,1);
+          await trackedWrite(function(){return ref.update({extraPayments:eps})});
+          var lb=state.bills.find(function(bb){return bb._id===bid});if(lb)lb.extraPayments=eps;
+          // Update company credit balance if user chose to restore
+          if(_restoreCredit&&_delAmt>0){
+            var _prevCr=typeof c.creditBalance==='number'?c.creditBalance:getCompanyCreditBalance(c);
+            var _newCr=parseFloat(Math.max(0,_prevCr-_delAmt).toFixed(2));
+            await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance:_newCr})});
+            if(state.companies[c._id])state.companies[c._id].creditBalance=_newCr;
+          }
+          invalidateAnalyticsCache();ov.remove();render();
+        }catch(e){alert('Error: '+e.message)}
       }});
       document.getElementById('paySave').onclick=async function(){var bid=document.getElementById('payBill').value,amt=parseFloat(document.getElementById('payAmt').value)||0,dt=document.getElementById('payDt').value;if(!bid||amt<=0){alert('Enter an amount');return}
         try{
@@ -7548,12 +7589,19 @@
         }
       };
       document.getElementById('beDelete').onclick=async function(){
-        if(!confirm('Delete this bill permanently?'))return;
+        // If this bill had credit applied to it, ask whether to restore the credit
+        var _billCredit = bill.creditApplied || 0;
+        var _shouldRestore = false;
+        if(_billCredit > 0){
+          _shouldRestore = confirm('This bill had $'+_billCredit.toFixed(2)+' of credit applied to it.\n\nClick OK to restore that credit back to the company balance after deleting.\nClick Cancel to delete without restoring credit.');
+        } else {
+          if(!confirm('Delete this bill permanently?'))return;
+        }
         var delBtn=this;delBtn.disabled=true;delBtn.textContent='Deleting...';
         try{
           await db.doc(userPath()+'/bills/'+bill._id).delete();
           state.bills=state.bills.filter(function(b){return b._id!==bill._id});
-          // Restore credit balance: recompute from remaining bills for this company
+          // Recompute credit balance from remaining bills for this company
           try {
             var _delCompId = bill.companyId || c._id;
             var _remainBills = state.bills.filter(function(b){ return b.companyId === _delCompId; });
@@ -7566,6 +7614,10 @@
               });
               _newCrBal -= (b.creditApplied||0);
             });
+            // If user chose to restore credit that was consumed by this bill, add it back
+            if(_shouldRestore && _billCredit > 0){
+              _newCrBal += _billCredit;
+            }
             _newCrBal = Math.max(0, parseFloat(_newCrBal.toFixed(2)));
             await db.doc(userPath()+'/companies/'+_delCompId).update({creditBalance: _newCrBal});
             if(state.companies[_delCompId]) state.companies[_delCompId].creditBalance = _newCrBal;
