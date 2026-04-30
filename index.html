@@ -695,6 +695,8 @@
       /* Live bill print: mobile icon visible, desktop text button hidden */
       #liveBillPrintMobile { display:flex!important; }
       #liveBillPrintDesktop { display:none!important; }
+      .inv-btn-label { display: none !important; }
+      .desktop-date-input { display: none !important; }
       #globalAnalyticsModal .analytics-summary { grid-template-columns: repeat(2, 1fr); }
       #globalAnalyticsModal div[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
     }
@@ -1086,6 +1088,8 @@
       /* On desktop: show text Print button, hide mobile icon-only button */
       #liveBillPrintMobile { display:none!important; }
       #liveBillPrintDesktop { display:flex!important; }
+      .inv-btn-label { display: inline !important; }
+      .desktop-date-input { display: inline-block !important; }
     }
     @media (max-width:767px) {
       .analytics-summary { grid-template-columns:repeat(2, 1fr); gap:10px; }
@@ -2140,28 +2144,14 @@
         </div>
         <div class="header-actions">
           <button class="btn btn-ghost btn-sm" id="btnMasterGames" style="gap:6px">
-            <svg width="20" height="16" viewBox="0 0 30 22" fill="none" stroke="var(--purpleLight)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <!-- Controller body -->
-              <rect x="2" y="8" width="22" height="11" rx="4"/>
-              <!-- D-pad vertical -->
-              <line x1="8" y1="10.5" x2="8" y2="16.5"/>
-              <!-- D-pad horizontal -->
-              <line x1="5" y1="13.5" x2="11" y2="13.5"/>
-              <!-- Right action buttons -->
-              <circle cx="18" cy="12.5" r="1.1"/>
-              <circle cx="20.8" cy="15" r="1.1"/>
-              <!-- Gear overlay top-right -->
-              <circle cx="26" cy="4" r="2" stroke-width="1.5"/>
-              <line x1="26" y1="1" x2="26" y2="2.2"/>
-              <line x1="26" y1="5.8" x2="26" y2="7"/>
-              <line x1="23" y1="4" x2="24.2" y2="4"/>
-              <line x1="27.8" y1="4" x2="29" y2="4"/>
-              <line x1="24.1" y1="2.1" x2="24.9" y2="2.9"/>
-              <line x1="27.1" y1="5.1" x2="27.9" y2="5.9"/>
-              <line x1="27.9" y1="2.1" x2="27.1" y2="2.9"/>
-              <line x1="24.9" y1="5.1" x2="24.1" y2="5.9"/>
+            <svg width="20" height="18" viewBox="0 0 24 22" fill="none" stroke="var(--purpleLight)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <!-- Warehouse/inventory icon -->
+              <path d="M2 18V9l10-7 10 7v9"/>
+              <rect x="7" y="13" width="4" height="5" rx="0.5"/>
+              <rect x="13" y="11" width="5" height="3" rx="0.5"/>
+              <line x1="2" y1="18" x2="22" y2="18"/>
             </svg>
-            <span>Games</span>
+            <span class="inv-btn-label" style="display:inline">Inventory</span>
           </button>
           <div style="position:relative" id="accountWrap">
             <div class="account-trigger" id="accountTrigger">
@@ -3211,7 +3201,7 @@
       overlay.id = 'masterGamesModal';
       overlay.innerHTML = `<div class="modal fade-in" style="max-width:580px">
         <div class="modal-header">
-          <h3 class="modal-title">MASTER GAME LIST</h3>
+          <h3 class="modal-title">MASTER INVENTORY LIST</h3>
           <button class="btn btn-ghost btn-sm" id="closeMasterGames"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="search-wrap" style="margin-bottom:14px">
@@ -3240,6 +3230,9 @@
       renderMasterGamesList();
     }
 
+    // State for ordered points date filter
+    var _mgOrdFrom = null, _mgOrdTo = null;
+
     function renderMasterGamesList() {
       const search = ($('#mgSearch')?.value || '').toLowerCase();
       const list = $('#mgList');
@@ -3247,25 +3240,74 @@
       const filtered = state.masterGames.filter(g => g.name.toLowerCase().includes(search));
       const showCostRate = state.empRole !== 'employee' || getEmpPerm('viewCostRate');
       const isManager = state.empRole !== 'employee';
-      list.innerHTML = filtered.map(g => `
-        <div class="mg-row" style="display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);gap:8px;cursor:pointer;transition:background 0.15s" data-id="${g._id}" onmouseenter="this.style.background='var(--bgHover)'" onmouseleave="this.style.background='transparent'">
+
+      // Compute filtered ordered points from billingHistory per date range
+      function getFilteredOrdered(g) {
+        if (!_mgOrdFrom && !_mgOrdTo) return g.orderedPoints || 0;
+        const bh = g.billingHistory || [];
+        const fromD = _mgOrdFrom ? new Date(_mgOrdFrom + 'T00:00:00') : null;
+        const toD   = _mgOrdTo   ? new Date(_mgOrdTo   + 'T23:59:59') : null;
+        // billingType 'Ordered' = orderedPoints; also sum all if no type distinction
+        return bh.reduce((s, r) => {
+          if (r.billingType && r.billingType !== 'Ordered') return s;
+          const d = r.date ? new Date(r.date) : null;
+          if (!d || isNaN(d.getTime())) return s;
+          if (fromD && d < fromD) return s;
+          if (toD   && d > toD)   return s;
+          return s + (r.amount || 0);
+        }, 0);
+      }
+
+      list.innerHTML = filtered.map(g => {
+        const filtOrd = getFilteredOrdered(g);
+        const ordLabel = (_mgOrdFrom || _mgOrdTo) ? ' (filtered)' : '';
+        return `<div class="mg-row" style="display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);gap:8px;cursor:pointer;transition:background 0.15s" data-id="${g._id}" onmouseenter="this.style.background='var(--bgHover)'" onmouseleave="this.style.background='transparent'">
           <span style="font-size:16px">🎮</span>
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:14px">${esc(g.name)}</div>
             ${isManager && g.assignedUsername ? `<div style="font-size:10px;color:var(--textMuted);margin-top:1px">${esc(g.assignedUsername)} · ${esc(g.assignedLevel||'')}</div>` : ''}
           </div>
           ${showCostRate ? `<span class="badge badge-orange" style="margin-right:2px">${g.costRate||0}%</span>` : ''}
-          ${(g.orderedPoints||0) > 0 ? `<span class="badge badge-yellow" title="Ordered Points">${(g.orderedPoints||0).toLocaleString()} ord pts</span>` : ''}
+          ${filtOrd > 0 ? `<span class="badge badge-yellow" title="Ordered Points${ordLabel}">${filtOrd.toLocaleString()} ord pts</span>` : ''}
           <span class="badge ${(g.remainingPoints||0) > 0 ? 'badge-cyan' : 'badge-red'}">${(g.remainingPoints||0).toLocaleString()} pts</span>
           <span style="color:var(--textMuted);font-size:12px">▸</span>
-        </div>
-      `).join('') || '<div style="padding:20px;text-align:center;color:var(--textMuted)">No games found</div>';
+        </div>`;
+      }).join('') || '<div style="padding:20px;text-align:center;color:var(--textMuted)">No games found</div>';
     }
 
     function bindMasterGamesModal() {
       $('#closeMasterGames').onclick = () => { state.masterGamesModalOpen = false; $('#masterGamesModal')?.remove(); };
       $('#masterGamesModal').onclick = (e) => { if (e.target.id === 'masterGamesModal') { state.masterGamesModalOpen = false; e.target.remove(); } };
       $('#mgSearch').oninput = () => { renderMasterGamesList(); bindMasterGameListEvents(); };
+
+      // Inject ordered points date filter row above mgList (only show for managers)
+      const _mgListEl = $('#mgList');
+      if (_mgListEl && !document.getElementById('mgOrdFilterWrap')) {
+        const now = new Date();
+        const _dfrom = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-01';
+        const _dto   = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+        const filterWrap = document.createElement('div');
+        filterWrap.id = 'mgOrdFilterWrap';
+        filterWrap.style.cssText = 'display:flex;gap:6px;align-items:flex-end;margin-bottom:10px;padding:8px 10px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.15);border-radius:8px;flex-wrap:wrap';
+        filterWrap.innerHTML = `
+          <span style="font-size:10px;color:#fbbf24;font-weight:700;text-transform:uppercase;letter-spacing:.5px;align-self:center;flex-shrink:0">Ord Pts Filter</span>
+          <div style="flex:1;min-width:90px"><span style="font-size:9px;color:var(--textMuted);display:block;margin-bottom:2px">From</span><input class="input" type="date" id="mgOrdFrom" value="${_dfrom}" style="font-size:11px;padding:4px 8px"/></div>
+          <div style="flex:1;min-width:90px"><span style="font-size:9px;color:var(--textMuted);display:block;margin-bottom:2px">To</span><input class="input" type="date" id="mgOrdTo" value="${_dto}" style="font-size:11px;padding:4px 8px"/></div>
+          <button class="btn btn-sm" id="mgOrdApply" style="background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;font-size:10px;padding:4px 10px;align-self:flex-end">Apply</button>
+          <button class="btn btn-sm" id="mgOrdReset" style="font-size:10px;color:var(--textMuted);padding:4px 8px;align-self:flex-end">All</button>
+        `;
+        _mgListEl.parentNode.insertBefore(filterWrap, _mgListEl);
+        // Pre-apply default: no filter (show all-time ordered)
+        document.getElementById('mgOrdApply').onclick = () => {
+          _mgOrdFrom = document.getElementById('mgOrdFrom').value || null;
+          _mgOrdTo   = document.getElementById('mgOrdTo').value   || null;
+          renderMasterGamesList(); bindMasterGameListEvents();
+        };
+        document.getElementById('mgOrdReset').onclick = () => {
+          _mgOrdFrom = null; _mgOrdTo = null;
+          renderMasterGamesList(); bindMasterGameListEvents();
+        };
+      }
       const mgAddHandler = () => $('#mgAdd').click();
       if ($('#mgNewName')) $('#mgNewName').onkeydown = (e) => { if (e.key === 'Enter') mgAddHandler(); };
       if ($('#mgNewPoints')) $('#mgNewPoints').onkeydown = (e) => { if (e.key === 'Enter') mgAddHandler(); };
@@ -3779,17 +3821,22 @@
               usernames: [] 
             };
           }
-          $('#newCompanyName').value = '';
-          $('#addCompanyForm').classList.add('hidden');
+          // Clear form fields while DOM still exists, BEFORE render()
+          const _nameEl = $('#newCompanyName');
+          const _formEl = $('#addCompanyForm');
+          if (_nameEl) _nameEl.value = '';
+          if (_formEl) _formEl.classList.add('hidden');
           render();
         } catch(e) {
           console.error('Add company error:', e);
+          // Re-enable button before alerting so UI stays responsive
+          btn.disabled = false;
+          btn.textContent = 'Add';
           alert('Failed to add company: ' + e.message);
         } finally {
-          if ($('#confirmAddCompany')) {
-            btn.disabled = false;
-            btn.textContent = 'Add';
-          }
+          // btn may be stale after render() — look it up fresh if needed
+          const _freshBtn = $('#confirmAddCompany');
+          if (_freshBtn) { _freshBtn.disabled = false; _freshBtn.textContent = 'Add'; }
         }
       };
       $('#newCompanyName').onkeydown = (e) => { if (e.key === 'Enter') $('#confirmAddCompany').click(); };
@@ -3925,6 +3972,7 @@
               <svg id="billDateIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${state.billDateOverride?'#22d3ee':'#a78bfa'}" stroke-width="2" style="cursor:pointer;flex-shrink:0;vertical-align:middle" title="${state.billDateOverride?'Custom date active — click to change':'Set custom bill date'}" onclick="var p=document.getElementById('billDatePicker');if(p.showPicker)p.showPicker();else p.focus()"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               ${state.billDateOverride ? '<span id="billDateOverrideLabel" style="font-size:10px;color:#22d3ee;font-family:Rajdhani,sans-serif;cursor:pointer;white-space:nowrap" title="Click to clear custom date" onclick="state.billDateOverride=null;refreshBillingPanel()">'+(function(){var d=new Date(state.billDateOverride);return String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getDate()).padStart(2,"0")+" "+d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",hour12:true})})()+" ×</span>" : ""}
               <input type="datetime-local" id="billDatePicker" value="${(function(){if(state.billDateOverride){var d=new Date(state.billDateOverride);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T"+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}var n=new Date();return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0")+"T"+String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0")})()}" onchange="if(this.value){state.billDateOverride=new Date(this.value).toISOString();var lbl=document.getElementById('billDateOverrideLabel');if(lbl){var _d=new Date(state.billDateOverride);lbl.textContent=String(_d.getMonth()+1).padStart(2,'0')+'/'+String(_d.getDate()).padStart(2,'0')+' '+_d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true})+' ×'}else{var _ic=document.getElementById('billDateIcon');if(_ic){_ic.style.stroke='#22d3ee';var _sp=document.createElement('span');_sp.id='billDateOverrideLabel';_sp.style.cssText='font-size:10px;color:#22d3ee;font-family:Rajdhani,sans-serif;cursor:pointer;white-space:nowrap';_sp.title='Click to clear custom date';var _dd=new Date(state.billDateOverride);_sp.textContent=String(_dd.getMonth()+1).padStart(2,'0')+'/'+String(_dd.getDate()).padStart(2,'0')+' '+_dd.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true})+' ×';_sp.onclick=function(){state.billDateOverride=null;refreshBillingPanel();};_ic.parentNode.insertBefore(_sp,_ic.nextSibling)}}}" style="position:absolute;opacity:0;width:1px;height:1px;overflow:hidden" />
+              <input type="datetime-local" id="billDateVisibleInput" class="input desktop-date-input" value="${(function(){if(state.billDateOverride){var d=new Date(state.billDateOverride);return d.getFullYear()+ \"-\"+String(d.getMonth()+1).padStart(2,\"0\")+\"-\"+String(d.getDate()).padStart(2,\"0\")+\"T\"+String(d.getHours()).padStart(2,\"0\")+\":\"+String(d.getMinutes()).padStart(2,\"0\")}var n=new Date();return n.getFullYear()+\"-\"+String(n.getMonth()+1).padStart(2,\"0\")+\"-\"+String(n.getDate()).padStart(2,\"0\")+\"T\"+String(n.getHours()).padStart(2,\"0\")+\":\"+String(n.getMinutes()).padStart(2,\"0\")})()}" onchange="if(this.value){var _hp=document.getElementById('billDatePicker');if(_hp)_hp.value=this.value;state.billDateOverride=new Date(this.value).toISOString();refreshBillingPanel()}" style="font-size:11px;padding:4px 8px;height:30px;color:#22d3ee;border-color:rgba(34,211,238,0.3);background:rgba(34,211,238,0.05);min-width:170px" />
             </div>
             <div id="convToggle" style="display:inline-flex;align-items:center;gap:0;cursor:pointer;user-select:none">
             <div style="padding:6px 0;min-width:58px;text-align:center;border-radius:6px 0 0 6px;font-family:'Orbitron',monospace;font-size:11px;font-weight:700;line-height:1;
@@ -3945,6 +3993,8 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
           ADD GAME TO BILL
         </button>
+
+        ${items.length === 0 ? '' : `
 
         <div class="card totals-card" style="margin-bottom:14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -4032,6 +4082,7 @@
             <span style="color:var(--green);font-weight:600">✓ Bill saved successfully!</span>
           </div>
         </div>
+        `}
 
         <div class="card" style="margin-top:16px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -4163,7 +4214,7 @@
                 <span style="padding:2px 6px;background:${(item.mode||state.convMode)==='dollar2pts'?'var(--green)':'transparent'};color:${(item.mode||state.convMode)==='dollar2pts'?'#000':'var(--textMuted)'};transition:all 0.2s">$</span>
               </div>
             </div>
-            <input class="input bill-value-input" data-idx="${idx}" type="number" placeholder="${(item.mode||state.convMode)==='pts2dollar'?'Enter points':'Enter $'}" value="${item.value}" />
+            <input class="input bill-value-input" data-idx="${idx}" type="text" inputmode="decimal" placeholder="${(item.mode||state.convMode)==='pts2dollar'?'Enter points':'Enter $'}" value="${item.value}" />
           </div>
         </div>
         ${item.value ? `<div class="bill-result">
@@ -4348,6 +4399,24 @@
             opt.style.display = opt.dataset.gamename.toLowerCase().includes(q) ? '' : 'none';
           });
         };
+        inp.onblur = () => {
+          setTimeout(() => {
+            const q = inp.value.trim().toLowerCase();
+            if (!q) { dropdown.classList.add('hidden'); return; }
+            // If current value exactly matches already-selected game, skip
+            if (state.billItems[idx] && state.billItems[idx].gameName.toLowerCase() === q) { dropdown.classList.add('hidden'); return; }
+            // Find best visible match
+            const visible = Array.from(dropdown.querySelectorAll('.dropdown-item')).filter(o => o.style.display !== 'none');
+            // Exact match first
+            let best = visible.find(o => o.dataset.gamename.toLowerCase() === q);
+            // Starts-with match
+            if (!best) best = visible.find(o => o.dataset.gamename.toLowerCase().startsWith(q));
+            // Any includes match
+            if (!best) best = visible[0];
+            if (best) best.click();
+            else dropdown.classList.add('hidden');
+          }, 200);
+        };
         dropdown.querySelectorAll('.dropdown-item').forEach(opt => {
           opt.onclick = () => {
             state.billItems[idx].gameId = opt.dataset.gameid;
@@ -4391,6 +4460,19 @@
             // Always show "No Username" option
             opt.style.display = (user === '' || text.includes(q)) ? '' : 'none';
           });
+        };
+        inp.onblur = () => {
+          setTimeout(() => {
+            const q = inp.value.trim().toLowerCase();
+            if (!q) { dropdown.classList.add('hidden'); return; }
+            if (state.billItems[idx] && state.billItems[idx].username.toLowerCase() === q) { dropdown.classList.add('hidden'); return; }
+            const visible = Array.from(dropdown.querySelectorAll('.dropdown-item[data-user]')).filter(o => o.dataset.user !== '' && o.style.display !== 'none');
+            let best = visible.find(o => o.dataset.user.toLowerCase() === q);
+            if (!best) best = visible.find(o => o.dataset.user.toLowerCase().startsWith(q));
+            if (!best) best = visible[0];
+            if (best) best.click();
+            else dropdown.classList.add('hidden');
+          }, 200);
         };
 
         dropdown.querySelectorAll('.dropdown-item').forEach(opt => {
@@ -5226,19 +5308,9 @@
           <span style="font-size:13px;font-weight:700;color:#059669">$${fmtDol(totalReceived)}</span>
         </div>`;
       }
-      // Show credit applied if any
-      if (summaryTotalCredit > 0) {
-        summaryRowsHTML += `<div style="display:flex;justify-content:space-between">
-          <span style="font-size:13px;color:#2563eb">Credit Applied</span>
-          <span style="font-size:13px;font-weight:700;color:#2563eb">−$${fmtDol(summaryTotalCredit)}</span>
-        </div>`;
-      }
       summaryRowsHTML += `<div style="height:1px;background:#e5e7eb;margin-top:4px"></div>`;
       // For single-bill or live-bill invoices, show prior outstanding and total balance due
-      const _invPendingDueRaw = getCompanyOutstandingBalance(comp);
-      // Subtract the current invoice's own balance from the outstanding total to avoid double-counting.
-      // For a single bill, totalBalance IS this bill's balanceDue, which is already in _invPendingDueRaw.
-      const _invPendingDue = isLiveBill ? _invPendingDueRaw : Math.max(0, _invPendingDueRaw - totalBalance);
+      const _invPendingDue = getCompanyOutstandingBalance(comp);
       const _isSingleOrLive = isLiveBill || (singleBill != null) || (billsOverride && billsOverride.length === 1);
       const _showPending = _invPendingDue > 0.001 && _isSingleOrLive;
       // Only show balance due if there's actually a balance
@@ -6495,16 +6567,13 @@
         var tag=h.kind==='general'?tg2('RECEIVED','#34d399'):h.kind==='credit'?tg2('CREDIT +','#22d3ee'):h.kind==='applied'?tg2('CREDIT USED','#f472b6'):h.status==='received'?tg2('FULL','#34d399'):tg2('PARTIAL','#fbbf24');
         var billRef=h.billTotal!==undefined?'<span style="color:var(--textMuted);font-size:10px">bill $'+h.billTotal.toFixed(2)+'</span>':'';
         var poolBadge='<span style="color:#a78bfa;font-size:9px;background:rgba(124,58,237,0.12);padding:1px 5px;border-radius:4px;margin-left:4px">pool $'+h._poolAfter.toFixed(2)+'</span>';
-        // Only show edit/delete for extraPayment entries (general, credit) that have a billId+payIdx
-        var actionBtns='';
-        if((h.kind==='general'||h.kind==='credit')&&h.billId!=null&&h.payIdx!=null){
-          var epDate=(h.date&&typeof h.date==='string')?h.date:(h.date instanceof Date?h.date.toISOString().slice(0,10):localDateStr());
-          actionBtns='<button class="pay-edit-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" data-amt="'+h.amount.toFixed(2)+'" data-date="'+epDate+'" style="padding:2px 7px;font-size:10px;margin-left:4px" title="Edit">✏️</button>'
-            +'<button class="pay-del-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" style="padding:2px 7px;font-size:10px;color:#f87171" title="Delete">🗑️</button>';
-        }
-        return '<div class="analytics-detail-item" style="padding:8px 10px;font-size:12px;flex-wrap:wrap;gap:4px;align-items:center"><span style="color:'+amtColor+';font-weight:700;min-width:60px">'+sign+h.amount.toFixed(2)+'</span>'+tag+billRef+poolBadge+'<span style="color:var(--textMuted);font-size:10px;margin-left:auto">'+toLocalDate(h.date).toLocaleDateString()+'</span>'+actionBtns+'</div>';
+        return '<div class="analytics-detail-item" style="padding:8px 10px;font-size:12px;flex-wrap:wrap;gap:4px"><span style="color:'+amtColor+';font-weight:700;min-width:60px">'+sign+h.amount.toFixed(2)+'</span>'+tag+billRef+poolBadge+'<span style="color:var(--textMuted);font-size:10px;margin-left:auto">'+toLocalDate(h.date).toLocaleDateString()+'</span></div>';
       }).join(''):'<div style="padding:14px;text-align:center;color:var(--textMuted);font-size:12px">No payments yet</div>';
-      var ov=document.createElement('div');ov.className='modal-overlay';ov.id='paymentRecordModal';ov.innerHTML='<div class="modal fade-in" style="max-width:480px"><div class="modal-header"><h3 class="modal-title">PAYMENTS</h3><button class="btn btn-ghost btn-sm" id="closePayM"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div style="display:flex;gap:10px;padding:14px;border-radius:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.12);margin-bottom:14px;flex-wrap:wrap"><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:#22d3ee;text-transform:uppercase;font-weight:700;margin-bottom:2px">Received</div><div style="font-size:18px;font-weight:800;color:#34d399;font-family:Orbitron,monospace">$'+d.totalReceived.toFixed(2)+'</div></div><div style="width:1px;background:rgba(120,100,200,0.12)"></div><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';text-transform:uppercase;font-weight:700;margin-bottom:2px">'+(d.totalBalance<0?'Credit':'Balance')+'</div><div style="font-size:18px;font-weight:800;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';font-family:Orbitron,monospace">'+'$'+Math.abs(d.totalBalance).toFixed(2)+'</div></div>'+(d.totalRedeemedDollars>0?'<div style="width:100%;padding:6px 10px;border-radius:8px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.1);font-size:11px;display:flex;justify-content:space-between"><span style="color:#fbbf24;font-weight:600">Redeemed Value</span><span style="color:#fbbf24;font-weight:700">$'+d.totalRedeemedDollars.toFixed(2)+'</span></div><div style="width:100%;padding:4px 10px;font-size:11px;display:flex;justify-content:space-between"><span style="color:var(--textMuted)">Net Received</span><span style="color:#22d3ee;font-weight:700">$'+(d.totalReceived-d.totalRedeemedDollars).toFixed(2)+'</span></div>':'')+'</div>'+(creditBal>0?'<div style="padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);margin-bottom:14px;display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg><span style="font-size:12px;color:#34d399;font-weight:700">Available Credit: $'+creditBal.toFixed(2)+'</span><span style="font-size:10px;color:var(--textMuted);margin-left:auto">Auto-applied to future bills</span></div>':'')+'<div style="margin-bottom:14px"><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:8px">RECORD PAYMENT</h4><div style="margin-bottom:8px"><span class="label" style="font-size:9px">Bill</span><select class="input styled-select" id="payBill" style="font-size:12px;background-color:var(--bgInput)">'+opts+'</select></div><div style="display:flex;gap:8px"><div style="flex:1"><span class="label" style="font-size:9px">Amount ($)</span><input class="input" type="number" id="payAmt" placeholder="0.00" step="0.01" min="0"/></div><div style="flex:1"><span class="label" style="font-size:9px">Date</span><input class="input" type="date" id="payDt" value="'+localDateStr()+'"/></div></div><button class="btn btn-green btn-full btn-sm" id="paySave" style="margin-top:10px;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Record</button></div><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:6px">HISTORY</h4><div style="max-height:200px;overflow-y:auto;border-radius:10px;background:rgba(15,12,28,0.4);border:1px solid rgba(120,100,200,0.08)">'+hH+'</div></div>';
+      // Build payment method options for the record payment form
+      var _pmOpts = cfPaymentMethods.length > 0
+        ? '<option value="">— None —</option>' + cfPaymentMethods.map(function(pm){ return '<option value="'+esc(pm.id)+'">'+esc(pm.name)+'</option>'; }).join('')
+        : '<option value="">No payment methods</option>';
+      var ov=document.createElement('div');ov.className='modal-overlay';ov.id='paymentRecordModal';ov.innerHTML='<div class="modal fade-in" style="max-width:480px"><div class="modal-header"><h3 class="modal-title">PAYMENTS</h3><button class="btn btn-ghost btn-sm" id="closePayM"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div><div style="display:flex;gap:10px;padding:14px;border-radius:12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.12);margin-bottom:14px;flex-wrap:wrap"><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:#22d3ee;text-transform:uppercase;font-weight:700;margin-bottom:2px">Received</div><div style="font-size:18px;font-weight:800;color:#34d399;font-family:Orbitron,monospace">$'+d.totalReceived.toFixed(2)+'</div></div><div style="width:1px;background:rgba(120,100,200,0.12)"></div><div style="flex:1;text-align:center;min-width:80px"><div style="font-size:10px;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';text-transform:uppercase;font-weight:700;margin-bottom:2px">'+(d.totalBalance<0?'Credit':'Balance')+'</div><div style="font-size:18px;font-weight:800;color:'+(d.totalBalance>0?'#f472b6':'#34d399')+';font-family:Orbitron,monospace">'+'$'+Math.abs(d.totalBalance).toFixed(2)+'</div></div>'+(d.totalRedeemedDollars>0?'<div style="width:100%;padding:6px 10px;border-radius:8px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.1);font-size:11px;display:flex;justify-content:space-between"><span style="color:#fbbf24;font-weight:600">Redeemed Value</span><span style="color:#fbbf24;font-weight:700">$'+d.totalRedeemedDollars.toFixed(2)+'</span></div><div style="width:100%;padding:4px 10px;font-size:11px;display:flex;justify-content:space-between"><span style="color:var(--textMuted)">Net Received</span><span style="color:#22d3ee;font-weight:700">$'+(d.totalReceived-d.totalRedeemedDollars).toFixed(2)+'</span></div>':'')+'</div>'+(creditBal>0?'<div style="padding:10px 14px;border-radius:10px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);margin-bottom:14px;display:flex;align-items:center;gap:8px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg><span style="font-size:12px;color:#34d399;font-weight:700">Available Credit: $'+creditBal.toFixed(2)+'</span><span style="font-size:10px;color:var(--textMuted);margin-left:auto">Auto-applied to future bills</span></div>':'')+'<div style="margin-bottom:14px"><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:8px">RECORD PAYMENT</h4><div style="margin-bottom:8px"><span class="label" style="font-size:9px">Bill</span><select class="input styled-select" id="payBill" style="font-size:12px;background-color:var(--bgInput)">'+opts+'</select></div><div style="display:flex;gap:8px"><div style="flex:1"><span class="label" style="font-size:9px">Amount ($)</span><input class="input" type="number" id="payAmt" placeholder="0.00" step="0.01" min="0"/></div><div style="flex:1"><span class="label" style="font-size:9px">Date</span><input class="input" type="date" id="payDt" value="'+localDateStr()+'"/></div></div>'+(cfPaymentMethods.length>0?'<div style="margin-top:8px"><span class="label" style="font-size:9px">Payment Method</span><select class="input styled-select" id="payMethod" style="font-size:12px;background-color:var(--bgInput)">'+_pmOpts+'</select></div>':'')+'<button class="btn btn-green btn-full btn-sm" id="paySave" style="margin-top:10px;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Record</button></div><h4 style="font-family:Orbitron,monospace;font-size:11px;color:var(--textSecondary);margin-bottom:6px">HISTORY</h4><div style="max-height:200px;overflow-y:auto;border-radius:10px;background:rgba(15,12,28,0.4);border:1px solid rgba(120,100,200,0.08)">'+hH+'</div></div>';
       document.body.appendChild(ov);ov.onclick=function(e){if(e.target===ov)ov.remove()};document.getElementById('closePayM').onclick=function(){ov.remove()};
       ov.querySelectorAll('.pay-edit-btn').forEach(function(eb){eb.onclick=function(){
         var bid=eb.dataset.billid,pidx=parseInt(eb.dataset.payidx),oldAmt=eb.dataset.amt,oldDate=eb.dataset.date;
@@ -6526,38 +6595,16 @@
         };
       }});
       ov.querySelectorAll('.pay-del-btn').forEach(function(pb){pb.onclick=async function(){
+        if(!confirm('Delete this payment?'))return;
         var bid=pb.dataset.billid,pidx=parseInt(pb.dataset.payidx);
-        // Find the payment being deleted so we know its amount and kind
-        var _delBill=state.bills.find(function(bb){return bb._id===bid});
-        var _delEp=_delBill&&(_delBill.extraPayments||[])[pidx];
-        var _delAmt=_delEp?(_delEp.amount||0):0;
-        var _isCredit=_delEp&&(_delEp.isCredit||false);
-        var _isGeneral=_delEp&&(_delEp.isGeneral||false);
-        // Ask user whether to restore credit balance (only relevant if this payment added to credit)
-        var _restoreCredit=false;
-        if(_delAmt>0&&(_isCredit||_isGeneral)){
-          var _choice=confirm('This payment of $'+_delAmt.toFixed(2)+' added to the credit balance.\n\nClick OK to restore (subtract) this amount from the credit balance after deleting.\nClick Cancel to delete the payment record only (keep credit balance unchanged).');
-          _restoreCredit=_choice;
-        } else {
-          if(!confirm('Delete this payment record?'))return;
-        }
-        try{
-          var ref=db.doc(userPath()+'/bills/'+bid);
-          var snap=await ref.get();var eps=(snap.data().extraPayments||[]);
-          eps.splice(pidx,1);
-          await trackedWrite(function(){return ref.update({extraPayments:eps})});
-          var lb=state.bills.find(function(bb){return bb._id===bid});if(lb)lb.extraPayments=eps;
-          // Update company credit balance if user chose to restore
-          if(_restoreCredit&&_delAmt>0){
-            var _prevCr=typeof c.creditBalance==='number'?c.creditBalance:getCompanyCreditBalance(c);
-            var _newCr=parseFloat(Math.max(0,_prevCr-_delAmt).toFixed(2));
-            await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance:_newCr})});
-            if(state.companies[c._id])state.companies[c._id].creditBalance=_newCr;
-          }
-          invalidateAnalyticsCache();ov.remove();render();
-        }catch(e){alert('Error: '+e.message)}
+        try{var ref=db.doc(userPath()+'/bills/'+bid);var snap=await ref.get();var eps=(snap.data().extraPayments||[]);
+        eps.splice(pidx,1);await trackedWrite(function(){return ref.update({extraPayments:eps})});
+        var lb=state.bills.find(function(bb){return bb._id===bid});if(lb)lb.extraPayments=eps;
+        invalidateAnalyticsCache();ov.remove();render();}catch(e){alert('Error: '+e.message)}
       }});
-      document.getElementById('paySave').onclick=async function(){var bid=document.getElementById('payBill').value,amt=parseFloat(document.getElementById('payAmt').value)||0,dt=document.getElementById('payDt').value;if(!bid||amt<=0){alert('Enter an amount');return}
+      document.getElementById('paySave').onclick=async function(){var bid=document.getElementById('payBill').value,amt=parseFloat(document.getElementById('payAmt').value)||0,dt=document.getElementById('payDt').value;
+        var _payMethEl=document.getElementById('payMethod'); var _payMethId=_payMethEl?(_payMethEl.value||''):'';
+        if(!bid||amt<=0){alert('Enter an amount');return}
         try{
           if(bid==='__general__'){
             var payDate = dt || localDateStr();
@@ -6568,66 +6615,58 @@
 
             if(allCompBills.length===0){
               // No bills at all — create a holder bill to record the payment
-              var payBill={companyId:c._id,companyName:c.name,date:new Date().toISOString(),convMode:'pts2dollar',items:[],totalDollars:0,totalPoints:0,paymentStatus:'received',partialAmount:0,balanceDue:0,extraPayments:[{amount:amt,date:payDate,isGeneral:true}]};
+              var _epEntry={amount:amt,date:payDate,isGeneral:true}; if(_payMethId) _epEntry.paymentMethodId=_payMethId;
+              var payBill={companyId:c._id,companyName:c.name,date:new Date().toISOString(),convMode:'pts2dollar',items:[],totalDollars:0,totalPoints:0,paymentStatus:'received',partialAmount:0,balanceDue:0,extraPayments:[_epEntry]};
               await trackedWrite(function(){return db.collection(userPath()+'/bills').add(payBill)});
               // Update company creditBalance
               await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance: Math.max(0,(c.creditBalance||0)+amt)})});
               if(state.companies[c._id]) state.companies[c._id].creditBalance = Math.max(0,(c.creditBalance||0)+amt);
+              // Record in cash flow
+              if(_payMethId) cfRecordExtraPayment(amt, _payMethId, payDate, c._id, c.name);
             } else {
               var remaining = amt;
-
-              // Apply payment to each unpaid bill oldest-first.
-              // Only update balanceDue / paymentStatus / partialAmount — do NOT push any
-              // extraPayments entry on the cleared bill.  Analytics counts the payment via
-              // the updated partialAmount (bPaid), so no extra entry is needed and none
-              // would cause a double-count.
               for(let ubi=0; ubi<unpaidBills.length && remaining>0.001; ubi++){
                 let ubill = unpaidBills[ubi];
-                // Fetch fresh from Firestore to avoid stale data
                 let uref = db.doc(userPath()+'/bills/'+ubill._id);
                 let usn = await uref.get(); let udata = usn.data();
                 let uDue = udata.balanceDue||0;
                 if(uDue <= 0.001) continue;
-
                 let applyAmt = Math.min(remaining, uDue);
                 let newDue = parseFloat((uDue - applyAmt).toFixed(2));
                 let uupdates = { balanceDue: newDue };
                 uupdates.paymentStatus = newDue <= 0.001 ? 'received' : 'partial';
-                // partialAmount = total actually paid toward this bill's grand total
                 let grandTotal = (udata.totalDollars||0)+(udata.extraFeeAmount||0);
                 uupdates.partialAmount = parseFloat((grandTotal - newDue).toFixed(2));
-                // Push an extraPayments record so this payment is visible in history
                 let existingEps = udata.extraPayments || [];
-                existingEps.push({ amount: parseFloat(applyAmt.toFixed(2)), date: payDate, isGeneral: true });
+                var _epEntry2={amount: parseFloat(applyAmt.toFixed(2)), date: payDate, isGeneral: true}; if(_payMethId) _epEntry2.paymentMethodId=_payMethId;
+                existingEps.push(_epEntry2);
                 uupdates.extraPayments = existingEps;
-
+                if(_payMethId) uupdates.paymentMethodId = _payMethId;
                 await trackedWrite(function(){return uref.update(uupdates)});
-                // Update local state immediately
                 let lbU=state.bills.find(function(bb){return bb._id===ubill._id});
                 if(lbU){Object.assign(lbU,uupdates);}
                 remaining -= applyAmt;
               }
 
-              // Remaining amount after clearing all bills = new credit
               var newCredit = parseFloat((Math.max(0, remaining)).toFixed(2));
               var prevCredit = typeof c.creditBalance==='number' ? c.creditBalance : 0;
               var totalCredit = parseFloat((prevCredit + newCredit).toFixed(2));
 
-              // Record the credit portion on the newest bill for visibility in payment history.
-              // isCredit:true marks this as a standalone credit addition (not a bill payment),
-              // so analytics correctly adds it to totalReceived without double-counting.
               if(newCredit > 0.001){
                 var newestBill = allCompBills[allCompBills.length-1];
                 var nbRef = db.doc(userPath()+'/bills/'+newestBill._id);
                 var nbSnap = await nbRef.get(); var nbData = nbSnap.data();
                 var nbEp = (nbData.extraPayments||[]);
-                nbEp.push({amount:newCredit, date:payDate, isCredit:true});
+                var _crEpEntry={amount:newCredit, date:payDate, isCredit:true}; if(_payMethId) _crEpEntry.paymentMethodId=_payMethId;
+                nbEp.push(_crEpEntry);
                 await trackedWrite(function(){return nbRef.update({extraPayments:nbEp})});
                 var lbN=state.bills.find(function(bb){return bb._id===newestBill._id});
                 if(lbN){lbN.extraPayments=nbEp;}
               }
 
-              // Update company creditBalance — single source of truth
+              // Record in cash flow for payment method tracking
+              if(_payMethId) cfRecordExtraPayment(amt, _payMethId, payDate, c._id, c.name);
+
               await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance: totalCredit})});
               if(state.companies[c._id]) state.companies[c._id].creditBalance = totalCredit;
             }
@@ -6636,17 +6675,19 @@
             var sn=await ref.get(); var bData=sn.data();
             var ep=(bData.extraPayments||[]);
             var payDate2=dt||localDateStr();
-            ep.push({amount:amt,date:payDate2});
+            var _epEntry3={amount:amt,date:payDate2}; if(_payMethId) _epEntry3.paymentMethodId=_payMethId;
+            ep.push(_epEntry3);
             var curDue = bData.balanceDue||0;
             var newDue2 = parseFloat(Math.max(0, curDue - amt).toFixed(2));
             var updates2={extraPayments:ep, balanceDue:newDue2};
             updates2.paymentStatus = newDue2 <= 0.001 ? 'received' : 'partial';
             var grandTotal2=(bData.totalDollars||0)+(bData.extraFeeAmount||0);
             updates2.partialAmount = parseFloat((grandTotal2 - newDue2).toFixed(2));
+            if(_payMethId) updates2.paymentMethodId = _payMethId;
             await trackedWrite(function(){return ref.update(updates2)});
             var lb4=state.bills.find(function(bb){return bb._id===bid});
             if(lb4){Object.assign(lb4,updates2);}
-            // If payment exceeded balance, remainder is credit
+            if(_payMethId) cfRecordExtraPayment(amt, _payMethId, payDate2, c._id, c.name);
             var overpay = parseFloat(Math.max(0, amt - curDue).toFixed(2));
             if(overpay > 0.001){
               var prevCr = typeof c.creditBalance==='number' ? c.creditBalance : 0;
@@ -7589,19 +7630,12 @@
         }
       };
       document.getElementById('beDelete').onclick=async function(){
-        // If this bill had credit applied to it, ask whether to restore the credit
-        var _billCredit = bill.creditApplied || 0;
-        var _shouldRestore = false;
-        if(_billCredit > 0){
-          _shouldRestore = confirm('This bill had $'+_billCredit.toFixed(2)+' of credit applied to it.\n\nClick OK to restore that credit back to the company balance after deleting.\nClick Cancel to delete without restoring credit.');
-        } else {
-          if(!confirm('Delete this bill permanently?'))return;
-        }
+        if(!confirm('Delete this bill permanently?'))return;
         var delBtn=this;delBtn.disabled=true;delBtn.textContent='Deleting...';
         try{
           await db.doc(userPath()+'/bills/'+bill._id).delete();
           state.bills=state.bills.filter(function(b){return b._id!==bill._id});
-          // Recompute credit balance from remaining bills for this company
+          // Restore credit balance: recompute from remaining bills for this company
           try {
             var _delCompId = bill.companyId || c._id;
             var _remainBills = state.bills.filter(function(b){ return b.companyId === _delCompId; });
@@ -7614,10 +7648,6 @@
               });
               _newCrBal -= (b.creditApplied||0);
             });
-            // If user chose to restore credit that was consumed by this bill, add it back
-            if(_shouldRestore && _billCredit > 0){
-              _newCrBal += _billCredit;
-            }
             _newCrBal = Math.max(0, parseFloat(_newCrBal.toFixed(2)));
             await db.doc(userPath()+'/companies/'+_delCompId).update({creditBalance: _newCrBal});
             if(state.companies[_delCompId]) state.companies[_delCompId].creditBalance = _newCrBal;
@@ -9785,7 +9815,7 @@
       wrap.innerHTML = employees.map((emp, idx) => {
         const myShift     = activeShifts.find(s => s.employeeId === emp._id);
         const isActive    = !!myShift;
-        const activeDurMs = isActive && myShift.startTime?.toDate ? now - myShift.startTime.toDate().getTime() : 0;
+        const activeDurMs = isActive && myShift.startTime?.toDate ? Math.max(0, now - myShift.startTime.toDate().getTime()) : 0;
         const clr         = colors[idx % colors.length];
         const isDeactivated = emp.active === false;
         const isLinked    = linkMap[emp._id];
@@ -9822,7 +9852,7 @@
           activeShifts.forEach(s => {
             const el = document.getElementById('ot_' + s.employeeId);
             if (!el) return;
-            const ms = s.startTime?.toDate ? Date.now() - s.startTime.toDate().getTime() : 0;
+            const ms = s.startTime?.toDate ? Math.max(0, Date.now() - s.startTime.toDate().getTime()) : 0;
             el.textContent = formatHHMMSS(ms);
           });
         }, 1000);
@@ -10533,6 +10563,26 @@
       }
     }
 
+    // ── Record an extra/standalone payment in cfTransactions ──
+    // Called when a payment is recorded via the Payment Received modal with a payment method selected.
+    function cfRecordExtraPayment(amount, pmId, date, companyId, companyName) {
+      if (!pmId || state.empRole === 'employee') return;
+      var tx = {
+        type: 'income',
+        category: 'extra_payment',
+        amount: parseFloat((amount||0).toFixed(2)),
+        paymentMethodId: pmId,
+        companyId: companyId || '',
+        companyName: companyName || '',
+        date: date ? (typeof date === 'string' ? date : new Date(date).toISOString()) : new Date().toISOString(),
+        billId: '',
+        note: 'Extra payment – ' + (companyName || '')
+      };
+      db.collection(cfPath('transactions')).add(tx).then(ref => {
+        cfTransactions.push(Object.assign({ id: ref.id }, tx));
+      }).catch(e => { console.error('cfRecordExtraPayment:', e); });
+    }
+
     // ── Sync all existing bills into cfTransactions (backfill) ──
     // Called after both state.bills and cfTransactions are loaded.
     // Creates a cfTransaction record for every bill that has received/partial payment
@@ -10758,17 +10808,15 @@
     // CASH FLOW: RENDER
     // ============================================================
     function renderCashFlowPage() {
-      var tab = state.cashFlowTab || 'overview';
+      var tab = state.cashFlowTab || 'tracking';
       // SVG icons for tabs — no emojis
       var tabSvgs = {
-        overview:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>',
         tracking:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>',
         methods:      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
         expenses:     '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
         shareholders: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
       };
       var tabs = [
-        { id: 'overview',    label: 'Overview'     },
         { id: 'tracking',    label: 'Cash Flow'    },
         { id: 'methods',     label: 'Payments'     },
         { id: 'expenses',    label: 'Expenses'     },
@@ -10807,11 +10855,14 @@
       }
 
       var content = '';
-      if (tab === 'overview') content = renderCFOverview(summary, fromDate, toDate, fromDateD, toDateD);
-      else if (tab === 'tracking') content = renderCFTracking(summary, fromDate, toDate, fromDateD, toDateD);
+      if (tab === 'tracking') content = renderCFTracking(summary, fromDate, toDate, fromDateD, toDateD);
       else if (tab === 'methods') content = renderCFMethods();
       else if (tab === 'expenses') content = renderCFExpenses(summary);
-      else if (tab === 'shareholders') content = renderCFShareholders(summary.grossProfit);
+      else if (tab === 'shareholders') {
+        // Shareholders pool uses Global Analytics gross profit (billing profit), not cash inflow-outflow
+        var _gaD = computeGlobalData(null, null);
+        content = renderCFShareholders(_gaD.gPr);
+      }
 
       return `<div class="page fade-in">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
@@ -10819,11 +10870,8 @@
           <h2 style="font-family:'Orbitron',monospace;font-size:18px;color:#34d399;flex:1">Cash Flow Management</h2>
           <button class="btn btn-sm" id="cfExportBtn" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size:11px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</button>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:16px">
-          ${tabs.slice(0,3).map(t => `<button class="btn btn-sm cf-tab-btn" data-tab="${t.id}" style="padding:9px 4px;border-radius:9px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;white-space:nowrap;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:4px;width:100%;${tab===t.id?'background:rgba(52,211,153,0.2);color:#34d399;border:1px solid rgba(52,211,153,0.3)':'background:rgba(15,12,28,0.5);color:var(--textMuted);border:1px solid rgba(120,100,200,0.15)'}">${tabSvgs[t.id]} ${t.label}</button>`).join('')}
-        </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin-bottom:16px">
-          ${tabs.slice(3).map(t => `<button class="btn btn-sm cf-tab-btn" data-tab="${t.id}" style="padding:9px 4px;border-radius:9px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;white-space:nowrap;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:4px;width:100%;${tab===t.id?'background:rgba(52,211,153,0.2);color:#34d399;border:1px solid rgba(52,211,153,0.3)':'background:rgba(15,12,28,0.5);color:var(--textMuted);border:1px solid rgba(120,100,200,0.15)'}">${tabSvgs[t.id]} ${t.label}</button>`).join('')}
+          ${tabs.map(t => `<button class="btn btn-sm cf-tab-btn" data-tab="${t.id}" style="padding:9px 4px;border-radius:9px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;white-space:nowrap;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:4px;width:100%;${tab===t.id?'background:rgba(52,211,153,0.2);color:#34d399;border:1px solid rgba(52,211,153,0.3)':'background:rgba(15,12,28,0.5);color:var(--textMuted);border:1px solid rgba(120,100,200,0.15)'}">${tabSvgs[t.id]} ${t.label}</button>`).join('')}
         </div>
         ${content}
       </div>`;
@@ -11194,7 +11242,7 @@
           if (!name) { $('#cfPmName').focus(); return; }
           var doc = await db.collection(cfPath('paymentMethods')).add({ name, createdAt: new Date().toISOString() });
           cfPaymentMethods.push({ id: doc.id, name, createdAt: new Date().toISOString() });
-          $('#cfPmName').value = '';
+          var _pmEl = $('#cfPmName'); if (_pmEl) _pmEl.value = '';
           render();
         };
       }
@@ -11272,8 +11320,8 @@
           var rec = { title, amount: parseFloat(amount.toFixed(2)), date, createdAt: new Date().toISOString() };
           var doc = await db.collection(cfPath('opExpenses')).add(rec);
           cfOperatingExpenses.push(Object.assign({ id: doc.id }, rec));
-          $('#cfExpTitle').value = '';
-          $('#cfExpAmount').value = '';
+          var _etEl=$('#cfExpTitle'); if(_etEl) _etEl.value='';
+          var _eaEl=$('#cfExpAmount'); if(_eaEl) _eaEl.value='';
           render();
         };
       }
@@ -11328,8 +11376,8 @@
           var rec = { name, percentage: pct, createdAt: new Date().toISOString() };
           var doc = await db.collection(cfPath('shareholders')).add(rec);
           cfShareholders.push(Object.assign({ id: doc.id }, rec));
-          $('#cfShName').value = '';
-          $('#cfShPct').value = '';
+          var _snEl=$('#cfShName'); if(_snEl) _snEl.value='';
+          var _spEl=$('#cfShPct'); if(_spEl) _spEl.value='';
           render();
         };
       }
