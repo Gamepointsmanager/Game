@@ -4067,9 +4067,6 @@
                   <input class="input" id="pmDropInput" value="${esc((cfPaymentMethods.find(pm=>pm.id===state.selectedPaymentMethodId)||cfPaymentMethods[0]||{name:''}).name)}" autocomplete="off" style="cursor:pointer;padding-right:28px;background:rgba(16,185,129,0.07);border-color:rgba(52,211,153,0.25);font-size:13px" readonly />
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2.5" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none"><polyline points="6,9 12,15 18,9"/></svg>
                   <input type="hidden" id="pmDropHidden" value="${esc(state.selectedPaymentMethodId||'')}"/>
-                  <div id="pmDropList" class="hidden" style="position:fixed;background:rgba(16,13,30,0.97);border:1px solid var(--glassBorder);border-radius:10px;z-index:99999;max-height:200px;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
-                    ${cfPaymentMethods.map(pm => `<div class="dropdown-item pm-drop-opt${state.selectedPaymentMethodId===pm.id?' selected':''}" data-pmid="${esc(pm.id)}" data-pmname="${esc(pm.name)}">${esc(pm.name)}</div>`).join('')}
-                  </div>
                 </div>
               </div>
             ` : ''}
@@ -4618,37 +4615,72 @@
         };
       });
       // Bind custom payment method dropdown
-      if ($('#pmDropInput') && $('#pmDropList') && $('#pmDropWrap')) {
+      if ($('#pmDropInput') && $('#pmDropWrap')) {
         var _pmInput = $('#pmDropInput');
-        var _pmList  = $('#pmDropList');
         var _pmHid   = $('#pmDropHidden');
-        var _openPm  = () => {
-          var r = _pmInput.getBoundingClientRect();
-          _pmList.style.top       = (r.bottom + 4) + 'px';
-          _pmList.style.left      = r.left + 'px';
-          _pmList.style.width     = r.width + 'px';
-          _pmList.style.minWidth  = r.width + 'px';
-          _pmList.classList.toggle('hidden');
-        };
-        var _closePm = () => { _pmList.classList.add('hidden'); };
-        _pmInput.onclick = (e) => { e.stopPropagation(); _openPm(); };
-        $$('.pm-drop-opt').forEach(opt => {
-          opt.onclick = (e) => {
+
+        // Remove any leftover portal from previous renders
+        var _oldPortal = document.getElementById('pmDropPortal');
+        if (_oldPortal) _oldPortal.remove();
+
+        // Build portal dropdown appended directly to <body> — escapes all stacking contexts
+        var _portal = document.createElement('div');
+        _portal.id = 'pmDropPortal';
+        _portal.style.cssText = 'position:fixed;background:rgba(16,13,30,0.98);border:1px solid rgba(120,100,200,0.3);border-radius:10px;z-index:2147483647;max-height:220px;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,0.8);display:none';
+        cfPaymentMethods.forEach(function(pm) {
+          var item = document.createElement('div');
+          item.className = 'dropdown-item pm-drop-opt' + (state.selectedPaymentMethodId === pm.id ? ' selected' : '');
+          item.dataset.pmid   = pm.id;
+          item.dataset.pmname = pm.name;
+          item.textContent    = pm.name;
+          item.onclick = function(e) {
             e.stopPropagation();
-            state.selectedPaymentMethodId = opt.dataset.pmid;
-            _pmInput.value = opt.dataset.pmname;
-            if (_pmHid) _pmHid.value = opt.dataset.pmid;
-            $$('.pm-drop-opt').forEach(o => o.classList.remove('selected'));
-            opt.classList.add('selected');
-            _closePm();
+            state.selectedPaymentMethodId = pm.id;
+            _pmInput.value = pm.name;
+            if (_pmHid) _pmHid.value = pm.id;
+            _portal.querySelectorAll('.pm-drop-opt').forEach(function(o){ o.classList.remove('selected'); });
+            item.classList.add('selected');
+            _portal.style.display = 'none';
           };
+          _portal.appendChild(item);
         });
-        document.addEventListener('click', function _pmOutside(e) {
-          if (!$('#pmDropWrap') || !$('#pmDropWrap').contains(e.target)) {
-            _closePm();
+        document.body.appendChild(_portal);
+
+        var _openPm = function() {
+          var r = _pmInput.getBoundingClientRect();
+          _portal.style.left     = r.left + 'px';
+          _portal.style.width    = r.width + 'px';
+          _portal.style.display  = _portal.style.display === 'none' ? 'block' : 'none';
+          // Position above or below depending on available space
+          var spaceBelow = window.innerHeight - r.bottom;
+          if (spaceBelow < 240 && r.top > 240) {
+            _portal.style.top    = 'auto';
+            _portal.style.bottom = (window.innerHeight - r.top + 4) + 'px';
+          } else {
+            _portal.style.bottom = 'auto';
+            _portal.style.top    = (r.bottom + 4) + 'px';
+          }
+        };
+
+        _pmInput.onclick = function(e) { e.stopPropagation(); _openPm(); };
+
+        var _pmOutside = function(e) {
+          var wrap = document.getElementById('pmDropWrap');
+          if (!wrap || (!wrap.contains(e.target) && !_portal.contains(e.target))) {
+            _portal.style.display = 'none';
+          }
+        };
+        document.addEventListener('click', _pmOutside);
+
+        // Clean up portal and listener when billing panel is re-rendered
+        var _observer = new MutationObserver(function() {
+          if (!document.getElementById('pmDropWrap')) {
+            _portal.remove();
             document.removeEventListener('click', _pmOutside);
+            _observer.disconnect();
           }
         });
+        _observer.observe(document.getElementById('tabContent') || document.body, { childList: true, subtree: true });
       }
 
       if ($('#partialAmountInput')) {
