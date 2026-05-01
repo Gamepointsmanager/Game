@@ -4067,7 +4067,7 @@
                   <input class="input" id="pmDropInput" value="${esc((cfPaymentMethods.find(pm=>pm.id===state.selectedPaymentMethodId)||cfPaymentMethods[0]||{name:''}).name)}" autocomplete="off" style="cursor:pointer;padding-right:28px;background:rgba(16,185,129,0.07);border-color:rgba(52,211,153,0.25);font-size:13px" readonly />
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--textMuted)" stroke-width="2.5" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none"><polyline points="6,9 12,15 18,9"/></svg>
                   <input type="hidden" id="pmDropHidden" value="${esc(state.selectedPaymentMethodId||'')}"/>
-                  <div id="pmDropList" class="hidden" style="position:absolute;top:calc(100% + 4px);left:0;right:0;background:rgba(16,13,30,0.97);border:1px solid var(--glassBorder);border-radius:10px;z-index:9999;max-height:200px;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
+                  <div id="pmDropList" class="hidden" style="position:fixed;background:rgba(16,13,30,0.97);border:1px solid var(--glassBorder);border-radius:10px;z-index:99999;max-height:200px;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
                     ${cfPaymentMethods.map(pm => `<div class="dropdown-item pm-drop-opt${state.selectedPaymentMethodId===pm.id?' selected':''}" data-pmid="${esc(pm.id)}" data-pmname="${esc(pm.name)}">${esc(pm.name)}</div>`).join('')}
                   </div>
                 </div>
@@ -4219,7 +4219,7 @@
                 <span style="padding:2px 6px;background:${(item.mode||state.convMode)==='dollar2pts'?'var(--green)':'transparent'};color:${(item.mode||state.convMode)==='dollar2pts'?'#000':'var(--textMuted)'};transition:all 0.2s">$</span>
               </div>
             </div>
-            <input class="input bill-value-input" data-idx="${idx}" type="text" inputmode="decimal" placeholder="${(item.mode||state.convMode)==='pts2dollar'?'Enter points':'Enter $'}" value="${item.value}" />
+            <input class="input bill-value-input" data-idx="${idx}" type="text" inputmode="text" placeholder="${(item.mode||state.convMode)==='pts2dollar'?'Enter points':'Enter $'}" value="${item.value}" />
           </div>
         </div>
         ${item.value ? `<div class="bill-result">
@@ -4622,7 +4622,14 @@
         var _pmInput = $('#pmDropInput');
         var _pmList  = $('#pmDropList');
         var _pmHid   = $('#pmDropHidden');
-        var _openPm  = () => { _pmList.classList.toggle('hidden'); };
+        var _openPm  = () => {
+          var r = _pmInput.getBoundingClientRect();
+          _pmList.style.top       = (r.bottom + 4) + 'px';
+          _pmList.style.left      = r.left + 'px';
+          _pmList.style.width     = r.width + 'px';
+          _pmList.style.minWidth  = r.width + 'px';
+          _pmList.classList.toggle('hidden');
+        };
         var _closePm = () => { _pmList.classList.add('hidden'); };
         _pmInput.onclick = (e) => { e.stopPropagation(); _openPm(); };
         $$('.pm-drop-opt').forEach(opt => {
