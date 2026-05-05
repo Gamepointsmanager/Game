@@ -4405,17 +4405,12 @@
           setTimeout(() => {
             const q = inp.value.trim().toLowerCase();
             if (!q) { dropdown.classList.add('hidden'); return; }
-            // If current value exactly matches already-selected game, skip
+            // If current value exactly matches already-selected game, just close
             if (state.billItems[idx] && state.billItems[idx].gameName.toLowerCase() === q) { dropdown.classList.add('hidden'); return; }
-            // Find best visible match
+            // Only auto-select on EXACT match to prevent e.g. "juwa" triggering "juwa 2.0"
             const visible = Array.from(dropdown.querySelectorAll('.dropdown-item')).filter(o => o.style.display !== 'none');
-            // Exact match first
-            let best = visible.find(o => o.dataset.gamename.toLowerCase() === q);
-            // Starts-with match
-            if (!best) best = visible.find(o => o.dataset.gamename.toLowerCase().startsWith(q));
-            // Any includes match
-            if (!best) best = visible[0];
-            if (best) best.click();
+            const exact = visible.find(o => o.dataset.gamename.toLowerCase() === q);
+            if (exact) exact.click();
             else dropdown.classList.add('hidden');
           }, 200);
         };
@@ -4428,7 +4423,8 @@
             dropdown.classList.add('hidden');
             const billCard2 = inp.closest('.bill-item');
             if (billCard2) billCard2.classList.remove('dropdown-open');
-            render();
+            // Use refreshBillingPanel instead of render() to avoid full page flicker
+            refreshBillingPanel();
           };
         });
       });
@@ -4469,10 +4465,9 @@
             if (!q) { dropdown.classList.add('hidden'); return; }
             if (state.billItems[idx] && state.billItems[idx].username.toLowerCase() === q) { dropdown.classList.add('hidden'); return; }
             const visible = Array.from(dropdown.querySelectorAll('.dropdown-item[data-user]')).filter(o => o.dataset.user !== '' && o.style.display !== 'none');
-            let best = visible.find(o => o.dataset.user.toLowerCase() === q);
-            if (!best) best = visible.find(o => o.dataset.user.toLowerCase().startsWith(q));
-            if (!best) best = visible[0];
-            if (best) best.click();
+            // Only auto-select on exact match
+            const exact = visible.find(o => o.dataset.user.toLowerCase() === q);
+            if (exact) exact.click();
             else dropdown.classList.add('hidden');
           }, 200);
         };
@@ -6611,7 +6606,18 @@
         var tag=h.kind==='general'?tg2('RECEIVED','#34d399'):h.kind==='credit'?tg2('CREDIT +','#22d3ee'):h.kind==='applied'?tg2('CREDIT USED','#f472b6'):h.status==='received'?tg2('FULL','#34d399'):tg2('PARTIAL','#fbbf24');
         var billRef=h.billTotal!==undefined?'<span style="color:var(--textMuted);font-size:10px">bill $'+h.billTotal.toFixed(2)+'</span>':'';
         var poolBadge='<span style="color:#a78bfa;font-size:9px;background:rgba(124,58,237,0.12);padding:1px 5px;border-radius:4px;margin-left:4px">pool $'+h._poolAfter.toFixed(2)+'</span>';
-        return '<div class="analytics-detail-item" style="padding:8px 10px;font-size:12px;flex-wrap:wrap;gap:4px"><span style="color:'+amtColor+';font-weight:700;min-width:60px">'+sign+h.amount.toFixed(2)+'</span>'+tag+billRef+poolBadge+'<span style="color:var(--textMuted);font-size:10px;margin-left:auto">'+toLocalDate(h.date).toLocaleDateString()+'</span></div>';
+        var actionBtns='';
+        if((h.kind==='general'||h.kind==='credit')&&h.billId!=null&&h.payIdx!=null){
+          var epDate=(h.date&&typeof h.date==='string')?h.date.slice(0,10):(h.date instanceof Date?h.date.toISOString().slice(0,10):'');
+          actionBtns=''
+            +'<button class="pay-edit-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" data-amt="'+h.amount.toFixed(2)+'" data-date="'+epDate+'" style="padding:3px 7px;font-size:10px;margin-left:4px;color:#22d3ee;border-color:rgba(34,211,238,0.25)" title="Edit payment">'
+            +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+            +'</button>'
+            +'<button class="pay-del-btn btn btn-ghost btn-sm" data-billid="'+h.billId+'" data-payidx="'+h.payIdx+'" style="padding:3px 7px;font-size:10px;margin-left:2px;color:#f87171;border-color:rgba(248,113,113,0.25)" title="Delete payment">'
+            +'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>'
+            +'</button>';
+        }
+        return '<div class="analytics-detail-item" style="padding:8px 10px;font-size:12px;flex-wrap:wrap;gap:4px;align-items:center"><span style="color:'+amtColor+';font-weight:700;min-width:60px">'+sign+h.amount.toFixed(2)+'</span>'+tag+billRef+poolBadge+'<span style="color:var(--textMuted);font-size:10px;margin-left:auto">'+toLocalDate(h.date).toLocaleDateString()+'</span>'+actionBtns+'</div>';
       }).join(''):'<div style="padding:14px;text-align:center;color:var(--textMuted);font-size:12px">No payments yet</div>';
       // Build payment method options for the record payment form
       var _pmOpts = cfPaymentMethods.length > 0
@@ -6689,13 +6695,17 @@
       // Bind payment method custom dropdown item clicks
       var _pmList = document.getElementById('payMethodList');
       var _pmBtn  = document.getElementById('payMethodBtn');
-      if(_pmBtn){ _pmBtn.onclick = function(){
+      if(_pmBtn){ _pmBtn.onclick = function(e){
+        e.stopPropagation();
         var list = document.getElementById('payMethodList');
         if(!list) return;
         var r = _pmBtn.getBoundingClientRect();
-        list.style.top  = (r.bottom+4)+'px';
-        list.style.left = r.left+'px';
-        list.style.minWidth = r.width+'px';
+        // Position directly below the button using fixed coords
+        list.style.position = 'fixed';
+        list.style.top    = (r.bottom + 2) + 'px';
+        list.style.left   = r.left + 'px';
+        list.style.width  = r.width + 'px';
+        list.style.zIndex = '2147483647';
         list.classList.toggle('hidden');
       }; }
       if(_pmList){ _pmList.querySelectorAll('.dropdown-item[data-pmid]').forEach(function(item){
@@ -10879,6 +10889,24 @@
               paymentMethodId: pmId
             });
           }
+        }
+      });
+
+      // Also include extra_payment transactions (general company payments) in byMethod breakdown
+      cfTransactions.forEach(function(tx) {
+        if (tx.category !== 'extra_payment') return;
+        var txDate = tx.date ? new Date(tx.date.length === 10 ? tx.date + 'T00:00:00' : tx.date) : null;
+        if (!txDate || isNaN(txDate.getTime())) return;
+        if (fD && txDate < fD) return;
+        if (tD && txDate > tD) return;
+        var pmId = tx.paymentMethodId || '';
+        if (pmId && byMethod[pmId]) {
+          byMethod[pmId].total += (tx.amount || 0);
+          byMethod[pmId].txs.push({
+            date: tx.date, amount: tx.amount || 0,
+            note: tx.note || 'Extra payment', companyName: tx.companyName || '',
+            paymentMethodId: pmId
+          });
         }
       });
 
