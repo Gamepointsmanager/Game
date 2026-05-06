@@ -19,6 +19,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <!-- Google Identity Services – for Drive upload token -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -5034,11 +5036,108 @@
       } catch(e){ console.warn('Invoice settings load failed:', e); }
     }
 
+    // ============================================================
+    // GOOGLE DRIVE LOGO UPLOAD
+    // ============================================================
+    const _DRIVE_CLIENT_ID = '909535669253-mbpqlochobbb1jvoj9gpvm2a5o4bnu10.apps.googleusercontent.com';
+    const _DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.file';
+    let   _driveToken       = null; // cached access token (in-memory only)
+
+    // Get a Drive access token via GIS popup (only asks permission once per session)
+    function getDriveToken() {
+      return new Promise((resolve, reject) => {
+        if (_driveToken && _driveToken.expires > Date.now()) { resolve(_driveToken.token); return; }
+        if (typeof google === 'undefined' || !google.accounts) {
+          reject(new Error('Google Identity Services not loaded. Check your internet connection and try again.')); return;
+        }
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: _DRIVE_CLIENT_ID,
+          scope:     _DRIVE_SCOPE,
+          callback:  (resp) => {
+            if (resp.error) { reject(new Error('Google auth error: ' + resp.error)); return; }
+            _driveToken = { token: resp.access_token, expires: Date.now() + (resp.expires_in - 60) * 1000 };
+            resolve(resp.access_token);
+          }
+        });
+        client.requestAccessToken({ prompt: _driveToken ? '' : 'consent' });
+      });
+    }
+
+    // Upload a File object (PNG/JPEG) to Google Drive, make it public, return { url, fileId, fileName }
+    async function uploadLogoToDrive(file) {
+      const token    = await getDriveToken();
+      const fileName = 'sweepAdmin_invoice_logo.' + (file.type === 'image/png' ? 'png' : 'jpg');
+
+      // Read file as ArrayBuffer
+      const buf = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload  = () => res(fr.result);
+        fr.onerror = () => rej(new Error('File read failed'));
+        fr.readAsArrayBuffer(file);
+      });
+
+      // Multipart upload: metadata + binary
+      const boundary = '-------SweepAdminBoundary';
+      const delimiter = '\r\n--' + boundary + '\r\n';
+      const closeDelim = '\r\n--' + boundary + '--';
+      const metadata  = JSON.stringify({ name: fileName, mimeType: file.type });
+
+      const bodyParts = [
+        delimiter,
+        'Content-Type: application/json\r\n\r\n',
+        metadata,
+        delimiter,
+        'Content-Type: ' + file.type + '\r\n',
+        'Content-Transfer-Encoding: base64\r\n\r\n',
+        btoa(String.fromCharCode(...new Uint8Array(buf))),
+        closeDelim
+      ].join('');
+
+      const uploadResp = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+        {
+          method:  'POST',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type':  'multipart/related; boundary=' + boundary,
+          },
+          body: bodyParts
+        }
+      );
+      if (!uploadResp.ok) {
+        const err = await uploadResp.text();
+        throw new Error('Drive upload failed: ' + err);
+      }
+      const { id: fileId } = await uploadResp.json();
+
+      // Make the file publicly readable so the invoice <img> can load it
+      await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '/permissions', {
+        method:  'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ role: 'reader', type: 'anyone' })
+      });
+
+      // Use the direct download URL (works in <img> tags)
+      const url = 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w200';
+      return { url, fileId, fileName };
+    }
+
+    // Delete a file from Drive (used when removing logo)
+    async function deleteLogoFromDrive(fileId) {
+      try {
+        const token = await getDriveToken();
+        await fetch('https://www.googleapis.com/drive/v3/files/' + fileId, {
+          method:  'DELETE',
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+      } catch(e) { console.warn('Drive delete failed (may already be gone):', e); }
+    }
+
     function showInvoiceSettingsModal() {
       document.getElementById('invoiceSettingsModal')?.remove();
       const s = getInvoiceSettings();
       const ov = document.createElement('div'); ov.className='modal-overlay'; ov.id='invoiceSettingsModal';
-      ov.innerHTML = `<div class="modal fade-in" style="max-width:460px">
+      ov.innerHTML = `<div class="modal fade-in" style="max-width:460px;max-height:90vh;overflow-y:auto">
         <div class="modal-header">
           <h3 class="modal-title">INVOICE SETTINGS</h3>
           <button class="btn btn-ghost btn-sm" id="invSetClose"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -5054,10 +5153,61 @@
             <input class="input" id="invContactInfo" placeholder="e.g. +1 234 567 8900 · contact@example.com" value="${esc(s.contactInfo||'')}" />
             <div style="font-size:10px;color:var(--textMuted);margin-top:3px">Shown below branding name. Can be phone, email, address, etc.</div>
           </div>
+
+          <!-- ── Branding Logo Upload ── -->
+          <div style="padding:14px;border-radius:10px;background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.18)">
+            <div style="font-size:12px;font-weight:700;color:var(--purpleLight);margin-bottom:10px;display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.5px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21,15 16,10 5,21"/></svg>
+              Branding Logo
+            </div>
+
+            ${s.logoUrl ? `
+            <!-- Current logo preview -->
+            <div id="invLogoCurrentWrap" style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;background:rgba(52,211,153,0.06);border:1px solid rgba(52,211,153,0.2);margin-bottom:10px">
+              <img id="invLogoPreview" src="${esc(s.logoUrl)}" referrerpolicy="no-referrer"
+                style="width:56px;height:56px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid #e5e7eb;flex-shrink:0"
+                onerror="this.style.display='none'" />
+              <div style="flex:1;min-width:0">
+                <div style="font-size:11px;font-weight:700;color:#34d399">✓ Logo active</div>
+                <div style="font-size:10px;color:var(--textMuted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.logoFileName||'invoice_logo')}</div>
+              </div>
+              <button id="invLogoRemoveBtn" style="flex-shrink:0;padding:5px 10px;border-radius:7px;border:1px solid rgba(248,113,113,0.35);background:rgba(248,113,113,0.08);color:#f87171;font-size:11px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                Remove
+              </button>
+            </div>` : ''}
+
+            <!-- Upload area -->
+            <div id="invLogoDropZone" style="border:2px dashed rgba(124,58,237,0.35);border-radius:10px;padding:18px 12px;text-align:center;cursor:pointer;transition:border-color 0.2s,background 0.2s"
+              onclick="document.getElementById('invLogoFile').click()"
+              ondragover="event.preventDefault();this.style.borderColor='var(--purple)';this.style.background='rgba(124,58,237,0.08)'"
+              ondragleave="this.style.borderColor='rgba(124,58,237,0.35)';this.style.background=''"
+              ondrop="event.preventDefault();this.style.borderColor='rgba(124,58,237,0.35)';this.style.background='';var f=event.dataTransfer.files[0];if(f)window._invLogoHandler(f)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--purpleLight)" stroke-width="1.5" style="margin-bottom:6px"><polyline points="16,16 12,12 8,16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>
+              <div style="font-size:12px;font-weight:600;color:var(--textSecondary)">Click or drag &amp; drop to upload</div>
+              <div style="font-size:10px;color:var(--textMuted);margin-top:3px">PNG or JPEG · Max 5MB · Saved to your Google Drive</div>
+              <input type="file" id="invLogoFile" accept="image/png,image/jpeg" style="display:none" />
+            </div>
+
+            <!-- Preview of newly chosen file (before upload) -->
+            <div id="invLogoNewPreview" style="display:none;margin-top:10px;padding:10px;border-radius:8px;background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.2);align-items:center;gap:10px">
+              <img id="invLogoNewImg" style="width:52px;height:52px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid #e5e7eb;flex-shrink:0" />
+              <div style="flex:1;min-width:0">
+                <div id="invLogoNewName" style="font-size:11px;font-weight:600;color:var(--textPrimary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+                <div id="invLogoNewSize" style="font-size:10px;color:var(--textMuted);margin-top:2px"></div>
+              </div>
+              <button id="invLogoClearNew" style="flex-shrink:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:none;color:var(--textMuted);font-size:10px;cursor:pointer">✕ Clear</button>
+            </div>
+
+            <!-- Upload status -->
+            <div id="invLogoStatus" style="font-size:11px;margin-top:8px;min-height:14px;text-align:center"></div>
+          </div>
+          <!-- ── End Logo Upload ── -->
+
           <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:10px;background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.15)">
             <div>
               <div style="font-size:13px;font-weight:600;color:var(--textPrimary)">Use Google Account Photo</div>
-              <div style="font-size:10px;color:var(--textMuted);margin-top:2px">Show your Google profile picture as logo</div>
+              <div style="font-size:10px;color:var(--textMuted);margin-top:2px">Show your Google profile picture as logo (overrides uploaded logo)</div>
             </div>
             <label style="position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0;cursor:pointer">
               <input type="checkbox" id="invUsePhoto" style="opacity:0;width:0;height:0" ${s.usePhoto?'checked':''}>
@@ -5081,6 +5231,7 @@
       ov.onclick = e => { if(e.target===ov) ov.remove(); };
       document.getElementById('invSetClose').onclick = () => ov.remove();
 
+      // Toggle track
       const cb = document.getElementById('invUsePhoto');
       const track = document.getElementById('invPhotoToggleTrack');
       const thumb = document.getElementById('invPhotoToggleThumb');
@@ -5089,22 +5240,120 @@
         thumb.style.left = cb.checked ? '21px' : '3px';
       };
 
-      document.getElementById('invSetSave').onclick = async () => {
-        const btn = document.getElementById('invSetSave');
-        const statusEl = document.getElementById('invSetStatus');
-        btn.disabled = true; btn.textContent = 'Saving...';
-        const ns = {
-          brandName:   document.getElementById('invBrandName').value.trim(),
-          contactInfo: document.getElementById('invContactInfo').value.trim(),
-          usePhoto:    document.getElementById('invUsePhoto').checked,
-          footerNote:  document.getElementById('invFooterNote').value.trim()
-        };
+      // ── Logo upload logic ──
+      let _pendingLogoFile = null; // the File chosen but not yet saved
+
+      const _setStatus = (msg, color) => {
+        const el = document.getElementById('invLogoStatus');
+        if (el) { el.textContent = msg; el.style.color = color || 'var(--textMuted)'; }
+      };
+
+      // Show newly chosen file in preview panel (before Drive upload)
+      window._invLogoHandler = (file) => {
+        if (!file) return;
+        if (!['image/png','image/jpeg'].includes(file.type)) {
+          _setStatus('❌ Only PNG or JPEG files are allowed.', '#f87171'); return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          _setStatus('❌ File too large. Max 5 MB.', '#f87171'); return;
+        }
+        _pendingLogoFile = file;
+        const preview = document.getElementById('invLogoNewPreview');
+        const img     = document.getElementById('invLogoNewImg');
+        const nameEl  = document.getElementById('invLogoNewName');
+        const sizeEl  = document.getElementById('invLogoNewSize');
+        if (preview && img) {
+          const reader = new FileReader();
+          reader.onload = e2 => { img.src = e2.target.result; };
+          reader.readAsDataURL(file);
+          nameEl.textContent = file.name;
+          sizeEl.textContent = (file.size / 1024).toFixed(1) + ' KB · ' + (file.type === 'image/png' ? 'PNG' : 'JPEG');
+          preview.style.display = 'flex';
+          _setStatus('File ready — click "Save & Sync Settings" to upload to Drive.', '#a78bfa');
+        }
+      };
+
+      // File input change
+      const fileInput = document.getElementById('invLogoFile');
+      if (fileInput) fileInput.onchange = (e) => { window._invLogoHandler(e.target.files[0]); };
+
+      // Clear newly chosen file
+      const clearBtn = document.getElementById('invLogoClearNew');
+      if (clearBtn) clearBtn.onclick = () => {
+        _pendingLogoFile = null;
+        const preview = document.getElementById('invLogoNewPreview');
+        if (preview) preview.style.display = 'none';
+        if (fileInput) fileInput.value = '';
+        _setStatus('');
+      };
+
+      // Remove existing logo
+      const removeBtn = document.getElementById('invLogoRemoveBtn');
+      if (removeBtn) removeBtn.onclick = async () => {
+        removeBtn.disabled = true; removeBtn.textContent = 'Removing…';
+        const cur = getInvoiceSettings();
+        if (cur.logoFileId) await deleteLogoFromDrive(cur.logoFileId);
+        const ns = Object.assign({}, cur, { logoUrl: '', logoFileId: '', logoFileName: '' });
         await saveInvoiceSettings(ns);
-        btn.disabled = false;
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Save &amp; Sync Settings';
-        statusEl.style.color = '#34d399';
-        statusEl.textContent = '✓ Saved and synced to cloud';
-        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        ov.remove(); showInvoiceSettingsModal();
+      };
+
+      // ── Save handler ──
+      document.getElementById('invSetSave').onclick = async () => {
+        const btn      = document.getElementById('invSetSave');
+        const statusEl = document.getElementById('invSetStatus');
+        btn.disabled = true; btn.textContent = 'Saving…';
+
+        try {
+          const cur = getInvoiceSettings();
+          let logoUrl      = cur.logoUrl      || '';
+          let logoFileId   = cur.logoFileId   || '';
+          let logoFileName = cur.logoFileName || '';
+
+          // Upload new logo if one was chosen
+          if (_pendingLogoFile) {
+            _setStatus('Connecting to Google Drive…', '#a78bfa');
+            btn.textContent = 'Uploading logo…';
+            // Delete old file if replacing
+            if (logoFileId) await deleteLogoFromDrive(logoFileId);
+            const result = await uploadLogoToDrive(_pendingLogoFile);
+            logoUrl      = result.url;
+            logoFileId   = result.fileId;
+            logoFileName = result.fileName;
+            _setStatus('✓ Logo uploaded to Drive!', '#34d399');
+            _pendingLogoFile = null;
+          }
+
+          const ns = {
+            brandName:   document.getElementById('invBrandName').value.trim(),
+            contactInfo: document.getElementById('invContactInfo').value.trim(),
+            usePhoto:    document.getElementById('invUsePhoto').checked,
+            footerNote:  document.getElementById('invFooterNote').value.trim(),
+            logoUrl,
+            logoFileId,
+            logoFileName
+          };
+          await saveInvoiceSettings(ns);
+
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Save &amp; Sync Settings';
+          statusEl.style.color = '#34d399';
+          statusEl.textContent = '✓ Saved and synced to cloud';
+          setTimeout(() => {
+            statusEl.textContent = '';
+            if (ns.logoUrl && ns.logoUrl !== (cur && cur.logoUrl)) {
+              ov.remove(); showInvoiceSettingsModal(); // refresh to show new logo preview
+            }
+          }, 2000);
+
+        } catch(e) {
+          console.error('Invoice settings save error:', e);
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Save &amp; Sync Settings';
+          _setStatus('❌ ' + (e.message || 'Unknown error'), '#f87171');
+          const statusEl2 = document.getElementById('invSetStatus');
+          if (statusEl2) { statusEl2.style.color = '#f87171'; statusEl2.textContent = 'Error: ' + e.message; }
+        }
       };
     }
 
@@ -5382,8 +5631,10 @@
       }
 
       const logoHTML = usePhoto
-        ? `<img src="${esc(u.photoURL)}" referrerpolicy="no-referrer" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #e5e7eb;flex-shrink:0" />`
-        : `<div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#06b6d4);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>`;
+        ? `<img src="${esc(u.photoURL)}" referrerpolicy="no-referrer" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #e5e7eb;flex-shrink:0" />`
+        : s.logoUrl
+          ? `<img src="${esc(s.logoUrl)}" referrerpolicy="no-referrer" style="width:56px;height:56px;object-fit:contain;border-radius:10px;border:1px solid #e5e7eb;background:#fff;flex-shrink:0" />`
+          : `<div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#06b6d4);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>`;
 
       const html = `<!DOCTYPE html>
 <html>
