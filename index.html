@@ -4148,7 +4148,6 @@
             const ag=(comp.assignedGames||[]).find(g=>g.gameName===val);
             const rate=ag?parseFloat(ag.rate||ag.sellRate||0):0;
             if(!rate||rate<=0){
-              // Prompt user to set the selling rate right here
               setTimeout(()=>promptSetGameRate(comp,val,r),100);
             }
           }
@@ -4156,6 +4155,23 @@
         if(c===CI.username){
           const comp=companies.find(co=>co.name===rows[r][CI.company]);
           if(comp&&val){const lv=getUserLevel(comp,val,rows[r][CI.game]);if(lv)rows[r][CI.level]=lv;}
+        }
+        // Auto-set paystatus when payment method is entered or cleared
+        if(c===CI.paymethod){
+          const curStatus=rows[r][CI.paystatus]||'';
+          if(val){
+            // Payment method set → default to received (unless partial amount already set)
+            if(!curStatus||curStatus==='not_received'){
+              rows[r][CI.paystatus]=rows[r][CI.partialamt]?'partial':'received';
+            }
+          } else {
+            // Payment method cleared → revert to not_received
+            if(curStatus==='received') rows[r][CI.paystatus]='not_received';
+          }
+        }
+        // Auto-set to partial when partial amount is entered
+        if(c===CI.partialamt && parseFloat(val)>0){
+          rows[r][CI.paystatus]='partial';
         }
         if(!rows[r][CI.date]&&rows[r][CI.company])rows[r][CI.date]=todayStr;
       }
@@ -4590,28 +4606,55 @@
               } else { billDate=new Date().toISOString(); }
             } catch(e3){ billDate=new Date().toISOString(); }
             const convMode = 'pts2dollar'; // default since mode column removed
-            // Build items
+            // Build items using identical conversion logic as calcLine() in live bill
             let totalPts=0,totalDollars=0;
             const items=compRows.map(row=>{
-              const rawPts=parseFloat(row[CI.points])||0;
-              const rawAmt=parseFloat(row[CI.amount])||0;
-              const sellRate=getGameRate(comp,row[CI.game])||100;
-              const costRate=getCostRate(row[CI.game])||0;
-              let pts=rawPts,dollars=rawAmt;
-              if(rawPts&&!rawAmt)dollars=rawPts*(sellRate/100);
-              else if(rawAmt&&!rawPts)pts=rawAmt/(sellRate/100);
-              totalPts+=pts;totalDollars+=dollars;
-              return{gameName:row[CI.game],gameId:'',username:row[CI.username]||'',value:rawPts||rawAmt,costRate,sellRate,points:pts,dollars,inputAmount:rawPts||rawAmt,feeEmbedded:false};
+              const rawPts  = parseFloat(row[CI.points])||0;
+              const rawAmt  = parseFloat(row[CI.amount])||0;
+              const sellRate= getGameRate(comp,row[CI.game])||0;
+              const costRate= getCostRate(row[CI.game])||0;
+              const rateDecimal = sellRate/100;
+              let pts,dollars;
+              if(rawPts!==0){
+                // pts→$ mode: points is the input, dollars derived (no truncation needed)
+                pts    = rawPts;
+                dollars= rateDecimal ? rawPts * rateDecimal : 0;
+              } else if(rawAmt!==0){
+                // $→pts mode: dollars is the input, points derived (Math.trunc = non-decimal)
+                dollars= rawAmt;
+                pts    = rateDecimal ? Math.trunc(rawAmt / rateDecimal) : 0;
+              } else {
+                pts=0; dollars=0;
+              }
+              totalPts    += pts;
+              totalDollars+= dollars;
+              return{
+                gameName:row[CI.game], gameId:'', username:row[CI.username]||'',
+                value: rawPts||rawAmt, costRate, sellRate,
+                points: pts, dollars, inputAmount: rawPts||rawAmt, feeEmbedded: false
+              };
             });
             const grandTotal=parseFloat(totalDollars.toFixed(2));
-            // Payment status
-            const rawStatus=compRows[0][CI.paystatus]||'not_received';
-            const rawPartial=parseFloat(compRows[0][CI.partialamt])||0;
-            const payStatus=rawStatus==='received'?'received':rawStatus==='partial'?'partial':'not_received';
-            const partialAmt=payStatus==='received'?grandTotal:payStatus==='partial'?rawPartial:0;
-            const balDue=payStatus==='received'?0:payStatus==='partial'?Math.max(0,grandTotal-rawPartial):grandTotal;
+            // Payment method
             const pmName=compRows[0][CI.paymethod]||'';
             const pm=cfPaymentMethods.find(p=>p.name===pmName);
+            // Auto-set pay status based on payment method:
+            // If payment method selected → received (unless user explicitly set partial)
+            // If no payment method → not_received (unless user explicitly set something else)
+            const userSetStatus=compRows[0][CI.paystatus]||'';
+            let payStatus;
+            if(userSetStatus==='received'||userSetStatus==='partial'||userSetStatus==='not_received'){
+              payStatus=userSetStatus; // respect explicit user choice
+            } else if(pm){
+              payStatus='received'; // payment method set → assume received
+            } else {
+              payStatus='not_received';
+            }
+            // If payment method is set but user left status blank, treat as received
+            if(pm && !userSetStatus) payStatus='received';
+            const rawPartial=parseFloat(compRows[0][CI.partialamt])||0;
+            const partialAmt=payStatus==='received'?grandTotal:payStatus==='partial'?rawPartial:0;
+            const balDue    =payStatus==='received'?0:payStatus==='partial'?Math.max(0,grandTotal-rawPartial):grandTotal;
             const companyCode=comp.companyCode||await generateCompanyCode();
             const refNum=await generateReferenceNumber(companyCode,billDate);
             const bill={
