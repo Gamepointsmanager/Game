@@ -700,6 +700,7 @@
       .inv-btn-label { display: none !important; }
       .desktop-date-input { display: none !important; }
       .mobile-date-icon { display: inline !important; }
+      #bulkBillBtn { display: none !important; }
       #globalAnalyticsModal .analytics-summary { grid-template-columns: repeat(2, 1fr); }
       #globalAnalyticsModal div[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
     }
@@ -1054,6 +1055,21 @@
       flex-direction:column; gap:6px;
     }
     .analytics-nodata svg { opacity:0.4; }
+    /* ── Bulk Bill Sheet ── */
+    #bulkBillSheet { font-family:-apple-system,'Segoe UI',sans-serif; }
+    #bbScrollWrap { scrollbar-width:thin; scrollbar-color:rgba(124,58,237,0.4) transparent; }
+    #bbScrollWrap::-webkit-scrollbar { width:8px; height:8px; }
+    #bbScrollWrap::-webkit-scrollbar-track { background:transparent; }
+    #bbScrollWrap::-webkit-scrollbar-thumb { background:rgba(124,58,237,0.4); border-radius:4px; }
+    #bbTableWrap table { border-collapse:collapse; }
+    #bbTableWrap td[data-c]:hover { filter:brightness(1.18); }
+    #bbTableWrap td[data-c="4"]:hover { filter:none; }
+    .bb-ac-item:hover,.bb-ac-item.highlighted { background:rgba(124,58,237,0.28) !important; color:#e2e8f0 !important; }
+    #bbAcDrop::-webkit-scrollbar { width:5px; }
+    #bbAcDrop::-webkit-scrollbar-thumb { background:rgba(124,58,237,0.4); border-radius:3px; }
+    #bbScroll { scrollbar-width:thin; scrollbar-color:rgba(124,58,237,0.3) transparent; }
+    #bbScroll::-webkit-scrollbar { width:8px; height:8px; }
+    #bbScroll::-webkit-scrollbar-thumb { background:rgba(124,58,237,0.3); border-radius:4px; }
     /* Floating add button */
     .fab-add {
       position:fixed; bottom:24px; right:24px; z-index:90;
@@ -3762,7 +3778,13 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
           <h2 style="font-size:20px"><span style="color:var(--purpleLight)">Companies</span>
             <span style="color:var(--textMuted);font-size:13px;font-weight:400;margin-left:8px">(${list.length})</span></h2>
-          <button class="btn btn-purple" id="addCompanyBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> New Company</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm" id="bulkBillBtn" style="background:linear-gradient(135deg,rgba(124,58,237,0.25),rgba(6,182,212,0.2));border:1px solid rgba(124,58,237,0.4);color:var(--purpleLight);gap:6px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+              Bulk Bill
+            </button>
+            <button class="btn btn-purple" id="addCompanyBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> New Company</button>
+          </div>
         </div>
         <div class="search-wrap" style="margin-bottom:14px">
           <span class="search-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>
@@ -3794,8 +3816,867 @@
       </div>`;
     }
 
+    // ============================================================
+    // BULK BILL SHEET
+    // ============================================================
+    function showBulkBillSheet() {
+      // ── Only available on desktop ──
+      if (window.innerWidth < 768) { alert('Bulk Bill Sheet is only available on desktop browsers.'); return; }
+      document.getElementById('bulkBillSheet')?.remove();
+
+      const companies   = Object.values(state.companies).filter(c=>c.active!==false).sort((a,b)=>a.name.localeCompare(b.name));
+      const compNames   = companies.map(c=>c.name);
+      const masterGames = state.masterGames.map(g=>g.name);
+      const PAY_STATUSES= ['not_received','partial','received'];
+      const MODES       = ['pts→$','$→pts'];
+
+      // Column definitions
+      const COLS = [
+        {id:'date',      label:'Date',           w:108, hint:'YYYY/MM/DD · Ctrl+; = today'},
+        {id:'company',   label:'Company',         w:160, hint:'Type to search companies'},
+        {id:'game',      label:'Game',            w:150, hint:'Type to search inventory games'},
+        {id:'username',  label:'Username',        w:130, hint:'Player username'},
+        {id:'level',     label:'Level',           w:90,  hint:'Auto-filled · editable if new user', ro:false},
+        {id:'points',    label:'Points',          w:100, hint:'Points value (signed, neg=redeem)'},
+        {id:'amount',    label:'Amount ($)',       w:100, hint:'Dollar value (or leave for auto-calc)'},
+        {id:'paymethod', label:'Pay Method',      w:120, hint:'Payment method from Cash Flow'},
+        {id:'paystatus', label:'Pay Status',      w:110, hint:'not_received · partial · received'},
+        {id:'partialamt',label:'Partial $',       w:90,  hint:'Paid amount if partial'},
+      ];
+      const CI = {}; COLS.forEach((c,i)=>CI[c.id]=i);
+      const NC = COLS.length;
+
+      // Authoritative account levels (same as MG_HIERARCHY_LEVELS + Player)
+      const ACCOUNT_LEVELS = ['Agent','Supermaster','Master','Distributor','Subdistributor','Store','Player'];
+
+      const today = new Date();
+      const pad = n=>String(n).padStart(2,'0');
+      // MM/DD/YYYY format
+      const todayStr = pad(today.getMonth()+1)+'/'+pad(today.getDate())+'/'+today.getFullYear();
+
+      // State
+      let rows = [];
+      for(let i=0;i<100;i++) rows.push(Array(NC).fill(''));
+      let sel={r:0,c:0}, sel2={r:0,c:0};
+      let editingCell=null, undoStack=[], copyBuffer=null;
+      let colWidths=COLS.map(c=>c.w);   // resizable
+      const pushUndo=()=>{ undoStack.push(rows.map(r=>[...r])); if(undoStack.length>100) undoStack.shift(); };
+
+      // ── DOM ──
+      const overlay=document.createElement('div');
+      overlay.id='bulkBillSheet';
+      overlay.style.cssText='position:fixed;inset:0;z-index:10000;background:#0d0b18;display:flex;flex-direction:column;overflow:hidden;user-select:none';
+      overlay.innerHTML=`
+        <div id="bbToolbar" style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:#13101f;border-bottom:1px solid rgba(124,58,237,0.3);flex-shrink:0;flex-wrap:wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          <span style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:#a78bfa">BULK BILL</span>
+          <div style="width:1px;height:20px;background:rgba(124,58,237,0.3)"></div>
+          <button id="bbAddRowsBtn" class="btn btn-ghost btn-sm" style="font-size:11px">+ Rows</button>
+          <input id="bbAddRowsCount" type="number" value="10" min="1" max="500" style="width:48px;font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid rgba(120,100,200,0.25);background:rgba(0,0,0,0.3);color:#e2e8f0;text-align:center"/>
+          <button id="bbClearBtn" class="btn btn-ghost btn-sm" style="font-size:11px;color:#f87171">Clear</button>
+          <div style="width:1px;height:20px;background:rgba(124,58,237,0.3)"></div>
+          <button id="bbInfoBtn" class="btn btn-ghost btn-sm" style="font-size:11px;color:#22d3ee" title="Keyboard shortcuts">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Shortcuts
+          </button>
+          <div style="flex:1"></div>
+          <button id="bbSubmitBtn" class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;font-size:12px;font-weight:700;padding:6px 20px;gap:6px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>Submit Bills
+          </button>
+          <button id="bbCloseBtn" class="btn btn-ghost btn-sm" style="font-size:13px;padding:4px 10px">✕</button>
+        </div>
+        <div id="bbFormulaBar" style="display:flex;align-items:center;gap:8px;padding:4px 14px;background:#100d1c;border-bottom:1px solid rgba(120,100,200,0.15);flex-shrink:0;font-size:12px;min-height:28px">
+          <span id="bbCellAddr" style="color:#a78bfa;font-family:monospace;font-weight:700;min-width:36px">A1</span>
+          <span style="color:rgba(120,100,200,0.4)">|</span>
+          <span id="bbCellHint" style="color:var(--textMuted,#888);flex:1;font-size:11px"></span>
+          <span id="bbRowsReady" style="color:#34d399;font-size:11px"></span>
+        </div>
+        <div style="flex:1;overflow:auto;position:relative" id="bbScroll">
+          <table id="bbTable" style="border-collapse:collapse;table-layout:fixed;font-size:12px;min-width:max-content">
+            <thead id="bbHead"></thead>
+            <tbody id="bbBody"></tbody>
+          </table>
+        </div>
+        <div id="bbStatus" style="padding:3px 14px;font-size:11px;color:#888;background:#0d0b18;border-top:1px solid rgba(120,100,200,0.12);flex-shrink:0;min-height:20px">Ready · ${rows.length} rows</div>
+        <div id="bbAcDrop" style="display:none;position:fixed;background:#13101f;border:1px solid rgba(124,58,237,0.4);border-radius:8px;z-index:10002;max-height:220px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.8);min-width:160px;font-size:12px"></div>
+        <div id="bbShortcutsPanel" style="display:none;position:fixed;inset:0;z-index:10003;background:rgba(0,0,0,0.7);align-items:center;justify-content:center">
+          <div style="background:#13101f;border:1px solid rgba(124,58,237,0.4);border-radius:14px;padding:24px;max-width:560px;width:90%;max-height:80vh;overflow-y:auto">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+              <h3 style="font-family:'Orbitron',monospace;color:#a78bfa;font-size:14px">KEYBOARD SHORTCUTS</h3>
+              <button id="bbShortcutsClose" class="btn btn-ghost btn-sm">✕</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+              ${[
+                ['Arrow keys','Navigate cells'],['Tab / Shift+Tab','Move right / left'],
+                ['Enter','Edit cell / confirm down'],['Shift+Enter','Confirm & move up'],
+                ['F2 / double-click','Edit (keep value)'],['Any letter/digit','Start editing (replace)'],
+                ['Escape','Cancel edit or close AC'],['Delete / Backspace','Clear selected cells'],
+                ['Ctrl+Z','Undo (100 levels)'],['Ctrl+Y','Redo (coming soon)'],
+                ['Ctrl+C','Copy selection'],['Ctrl+X','Cut selection'],
+                ['Ctrl+V','Paste at cursor'],['Ctrl+D','Fill down selection'],
+                ['Ctrl+R','Fill right selection'],['Ctrl+Enter','Smart fill (down/right/block)'],
+                ['Ctrl+;','Insert today\'s date (MM/DD/YYYY)'],['Ctrl+Shift+;','Insert current time'],
+                ['Ctrl+\'','Copy value from row above'],['Ctrl+A','Select all cells'],
+                ['Ctrl+Space','Select entire column'],['Shift+Space','Select entire row'],
+                ['Ctrl+Home','Go to cell A1'],['Ctrl+End','Go to last used cell'],
+                ['Ctrl+Shift+End','Extend to last row'],['Shift+Arrows','Extend selection'],
+                ['Page Up / Down','Scroll 20 rows'],['Ctrl++ (Plus)','Insert row below'],
+                ['Ctrl+- (Minus)','Delete selected row(s)'],['Right-click','Context menu'],
+              ].map(([k,v])=>`<div style="padding:5px 8px;background:rgba(124,58,237,0.07);border-radius:6px;display:flex;justify-content:space-between;gap:8px"><span style="color:#22d3ee;font-family:monospace;font-size:11px;flex-shrink:0">${k}</span><span style="color:#b0a8c8;font-size:11px;text-align:right">${v}</span></div>`).join('')}
+            </div>
+            <div style="margin-top:14px;padding:10px;background:rgba(34,211,238,0.06);border-radius:8px;font-size:11px;color:#888">
+              <strong style="color:#22d3ee">Smart fill (Ctrl+Enter):</strong> Fills down if selection is taller, right if wider, both if block. Pastes for single cell.<br><br>
+              <strong style="color:#a78bfa">Autocomplete:</strong> Shows suggestions for Company, Game, Username, Level, Pay Method, Pay Status. Arrow keys ↑↓ navigate, Enter or Tab selects. Escape closes without selecting.<br><br>
+              <strong style="color:#34d399">Date:</strong> Type MM/DD/YYYY · Ctrl+; inserts today · Click an existing date to open calendar picker.
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      // ── Render column headers ──
+      function renderHead() {
+        const head=document.getElementById('bbHead');
+        if(!head) return;
+        let h='<tr>';
+        h+=`<th style="width:36px;min-width:36px;background:#1a1530;border:1px solid rgba(120,100,200,0.2);color:#666;font-size:10px;padding:5px 4px;position:sticky;top:0;left:0;z-index:5;text-align:center">#</th>`;
+        COLS.forEach((col,ci)=>{
+          h+=`<th data-ci="${ci}" style="width:${colWidths[ci]}px;min-width:40px;background:#1a1530;border:1px solid rgba(120,100,200,0.2);color:#a78bfa;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:5px 6px;position:sticky;top:0;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default">
+            ${col.label}
+            <div class="bb-col-resize" data-ci="${ci}" style="position:absolute;right:0;top:0;bottom:0;width:5px;cursor:col-resize;background:transparent" onmouseenter="this.style.background='rgba(124,58,237,0.4)'" onmouseleave="this.style.background='transparent'"></div>
+          </th>`;
+        });
+        h+='</tr>';
+        head.innerHTML=h;
+        bindColResize();
+      }
+
+      // ── Column resize ──
+      function bindColResize() {
+        document.querySelectorAll('.bb-col-resize').forEach(handle=>{
+          handle.onmousedown=e=>{
+            e.preventDefault(); e.stopPropagation();
+            const ci=parseInt(handle.dataset.ci);
+            const startX=e.clientX, startW=colWidths[ci];
+            const onMove=ev=>{ colWidths[ci]=Math.max(40,startW+(ev.clientX-startX)); renderHead(); renderBody(); };
+            const onUp=()=>{ document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+            document.addEventListener('mousemove',onMove);
+            document.addEventListener('mouseup',onUp);
+          };
+        });
+      }
+
+      // ── Render body ──
+      function renderBody() {
+        const tbody=document.getElementById('bbBody');
+        if(!tbody) return;
+        const rMin=Math.min(sel.r,sel2.r),rMax=Math.max(sel.r,sel2.r);
+        const cMin=Math.min(sel.c,sel2.c),cMax=Math.max(sel.c,sel2.c);
+        let h='';
+        rows.forEach((row,ri)=>{
+          h+=`<tr data-ri="${ri}">`;
+          h+=`<td style="background:#1a1530;border:1px solid rgba(120,100,200,0.15);color:#555;font-size:10px;text-align:center;padding:0;width:36px;min-width:36px;position:sticky;left:0;z-index:1;user-select:none;cursor:default">${ri+1}</td>`;
+          row.forEach((val,ci)=>{
+            const isAct=ri===sel.r&&ci===sel.c;
+            const isSel=ri>=rMin&&ri<=rMax&&ci>=cMin&&ci<=cMax;
+            const isRO=false; // all cols editable now including level
+            const col=COLS[ci];
+            let bg=isAct?'rgba(124,58,237,0.3)':isSel?'rgba(124,58,237,0.12)':val?'rgba(18,14,34,0.95)':'rgba(13,11,24,0.9)';
+            let border=isAct?'2px solid #7c3aed':'1px solid rgba(120,100,200,0.15)';
+            let color=ci===CI.level?'#a78bfa':ci===CI.amount?'#34d399':ci===CI.points?'#22d3ee':ci===CI.paymethod?'#f472b6':ci===CI.paystatus?'#fb923c':ci===CI.partialamt?'#34d399':'#e2e8f0';
+            let display=val;
+            if(!display&&ci===CI.paystatus) { display='not_received'; color='rgba(251,146,60,0.3)'; }
+            h+=`<td data-r="${ri}" data-c="${ci}" style="background:${bg};border:${border};padding:0;max-width:${colWidths[ci]}px;overflow:hidden;cursor:cell;position:relative">
+              <div style="padding:3px 5px;height:26px;display:flex;align-items:center;color:${color};white-space:nowrap;overflow:hidden;font-size:12px">${esc(display)}</div>
+            </td>`;
+          });
+          h+='</tr>';
+        });
+        tbody.innerHTML=h;
+        bindCellEvents();
+      }
+
+      function bindCellEvents() {
+        document.querySelectorAll('#bbBody td[data-r]').forEach(td=>{
+          const ri=parseInt(td.dataset.r),ci=parseInt(td.dataset.c);
+          td.onmousedown=e=>{
+            if(e.target.classList.contains('bb-col-resize'))return;
+            e.preventDefault();
+            closeEdit(); closeAc();
+            if(e.shiftKey){sel2={r:ri,c:ci};}
+            else{sel={r:ri,c:ci};sel2={r:ri,c:ci};}
+            renderBody(); updateBar();
+          };
+          td.ondblclick=()=>startEdit(ri,ci);
+          td.oncontextmenu=e=>{ e.preventDefault(); showContextMenu(e,ri,ci); };
+        });
+        document.getElementById('bbBody').onmousemove=e=>{
+          if(e.buttons!==1)return;
+          const td=e.target.closest('td[data-r]');
+          if(td&&document.getSelection().isCollapsed){sel2={r:parseInt(td.dataset.r),c:parseInt(td.dataset.c)};renderBody();}
+        };
+      }
+
+      // ── Formula bar / status ──
+      function updateBar() {
+        const col=String.fromCharCode(65+sel.c);
+        document.getElementById('bbCellAddr').textContent=col+(sel.r+1);
+        document.getElementById('bbCellHint').textContent=COLS[sel.c]?.hint||'';
+        const ready=rows.filter(r=>r[CI.company]&&r[CI.game]).length;
+        document.getElementById('bbRowsReady').textContent=ready?`${ready} row${ready===1?'':'s'} ready`:'';
+        document.getElementById('bbStatus').textContent=`Cell ${col}${sel.r+1} · ${rows.length} total rows · ${ready} ready to submit`;
+      }
+
+      // ── Autocomplete — Google Sheets style ──
+      // acState holds the currently active suggestion session
+      let acState = { items:[], hiIdx:-1, onSelect:null, anchorEl:null };
+
+      function showAc(anchorEl, items, onSelect) {
+        const drop = document.getElementById('bbAcDrop');
+        if (!drop) return;
+        if (!items.length) { drop.style.display='none'; acState.items=[]; return; }
+        // Don't rebuild if same items (prevents resetting highlight on every keystroke)
+        const key = items.join('|');
+        const prevKey = acState.items.join('|');
+        const rebuild = key !== prevKey;
+        acState = { items, hiIdx: rebuild ? 0 : acState.hiIdx, onSelect, anchorEl };
+        const r2 = anchorEl.getBoundingClientRect();
+        drop.style.left     = r2.left + 'px';
+        drop.style.top      = (r2.bottom + 2) + 'px';
+        drop.style.minWidth = Math.max(r2.width, 160) + 'px';
+        drop.style.display  = 'block';
+        if (rebuild) {
+          drop.innerHTML = items.slice(0,15).map((item,i) =>
+            '<div class="bb-ac-item" data-val="'+esc(item)+'" data-idx="'+i+'" style="padding:6px 12px;cursor:pointer;color:#e2e8f0;border-bottom:1px solid rgba(120,100,200,0.08);white-space:nowrap">'+esc(item)+'</div>'
+          ).join('');
+          drop.querySelectorAll('.bb-ac-item').forEach(el => {
+            el.onmouseenter = () => { acState.hiIdx = parseInt(el.dataset.idx); _acRenderHighlight(); };
+            el.onmousedown  = e  => { e.preventDefault(); e.stopPropagation(); _acCommit(parseInt(el.dataset.idx)); };
+          });
+        }
+        _acRenderHighlight();
+      }
+
+      function _acRenderHighlight() {
+        const drop = document.getElementById('bbAcDrop');
+        if (!drop) return;
+        drop.querySelectorAll('.bb-ac-item').forEach((el,i) => {
+          el.style.background = i === acState.hiIdx ? 'rgba(124,58,237,0.35)' : '';
+          el.style.color      = i === acState.hiIdx ? '#fff' : '#e2e8f0';
+          if (i === acState.hiIdx) el.scrollIntoView({block:'nearest'});
+        });
+      }
+
+      function _acCommit(idx) {
+        if (!acState.onSelect) return;
+        const val = acState.items[idx];
+        if (val == null) return;
+        const cb = acState.onSelect;
+        closeAc();
+        cb(val);
+      }
+
+      function closeAc() {
+        const d = document.getElementById('bbAcDrop');
+        if (d) d.style.display = 'none';
+        acState = { items:[], hiIdx:-1, onSelect:null, anchorEl:null };
+      }
+
+      function acIsOpen() {
+        const d = document.getElementById('bbAcDrop');
+        return d && d.style.display !== 'none' && acState.items.length > 0;
+      }
+
+      function acMoveHighlight(dir) {
+        if (!acIsOpen()) return false;
+        acState.hiIdx = Math.max(0, Math.min(acState.items.length-1, acState.hiIdx + dir));
+        _acRenderHighlight();
+        return true;
+      }
+
+      function acConfirm() {
+        if (!acIsOpen()) return false;
+        _acCommit(acState.hiIdx);
+        return true;
+      }
+
+      // ── Helpers ──
+      function getSuggestions(r,c,q){
+        q=(q||'').toLowerCase();
+        if(c===CI.company) return compNames.filter(n=>!q||n.toLowerCase().includes(q));
+        if(c===CI.game){
+          const comp=companies.find(co=>co.name===rows[r][CI.company]);
+          const list=comp?(comp.assignedGames||[]).map(g=>g.gameName):masterGames;
+          return list.filter(n=>!q||n.toLowerCase().includes(q));
+        }
+        if(c===CI.username){
+          const comp=companies.find(co=>co.name===rows[r][CI.company]);
+          if(!comp) return [];
+          const gname=rows[r][CI.game];
+          const ag=(comp.assignedGames||[]).find(g=>g.gameName===gname);
+          let us=[];
+          if(ag&&(ag.usernames||[]).length){
+            us=ag.usernames.map(u=>u.username||u.name||'').filter(Boolean);
+          } else {
+            us=(comp.usernames||[]).filter(u=>!u.gameName||u.gameName===gname).map(u=>u.username||u.name||'').filter(Boolean);
+          }
+          us=[...new Set(us)];
+          return q?us.filter(n=>n.toLowerCase().includes(q)):us.slice(0,15);
+        }
+        if(c===CI.level){
+          return q?ACCOUNT_LEVELS.filter(l=>l.toLowerCase().includes(q)):ACCOUNT_LEVELS;
+        }
+        if(c===CI.paymethod){
+          // Read fresh from cfPaymentMethods (loaded async)
+          const names=(cfPaymentMethods||[]).map(p=>p.name).filter(Boolean);
+          return q?names.filter(n=>n.toLowerCase().includes(q)):names;
+        }
+        if(c===CI.paystatus) return PAY_STATUSES.filter(s=>!q||s.toLowerCase().includes(q));
+        if(c===CI.date) return [];
+        return [];
+      }
+      function autoFillRow(r,c,val){
+        if(c===CI.company){
+          if(!rows[r][CI.date])rows[r][CI.date]=todayStr;
+          rows[r][CI.game]='';rows[r][CI.username]='';rows[r][CI.level]='';
+        }
+        if(c===CI.game && val){
+          rows[r][CI.username]='';rows[r][CI.level]='';
+          // Check if selling rate is set for this game in this company
+          const comp=companies.find(co=>co.name===rows[r][CI.company]);
+          if(comp){
+            const ag=(comp.assignedGames||[]).find(g=>g.gameName===val);
+            const rate=ag?parseFloat(ag.rate||ag.sellRate||0):0;
+            if(!rate||rate<=0){
+              // Prompt user to set the selling rate right here
+              setTimeout(()=>promptSetGameRate(comp,val,r),100);
+            }
+          }
+        }
+        if(c===CI.username){
+          const comp=companies.find(co=>co.name===rows[r][CI.company]);
+          if(comp&&val){const lv=getUserLevel(comp,val,rows[r][CI.game]);if(lv)rows[r][CI.level]=lv;}
+        }
+        if(!rows[r][CI.date]&&rows[r][CI.company])rows[r][CI.date]=todayStr;
+      }
+
+      // Prompt to set selling rate for a game in a company — updates live
+      function promptSetGameRate(comp, gameName, rowIdx){
+        document.getElementById('bbRatePrompt')?.remove();
+        const modal=document.createElement('div');
+        modal.id='bbRatePrompt';
+        modal.style.cssText='position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center';
+        modal.innerHTML=`<div style="background:#1a1530;border:1px solid rgba(248,113,113,0.4);border-radius:14px;padding:22px;max-width:340px;width:90%;box-shadow:0 12px 40px rgba(0,0,0,0.8)">
+          <div style="font-family:'Orbitron',monospace;font-size:13px;color:#f87171;margin-bottom:6px">⚠ Selling Rate Not Set</div>
+          <div style="font-size:12px;color:#b0a8c8;margin-bottom:14px">
+            <strong style="color:#e2e8f0">${esc(gameName)}</strong> has no selling rate set for <strong style="color:#e2e8f0">${esc(comp.name)}</strong>.<br><br>
+            Set the selling rate now (% of face value):
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+            <input id="bbRateInp" type="number" min="0" max="1000" step="0.01" placeholder="e.g. 85" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid rgba(124,58,237,0.4);background:rgba(0,0,0,0.3);color:#fff;font-size:14px;outline:none"/>
+            <span style="color:#888;font-size:13px">%</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button id="bbRateSave" class="btn btn-sm" style="flex:1;background:rgba(124,58,237,0.3);border:1px solid rgba(124,58,237,0.5);color:#e2e8f0;justify-content:center">Set Rate</button>
+            <button id="bbRateSkip" class="btn btn-ghost btn-sm" style="flex:1;justify-content:center">Skip</button>
+          </div>
+        </div>`;
+        document.body.appendChild(modal);
+        const inp=modal.querySelector('#bbRateInp');
+        inp.focus();
+        inp.onkeydown=e=>{ if(e.key==='Enter') modal.querySelector('#bbRateSave').click(); if(e.key==='Escape') modal.querySelector('#bbRateSkip').click(); };
+        modal.querySelector('#bbRateSkip').onclick=()=>modal.remove();
+        modal.querySelector('#bbRateSave').onclick=async()=>{
+          const newRate=parseFloat(inp.value);
+          if(isNaN(newRate)||newRate<0){inp.focus();inp.select();return;}
+          modal.remove();
+          try{
+            // Update the assigned game rate in Firestore
+            const ag=(comp.assignedGames||[]).find(g=>g.gameName===gameName);
+            if(ag){
+              ag.rate=newRate;
+              await db.doc(userPath()+'/companies/'+comp._id).update({assignedGames:comp.assignedGames});
+              if(state.companies[comp._id])state.companies[comp._id].assignedGames=comp.assignedGames;
+            } else {
+              // Game not yet assigned — assign it with this rate
+              const mg=state.masterGames.find(g=>g.name===gameName);
+              const newAg={gameName,gameId:mg?._id||'',rate:newRate,usernames:[]};
+              const updatedGames=[...(comp.assignedGames||[]),newAg];
+              await db.doc(userPath()+'/companies/'+comp._id).update({assignedGames:updatedGames});
+              comp.assignedGames=updatedGames;
+              if(state.companies[comp._id])state.companies[comp._id].assignedGames=updatedGames;
+            }
+            renderBody(); // refresh to show updated state
+          }catch(e2){console.error('Rate save failed:',e2);}
+        };
+      }
+
+      // ── Edit ──
+      // ── Edit cell — Google Sheets style ──
+      // initChar: the char that triggered editing (typed key). null = F2/dblclick (show full value).
+      // When initChar provided: clear cell and type that char (no double-letter).
+      function startEdit(r,c,initChar){
+        closeEdit(); closeAc();
+        const tbody=document.getElementById('bbBody');
+        const td=tbody?.querySelector(`td[data-r="${r}"][data-c="${c}"]`);
+        if(!td)return;
+
+        // Special: date column with existing value — open native date picker
+        if(c===CI.date && rows[r][c] && initChar==null){
+          const dateInp=document.createElement('input');
+          const existing=rows[r][c]; // MM/DD/YYYY
+          // Convert MM/DD/YYYY → YYYY-MM-DD for input[type=date]
+          let isoVal='';
+          try { const p=existing.split('/'); if(p.length===3) isoVal=p[2]+'-'+p[0].padStart(2,'0')+'-'+p[1].padStart(2,'0'); } catch(e){}
+          dateInp.type='date';
+          dateInp.value=isoVal;
+          dateInp.style.cssText='position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:3';
+          td.style.position='relative';
+          td.appendChild(dateInp);
+          editingCell={r,c,el:dateInp};
+          dateInp.focus();
+          dateInp.showPicker?.();
+          dateInp.onchange=()=>{
+            if(dateInp.value){
+              // Convert YYYY-MM-DD → MM/DD/YYYY
+              const parts=dateInp.value.split('-');
+              commitEdit(r,c,parts[1]+'/'+parts[2]+'/'+parts[0]);
+            } else closeEdit();
+          };
+          dateInp.onblur=()=>setTimeout(()=>closeEdit(),200);
+          return;
+        }
+
+        const inp=document.createElement('input');
+        // Google Sheets: typing a char REPLACES cell content. F2/dblclick APPENDS to it.
+        inp.value = initChar != null ? '' : (rows[r][c] || '');
+        inp.style.cssText='position:absolute;inset:0;width:100%;height:100%;border:none;background:rgba(18,14,36,0.97);color:#fff;font-size:12px;padding:3px 5px;outline:none;box-sizing:border-box;z-index:3;font-family:inherit';
+        td.style.position='relative'; td.style.overflow='visible';
+        td.appendChild(inp);
+        editingCell={r,c,el:inp};
+        inp.focus();
+        if(initChar!=null){
+          // Don't set value — let the browser handle the keypress naturally (no double letter)
+          // The keydown already fired; the browser will insert initChar into the empty input
+        } else {
+          inp.select();
+        }
+
+        let acJustSelected = false; // set true when AC item clicked, prevents onblur overwrite
+
+        const doShowAc = () => {
+          const sugg=getSuggestions(r,c,inp.value);
+          if(sugg.length) showAc(inp,sugg, v => {
+            acJustSelected = true;
+            commitEdit(r,c,v);
+            moveSel(0,1);
+          });
+          else closeAc();
+        };
+
+        // Show AC immediately (empty query = show all for this col)
+        doShowAc();
+
+        inp.oninput = doShowAc;
+
+        inp.onkeydown=e=>{
+          const open=acIsOpen();
+          if(e.key==='Escape'){
+            e.preventDefault();
+            if(open){closeAc();}
+            else{closeEdit();rows[r][c]=rows[r][c];renderBody();}
+            return;
+          }
+          if(e.key==='ArrowDown'){
+            e.preventDefault();
+            if(open) acMoveHighlight(1);
+            else { commitEdit(r,c,inp.value); moveSel(1,0); }
+            return;
+          }
+          if(e.key==='ArrowUp'){
+            e.preventDefault();
+            if(open) acMoveHighlight(-1);
+            else { commitEdit(r,c,inp.value); moveSel(-1,0); }
+            return;
+          }
+          if(e.key==='Enter'){
+            e.preventDefault();
+            if(open&&acConfirm()) return;
+            commitEdit(r,c,inp.value);
+            moveSel(e.shiftKey?-1:1,0);
+            return;
+          }
+          if(e.key==='Tab'){
+            e.preventDefault();
+            if(open&&acConfirm()) return;
+            commitEdit(r,c,inp.value);
+            moveSel(0,e.shiftKey?-1:1);
+            return;
+          }
+          // Ctrl+; = today's date
+          if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key===';'){
+            e.preventDefault(); inp.value=todayStr; doShowAc(); return;
+          }
+          // Ctrl+Shift+; = now
+          if((e.ctrlKey||e.metaKey)&&e.shiftKey&&e.key===';'){
+            e.preventDefault(); const n=new Date(); inp.value=todayStr+' '+pad(n.getHours())+':'+pad(n.getMinutes()); doShowAc(); return;
+          }
+        };
+
+        inp.onblur=()=>setTimeout(()=>{
+          if(acJustSelected) return; // AC selection already committed
+          if(document.getElementById('bbAcDrop')?.style.display!=='none') return;
+          commitEdit(r,c,inp.value);
+        },160);
+      }
+
+      function commitEdit(r,c,val){
+        if(!rows[r])return;
+        pushUndo();
+        const trimmed=val.trim();
+        rows[r][c]=trimmed;
+        autoFillRow(r,c,trimmed);
+        closeEdit(); closeAc(); renderBody(); updateBar();
+      }
+
+      function closeEdit(){
+        if(editingCell){
+          const{el}=editingCell;
+          if(el?.parentNode){el.parentNode.style.overflow='';el.parentNode.style.position='';el.remove();}
+          editingCell=null;
+        }
+      }
+
+      // ── Navigation ──
+      function moveSel(dr,dc,extend){
+        closeAc();
+        let nr=sel.r+dr,nc=sel.c+dc;
+        if(nc>=NC){nc=0;nr++;}if(nc<0){nc=NC-1;nr--;}
+        if(nr>=rows.length)addRows(Math.max(10,nr-rows.length+1));
+        if(nr<0)nr=0;
+        sel={r:nr,c:nc};
+        if(!extend)sel2={...sel};
+        renderBody(); updateBar();
+        // Scroll into view
+        const td=document.querySelector(`#bbBody td[data-r="${nr}"][data-c="${nc}"]`);
+        td?.scrollIntoView({block:'nearest',inline:'nearest'});
+      }
+      function addRows(n){
+        const cnt=parseInt(n)||10;
+        for(let i=0;i<cnt;i++)rows.push(Array(NC).fill(''));
+        renderBody(); renderHead(); updateBar();
+      }
+
+      // ── Copy / paste / fill ──
+      function getSelection(){
+        const rMin=Math.min(sel.r,sel2.r),rMax=Math.max(sel.r,sel2.r);
+        const cMin=Math.min(sel.c,sel2.c),cMax=Math.max(sel.c,sel2.c);
+        return{rMin,rMax,cMin,cMax};
+      }
+      function doCopy(cut){
+        const{rMin,rMax,cMin,cMax}=getSelection();
+        const data=[];
+        for(let r=rMin;r<=rMax;r++){const row=[];for(let c=cMin;c<=cMax;c++)row.push(rows[r][c]);data.push(row);}
+        copyBuffer={data,cut};
+        if(cut){pushUndo();for(let r=rMin;r<=rMax;r++)for(let c=cMin;c<=cMax;c++)rows[r][c]='';renderBody();}
+        const tsv=data.map(r=>r.join('\t')).join('\n');
+        navigator.clipboard?.writeText(tsv).catch(()=>{});
+        setStatus(`${cut?'Cut':'Copied'} ${data.length}×${data[0].length}`,'#22d3ee');
+      }
+      async function doPaste(){
+        let tsv='';
+        try{tsv=await navigator.clipboard.readText();}catch(e){}
+        if(!tsv&&copyBuffer)tsv=copyBuffer.data.map(r=>r.join('\t')).join('\n');
+        if(!tsv)return;
+        pushUndo();
+        const pasteRows=tsv.split('\n').map(r=>r.split('\t'));
+        const{rMin,rMax,cMin,cMax}=getSelection();
+        const spanR=rMax-rMin, spanC=cMax-cMin;
+        // Ctrl+Enter: tile paste over selection
+        const tile=(spanR>0||spanC>0);
+        const endR=tile?rMax:sel.r+pasteRows.length-1;
+        const endC=tile?cMax:sel.c+(pasteRows[0]?.length||1)-1;
+        for(let dr=0;dr<=(tile?spanR:pasteRows.length-1);dr++){
+          const tr=sel.r+dr; if(tr>=rows.length)rows.push(Array(NC).fill(''));
+          for(let dc=0;dc<=(tile?spanC:(pasteRows[0]?.length||1)-1);dc++){
+            const tc=sel.c+dc; if(tc<NC){
+              const srcR=dr%pasteRows.length, srcC=dc%(pasteRows[0]?.length||1);
+              rows[tr][tc]=pasteRows[srcR]?.[srcC]??'';
+              autoFillRow(tr,tc,rows[tr][tc]);
+            }
+          }
+        }
+        renderBody(); updateBar();
+      }
+      function doFillDown(){
+        const{rMin,rMax,cMin,cMax}=getSelection();
+        pushUndo();
+        for(let c=cMin;c<=cMax;c++){const v=rows[rMin][c];for(let r=rMin+1;r<=rMax;r++){rows[r][c]=v;autoFillRow(r,c,v);}}
+        renderBody();
+      }
+      function doFillRight(){
+        const{rMin,rMax,cMin,cMax}=getSelection();
+        pushUndo();
+        for(let r=rMin;r<=rMax;r++){const v=rows[r][cMin];for(let c=cMin+1;c<=cMax;c++){rows[r][c]=v;autoFillRow(r,c,v);}}
+        renderBody();
+      }
+      function doInsertRow(){
+        pushUndo();
+        rows.splice(sel.r+1,0,Array(NC).fill(''));
+        renderBody(); updateBar();
+      }
+      function doDeleteRows(){
+        const{rMin,rMax}=getSelection();
+        if(!confirm(`Delete rows ${rMin+1}–${rMax+1}?`))return;
+        pushUndo();
+        rows.splice(rMin,rMax-rMin+1);
+        if(rows.length===0)rows.push(Array(NC).fill(''));
+        sel={r:Math.min(rMin,rows.length-1),c:sel.c};sel2={...sel};
+        renderBody(); updateBar();
+      }
+      function doCopyAbove(){
+        // Ctrl+' — copy value from row above
+        if(sel.r===0)return;
+        pushUndo();
+        const{rMin,rMax,cMin,cMax}=getSelection();
+        for(let r=rMin;r<=rMax;r++)for(let c=cMin;c<=cMax;c++){rows[r][c]=rows[r-1]?.[c]||'';autoFillRow(r,c,rows[r][c]);}
+        renderBody();
+      }
+      function doUndo(){
+        if(!undoStack.length)return;
+        rows=undoStack.pop();
+        renderBody(); updateBar();
+      }
+      function doSelectAll(){sel={r:0,c:0};sel2={r:rows.length-1,c:NC-1};renderBody();}
+      function doSelectCol(){sel={r:0,c:sel.c};sel2={r:rows.length-1,c:sel2.c};renderBody();}
+      function doSelectRow(){sel={r:sel.r,c:0};sel2={r:sel2.r,c:NC-1};renderBody();}
+      function setStatus(msg,color){
+        const el=document.getElementById('bbStatus');
+        if(el){el.textContent=msg;el.style.color=color||'#888';setTimeout(()=>updateBar(),3000);}
+      }
+
+      // ── Context menu ──
+      function showContextMenu(e,r,c){
+        document.getElementById('bbCtxMenu')?.remove();
+        const m=document.createElement('div');
+        m.id='bbCtxMenu';
+        m.style.cssText=`position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:#1a1530;border:1px solid rgba(124,58,237,0.4);border-radius:8px;z-index:10002;min-width:160px;box-shadow:0 8px 32px rgba(0,0,0,0.7);font-size:12px;padding:4px 0`;
+        const items=[
+          ['Copy','Ctrl+C',()=>doCopy(false)],['Cut','Ctrl+X',()=>doCopy(true)],['Paste','Ctrl+V',()=>doPaste()],null,
+          ['Fill Down','Ctrl+D',()=>doFillDown()],['Fill Right','Ctrl+R',()=>doFillRight()],null,
+          ['Insert Row Below','Ctrl++',()=>doInsertRow()],['Delete Row(s)','Ctrl+-',()=>doDeleteRows()],null,
+          ['Clear','Del',()=>{pushUndo();const{rMin,rMax,cMin,cMax}=getSelection();for(let r2=rMin;r2<=rMax;r2++)for(let c2=cMin;c2<=cMax;c2++)rows[r2][c2]='';renderBody();}],
+        ];
+        m.innerHTML=items.map(it=>it?`<div class="bb-ctx-item" style="padding:6px 14px;cursor:pointer;display:flex;justify-content:space-between;gap:16px"><span style="color:#e2e8f0">${it[0]}</span><span style="color:#666;font-size:10px">${it[1]}</span></div>`:'<div style="height:1px;background:rgba(120,100,200,0.15);margin:3px 0"></div>').join('');
+        document.body.appendChild(m);
+        m.querySelectorAll('.bb-ctx-item').forEach((el,i)=>{
+          const fn=items.filter(Boolean)[Math.floor(i-(items.slice(0,i+1).filter(x=>!x).length))];
+          el.onmouseenter=()=>el.style.background='rgba(124,58,237,0.2)';
+          el.onmouseleave=()=>el.style.background='';
+          el.onmousedown=ev=>{ev.preventDefault();m.remove();const act=items.filter(Boolean).find(it=>it[0]===el.querySelector('span').textContent);act?.[2]?.();};
+        });
+        setTimeout(()=>document.addEventListener('click',()=>m.remove(),{once:true}),0);
+      }
+
+      // ── Global key handler ──
+      const onKey=e=>{
+        const tag=document.activeElement?.tagName;
+        const editing=tag==='INPUT'||tag==='TEXTAREA';
+        if(editing)return;
+        const ctrl=e.ctrlKey||e.metaKey;
+        // Arrow navigation
+        if(e.key==='ArrowUp'){e.preventDefault();if(e.shiftKey)sel2={r:Math.max(0,sel2.r-1),c:sel2.c};else moveSel(-1,0);renderBody();return;}
+        if(e.key==='ArrowDown'){e.preventDefault();if(e.shiftKey)sel2={r:Math.min(rows.length-1,sel2.r+1),c:sel2.c};else moveSel(1,0);renderBody();return;}
+        if(e.key==='ArrowLeft'){e.preventDefault();if(e.shiftKey)sel2={r:sel2.r,c:Math.max(0,sel2.c-1)};else moveSel(0,-1);renderBody();return;}
+        if(e.key==='ArrowRight'){e.preventDefault();if(e.shiftKey)sel2={r:sel2.r,c:Math.min(NC-1,sel2.c+1)};else moveSel(0,1);renderBody();return;}
+        if(e.key==='Tab'){e.preventDefault();moveSel(0,e.shiftKey?-1:1);return;}
+        if(e.key==='Enter'){e.preventDefault();if(e.shiftKey)moveSel(-1,0);else startEdit(sel.r,sel.c);return;}
+        if(e.key==='F2'){e.preventDefault();startEdit(sel.r,sel.c);return;}
+        if(e.key==='Escape'){closeAc();sel2={...sel};renderBody();return;}
+        if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();pushUndo();const{rMin,rMax,cMin,cMax}=getSelection();for(let r=rMin;r<=rMax;r++)for(let c=cMin;c<=cMax;c++)rows[r][c]='';renderBody();return;}
+        if(e.key==='PageUp'){e.preventDefault();moveSel(-20,0);return;}
+        if(e.key==='PageDown'){e.preventDefault();moveSel(20,0);return;}
+        if(ctrl&&e.key==='Home'){e.preventDefault();sel={r:0,c:0};sel2={...sel};renderBody();updateBar();return;}
+        if(ctrl&&e.key==='End'){e.preventDefault();const lr=rows.reduce((m,r,i)=>r.some(c=>c)?i:m,-1);sel={r:Math.max(0,lr),c:NC-1};sel2={...sel};renderBody();updateBar();return;}
+        if(ctrl&&e.shiftKey&&e.key==='End'){e.preventDefault();sel2={r:rows.length-1,c:NC-1};renderBody();return;}
+        // Ctrl shortcuts
+        if(ctrl&&e.key==='c'){e.preventDefault();doCopy(false);return;}
+        if(ctrl&&e.key==='x'){e.preventDefault();doCopy(true);return;}
+        if(ctrl&&e.key==='v'){e.preventDefault();doPaste();return;}
+        if(ctrl&&e.key==='z'){e.preventDefault();doUndo();return;}
+        if(ctrl&&e.key==='d'){e.preventDefault();doFillDown();return;}
+        if(ctrl&&e.key==='r'){e.preventDefault();doFillRight();return;}
+        if(ctrl&&e.key==='a'){e.preventDefault();doSelectAll();return;}
+        if(ctrl&&e.key==='Enter'){
+          e.preventDefault();
+          const{rMin,rMax,cMin,cMax}=getSelection();
+          const spanR=rMax-rMin,spanC=cMax-cMin;
+          if(spanR>0&&spanC===0) doFillDown();        // tall selection → fill down
+          else if(spanC>0&&spanR===0) doFillRight();  // wide selection → fill right
+          else if(spanR>0&&spanC>0){doFillDown();doFillRight();} // block → both
+          else doPaste();                             // single cell → paste
+          return;
+        }
+        if(ctrl&&e.key==='+'){e.preventDefault();doInsertRow();return;}
+        if(ctrl&&e.key==='-'){e.preventDefault();doDeleteRows();return;}
+        if(ctrl&&e.key==="'"){e.preventDefault();doCopyAbove();return;}
+        if(ctrl&&!e.shiftKey&&e.key===';'){e.preventDefault();pushUndo();const{rMin,rMax,cMin,cMax}=getSelection();for(let ri2=rMin;ri2<=rMax;ri2++)for(let ci2=cMin;ci2<=cMax;ci2++){if(ci2===CI.date||!rows[ri2][ci2])rows[ri2][ci2]=todayStr;}renderBody();return;}
+        if(ctrl&&e.shiftKey&&e.key===';'){e.preventDefault();pushUndo();const n=new Date();const t=todayStr+' '+pad(n.getHours())+':'+pad(n.getMinutes());const{rMin,rMax,cMin,cMax}=getSelection();for(let r=rMin;r<=rMax;r++)for(let c=cMin;c<=cMax;c++)rows[r][c]=t;renderBody();return;}
+        if(e.key===' '&&ctrl){e.preventDefault();doSelectCol();return;}
+        if(e.key===' '&&e.shiftKey){e.preventDefault();doSelectRow();return;}
+        // Start typing → begin edit (replace mode like Google Sheets)
+        // Allow shift+letter (uppercase). Only block ctrl/meta/alt combos.
+        if(!ctrl&&!e.altKey&&e.key.length===1){
+          e.preventDefault();
+          startEdit(sel.r,sel.c,e.key);
+          // After the input is focused, insert the char (handles shift for capitals)
+          setTimeout(()=>{
+            const ed=editingCell?.el;
+            if(ed&&ed.tagName==='INPUT'&&ed.type!=='date'){
+              ed.value=e.key;
+              ed.dispatchEvent(new Event('input'));
+            }
+          },0);
+        }
+      };
+      document.addEventListener('keydown',onKey);
+
+      // ── Submit ──
+      document.getElementById('bbSubmitBtn').onclick=async()=>{
+        const btn=document.getElementById('bbSubmitBtn');
+        btn.disabled=true;btn.textContent='Submitting…';
+        const validRows=rows.filter(r=>r[CI.company]&&r[CI.game]);
+        if(!validRows.length){alert('No rows to submit. Fill Company and Game at minimum.');btn.disabled=false;btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>Submit Bills';return;}
+        const errors=[];
+        validRows.forEach((row,i)=>{
+          if(!compNames.includes(row[CI.company]))errors.push(`Row ${i+1}: Unknown company "${row[CI.company]}"`);
+          if(!masterGames.includes(row[CI.game]))errors.push(`Row ${i+1}: Unknown game "${row[CI.game]}"`);
+          const hasVal=(parseFloat(row[CI.points])||0)!==0||(parseFloat(row[CI.amount])||0)!==0;
+          if(!hasVal)errors.push(`Row ${i+1}: Enter points or amount`);
+        });
+        if(errors.length){alert('Fix these issues:\n\n'+errors.slice(0,6).join('\n')+(errors.length>6?`\n…+${errors.length-6} more`:''));btn.disabled=false;btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>Submit Bills';return;}
+        // Group by company
+        const byComp={};
+        validRows.forEach(row=>{const k=row[CI.company];if(!byComp[k])byComp[k]=[];byComp[k].push(row);});
+        let saved=0,failed=0;
+        for(const[compName,compRows] of Object.entries(byComp)){
+          try{
+            const comp=companies.find(co=>co.name===compName);
+            if(!comp){failed++;continue;}
+            // Auto-add new usernames
+            for(const row of compRows){
+              const uname=(row[CI.username]||'').trim();
+              if(uname){
+                const exists=(comp.usernames||[]).some(u=>(u.username||u.name||'')===uname);
+                if(!exists){
+                  const lvl=row[CI.level]||'';
+                  const gname=row[CI.game];
+                  const nu={username:uname,level:lvl,gameName:gname};
+                  const ref2=await db.collection(userPath()+'/companies/'+comp._id+'/usernames').add(nu);
+                  comp.usernames=[...(comp.usernames||[]),{_id:ref2.id,...nu}];
+                  if(state.companies[comp._id])state.companies[comp._id].usernames=comp.usernames;
+                }
+              }
+            }
+            // Build bill date
+            const rawDate=compRows[0][CI.date]||todayStr;
+            // Parse MM/DD/YYYY
+            let billDate;
+            try {
+              const parts=rawDate.split('/');
+              if(parts.length===3){
+                const [mm,dd,yyyy]=parts;
+                billDate=new Date(parseInt(yyyy),parseInt(mm)-1,parseInt(dd)).toISOString();
+              } else { billDate=new Date().toISOString(); }
+            } catch(e3){ billDate=new Date().toISOString(); }
+            const convMode = 'pts2dollar'; // default since mode column removed
+            // Build items
+            let totalPts=0,totalDollars=0;
+            const items=compRows.map(row=>{
+              const rawPts=parseFloat(row[CI.points])||0;
+              const rawAmt=parseFloat(row[CI.amount])||0;
+              const sellRate=getGameRate(comp,row[CI.game])||100;
+              const costRate=getCostRate(row[CI.game])||0;
+              let pts=rawPts,dollars=rawAmt;
+              if(rawPts&&!rawAmt)dollars=rawPts*(sellRate/100);
+              else if(rawAmt&&!rawPts)pts=rawAmt/(sellRate/100);
+              totalPts+=pts;totalDollars+=dollars;
+              return{gameName:row[CI.game],gameId:'',username:row[CI.username]||'',value:rawPts||rawAmt,costRate,sellRate,points:pts,dollars,inputAmount:rawPts||rawAmt,feeEmbedded:false};
+            });
+            const grandTotal=parseFloat(totalDollars.toFixed(2));
+            // Payment status
+            const rawStatus=compRows[0][CI.paystatus]||'not_received';
+            const rawPartial=parseFloat(compRows[0][CI.partialamt])||0;
+            const payStatus=rawStatus==='received'?'received':rawStatus==='partial'?'partial':'not_received';
+            const partialAmt=payStatus==='received'?grandTotal:payStatus==='partial'?rawPartial:0;
+            const balDue=payStatus==='received'?0:payStatus==='partial'?Math.max(0,grandTotal-rawPartial):grandTotal;
+            const pmName=compRows[0][CI.paymethod]||'';
+            const pm=cfPaymentMethods.find(p=>p.name===pmName);
+            const companyCode=comp.companyCode||await generateCompanyCode();
+            const refNum=await generateReferenceNumber(companyCode,billDate);
+            const bill={
+              companyId:comp._id,companyName:comp.name,date:billDate,convMode,
+              extraFeePercent:0,extraFeeAmount:0,extraFeeCostRate:0,extraFeeProfit:0,
+              creditApplied:0,extraPayments:[],items,totalDollars,totalPoints:totalPts,
+              paymentStatus:payStatus,partialAmount:partialAmt,balanceDue:balDue,
+              referenceNumber:refNum,companyCode,
+              ...(pm?{paymentMethodId:pm.id}:{})
+            };
+            const ref=await db.collection(userPath()+'/bills').add(bill);
+            const newBill={_id:ref.id,...bill};
+            state.bills.push(newBill);
+            // Update master game balances
+            for(const row of compRows){
+              const mg=state.masterGames.find(g=>g.name===row[CI.game]);
+              if(mg){
+                const rawPts=parseFloat(row[CI.points])||0;
+                const rawAmt=parseFloat(row[CI.amount])||0;
+                const sellRate=getGameRate(comp,row[CI.game])||100;
+                const pts=rawPts||(rawAmt/(sellRate/100));
+                const uname=row[CI.username]||'';
+                const uLevel=row[CI.level]||getUserLevel(comp,uname,row[CI.game]);
+                const isOrdered=!!(mg.highestLevel&&uLevel===mg.highestLevel);
+                const billDateStr=new Date(billDate).toISOString().slice(0,10);
+                const billingEntry={date:billDateStr,amount:pts,username:uname,billingType:isOrdered?'Ordered':'Direct'};
+                mg.billingHistory=[...(mg.billingHistory||[]),billingEntry];
+                if(isOrdered){
+                  mg.orderedPoints=(mg.orderedPoints||0)+pts;
+                  await db.doc(userPath()+'/masterGames/'+mg._id).update({orderedPoints:mg.orderedPoints,billingHistory:mg.billingHistory});
+                }else{
+                  mg.remainingPoints=(mg.remainingPoints||0)-pts;
+                  await db.doc(userPath()+'/masterGames/'+mg._id).update({remainingPoints:mg.remainingPoints,billingHistory:mg.billingHistory});
+                }
+              }
+            }
+            // Record in CF if payment method selected
+            if(pm&&payStatus!=='not_received'){
+              const amount=payStatus==='received'?grandTotal:rawPartial;
+              if(amount>0)cfRecordExtraPayment(amount,pm.id,billDate,comp._id,comp.name);
+            }
+            saved++;
+          }catch(e2){console.error('Bulk bill row error:',e2);failed++;}
+        }
+        _gbCache.set('data',{mg:state.masterGames,bills:state.bills,companies:state.companies});
+        invalidateAnalyticsCache?.();
+        btn.disabled=false;
+        btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>Submit Bills';
+        setStatus(`✓ ${saved} bill${saved===1?'':'s'} saved${failed?` · ${failed} failed`:''}`,failed?'#f87171':'#34d399');
+        if(saved>0&&!failed){setTimeout(()=>{overlay.remove();document.removeEventListener('keydown',onKey);invalidateAnalyticsCache?.();render();},1800);}
+      };
+
+      // ── Toolbar bindings ──
+      document.getElementById('bbAddRowsBtn').onclick=()=>{addRows(parseInt(document.getElementById('bbAddRowsCount').value)||10);};
+      document.getElementById('bbClearBtn').onclick=()=>{if(confirm('Clear all rows?')){pushUndo();rows=rows.map(()=>Array(NC).fill(''));renderBody();updateBar();}};
+      document.getElementById('bbCloseBtn').onclick=()=>{overlay.remove();document.removeEventListener('keydown',onKey);closeAc();};
+      document.getElementById('bbInfoBtn').onclick=()=>{const p=document.getElementById('bbShortcutsPanel');p.style.display=p.style.display==='none'?'flex':'none';};
+      document.getElementById('bbShortcutsClose').onclick=()=>{document.getElementById('bbShortcutsPanel').style.display='none';};
+
+      // Initial render
+      renderHead(); renderBody(); updateBar();
+    }
     function bindCompanyList() {
-      $('#addCompanyBtn').onclick = () => { $('#addCompanyForm').classList.toggle('hidden'); $('#newCompanyName').focus(); };
+      $('#bulkBillBtn').onclick = () => showBulkBillSheet();
+      $('#addCompanyBtn').onclick = () => { $('#addCompanyForm').classList.toggle('hidden'); $('#newCompanyName')?.focus(); };
       $('#cancelAddCompany').onclick = () => $('#addCompanyForm').classList.add('hidden');
       $('#confirmAddCompany').onclick = async () => {
         const name = $('#newCompanyName').value.trim();
