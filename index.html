@@ -1319,12 +1319,17 @@
       globalDateTo: null,
       _restoreView: _persisted.view || null,
     };
+    var _persistTimer = null;
     function persistState() {
-      try { localStorage.setItem('gb_state', JSON.stringify({
-        view: state.view, selectedCompanyId: state.selectedCompanyId,
-        companyTab: state.companyTab, companyLastUsed: state.companyLastUsed,
-        analyticsAgg: state.analyticsAgg
-      })); } catch(e) {}
+      if (_persistTimer) clearTimeout(_persistTimer);
+      _persistTimer = setTimeout(function() {
+        _persistTimer = null;
+        try { localStorage.setItem('gb_state', JSON.stringify({
+          view: state.view, selectedCompanyId: state.selectedCompanyId,
+          companyTab: state.companyTab, companyLastUsed: state.companyLastUsed,
+          analyticsAgg: state.analyticsAgg
+        })); } catch(e) {}
+      }, 500); // debounce: only write localStorage 500ms after last call
     }
     function touchCompany(id) {
       state.companyLastUsed[id] = Date.now();
@@ -1406,8 +1411,29 @@
     let _unsubs = []; // Firestore listener unsubscribers
     function stopListeners() { _unsubs.forEach(fn => fn()); _unsubs = []; }
 
+    // === PERFORMANCE: Debounce/schedule helpers ===
+    var _gbCacheWriteTimer = null;
+    function scheduleGbCacheWrite() {
+      if (_gbCacheWriteTimer) clearTimeout(_gbCacheWriteTimer);
+      _gbCacheWriteTimer = setTimeout(function() {
+        _gbCacheWriteTimer = null;
+        _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
+      }, 1500);
+    }
+
+    var _cfSyncTimer = null;
+    function scheduleCfSync() {
+      if (_cfSyncTimer) clearTimeout(_cfSyncTimer);
+      _cfSyncTimer = setTimeout(function() {
+        _cfSyncTimer = null;
+        cfSyncBillsToTransactions();
+      }, 2000);
+    }
+
+    // Migration: only run once ever per session, not on every snapshot
+    var _migrationDoneSession = false;
+
     // One-time initial load (fast from cache)
-    // === PERFORMANCE: Cache helpers ===
     var _gbCache = {
       get: function(k) { try { var raw = localStorage.getItem('gb_'+dataOwnerUid()+'_'+k); if(!raw) return null; var d=JSON.parse(raw); return d; } catch(e){ return null; } },
       set: function(k,v) { try { localStorage.setItem('gb_'+dataOwnerUid()+'_'+k, JSON.stringify(v)); } catch(e){} },
@@ -1482,37 +1508,69 @@
       const bp = userPath();
       // Listen to master games
       _unsubs.push(db.collection(bp+'/masterGames').onSnapshot(snap => {
-        state.masterGames = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        snap.docChanges().forEach(change => {
+          const id = change.doc.id;
+          if (change.type === 'removed') {
+            state.masterGames = state.masterGames.filter(g => g._id !== id);
+          } else {
+            const data = { _id: id, ...change.doc.data() };
+            const idx = state.masterGames.findIndex(g => g._id === id);
+            if (idx >= 0) state.masterGames[idx] = data;
+            else state.masterGames.push(data);
+          }
+        });
+        scheduleGbCacheWrite();
+        invalidateAnalyticsCache();
       }));
       // Listen to bills (latest 100)
       _unsubs.push(db.collection(bp+'/bills').onSnapshot(snap => {
-        state.bills = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        
-        // Migrate old bills without reference numbers
-        state.bills.forEach(async (bill) => {
-          if (!bill.referenceNumber && bill.companyId) {
-            const company = state.companies[bill.companyId];
-            if (company && company.companyCode) {
-              try {
-                const refNum = await generateReferenceNumber(company.companyCode, bill.date);
-                await db.doc(bp+'/bills/'+bill._id).update({ 
-                  referenceNumber: refNum,
-                  companyCode: company.companyCode 
-                });
-              } catch(e) {
-                console.error('Error migrating reference number for bill', bill._id, e);
-              }
+        // Use docChanges for incremental updates — much faster than rebuilding entire array
+        if (state.bills && state.bills.length > 0) {
+          snap.docChanges().forEach(change => {
+            const id = change.doc.id;
+            if (change.type === 'removed') {
+              state.bills = state.bills.filter(b => b._id !== id);
+            } else {
+              const data = { _id: id, ...change.doc.data() };
+              const idx = state.bills.findIndex(b => b._id === id);
+              if (idx >= 0) state.bills[idx] = data;
+              else state.bills.push(data);
             }
+          });
+        } else {
+          state.bills = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        }
+
+        // Migrate old bills without reference numbers — only ONCE per session, not on every snapshot
+        if (!_migrationDoneSession) {
+          _migrationDoneSession = true;
+          var billsNeedingRef = state.bills.filter(function(bill){ return !bill.referenceNumber && bill.companyId; });
+          if (billsNeedingRef.length > 0) {
+            (async function() {
+              for (var mi = 0; mi < billsNeedingRef.length; mi++) {
+                var bill = billsNeedingRef[mi];
+                var company = state.companies[bill.companyId];
+                if (company && company.companyCode) {
+                  try {
+                    var refNum = await generateReferenceNumber(company.companyCode, bill.date);
+                    await db.doc(bp+'/bills/'+bill._id).update({ referenceNumber: refNum, companyCode: company.companyCode });
+                  } catch(e) { /* silent */ }
+                }
+              }
+            })();
           }
-        });
-        
-        _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
+        }
+
+        scheduleGbCacheWrite();
         invalidateAnalyticsCache();
-        // Sync any newly loaded bills into CF transactions if CF is already loaded
-        if (_cfLoaded && state.empRole !== 'employee') cfSyncBillsToTransactions();
+        rebuildBillIndex();
+        // Sync CF transactions — debounced, expensive
+        if (_cfLoaded && state.empRole !== 'employee') scheduleCfSync();
         // Soft-refresh bill history without rebuilding entire page
-        if(state.view === 'company' && state.companyTab === 'billing') {
+        if (state.view === 'company' && state.companyTab === 'billing') {
           refreshBillHistory();
+        } else if (state.view === 'companies') {
+          scheduleRender();
         }
       }));
       // Listen to companies
@@ -1532,8 +1590,8 @@
             setupCompanySubListeners(id);
           }
         });
-        // Re-render company list immediately when data arrives from Firestore
-        if (state.view === 'companies') render();
+        // Re-render company list — debounced to batch rapid changes
+        if (state.view === 'companies') scheduleRender();
         
         // Second pass: migrate company codes sequentially (only once on first snapshot)
         if (!_companiesMigrationDone) {
@@ -1740,7 +1798,7 @@
       var c = state.companies[state.selectedCompanyId];
       if(!c) return;
       // Re-render just the bill history HTML using same logic as renderBilling
-      var companyBills = state.bills.filter(function(b){return b.companyId === c._id}).sort(function(a,b){return toLocalDate(b.date)-toLocalDate(a.date)});
+      var companyBills = getCompanyBills(c._id).sort(function(a,b){return toLocalDate(b.date)-toLocalDate(a.date)});
       if(companyBills.length === 0) {
         histEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--textMuted);font-size:13px">No bills yet</div>';
       } else {
@@ -1859,6 +1917,19 @@
           if(bill) showBillEditModal(c, bill);
         };
       });
+    }
+
+    var _renderPending = false;
+    var _renderTimer = null;
+    function scheduleRender() {
+      if (_renderPending) return;
+      _renderPending = true;
+      if (_renderTimer) clearTimeout(_renderTimer);
+      _renderTimer = setTimeout(function() {
+        _renderPending = false;
+        _renderTimer = null;
+        render();
+      }, 40); // 40ms debounce — imperceptible but batches rapid Firestore events
     }
 
     function render() {
@@ -4890,6 +4961,21 @@
       }
     }
 
+    // Bills indexed by companyId for O(1) access — rebuilt whenever bills change
+    var _billsByCompany = {};
+    function rebuildBillIndex() {
+      _billsByCompany = {};
+      for (var _bi = 0; _bi < state.bills.length; _bi++) {
+        var _b = state.bills[_bi];
+        if (!_billsByCompany[_b.companyId]) _billsByCompany[_b.companyId] = [];
+        _billsByCompany[_b.companyId].push(_b);
+      }
+    }
+
+    function getCompanyBills(companyId) {
+      return _billsByCompany[companyId] || [];
+    }
+
     // ============================================================
     // BILLING
     // ============================================================
@@ -4898,7 +4984,7 @@
       const items = state.billItems;
       const assignedGames = c.assignedGames || [];
       const usernames = c.usernames || [];
-      const companyBills = state.bills.filter(b => b.companyId === c._id).sort((a,b) => toLocalDate(b.date)-toLocalDate(a.date));
+      const companyBills = getCompanyBills(c._id).slice().sort((a,b) => toLocalDate(b.date)-toLocalDate(a.date));
       const _histToday = (function(){var n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')})();
       const _histFirstOfMonth = _histToday.slice(0,8) + '01';
 
@@ -5259,7 +5345,7 @@
       var cash=state.paymentStatus==='received'?gt:state.paymentStatus==='partial'?(parseFloat(state.partialAmount)||0):0;
       var s=calcSettlement(gt,cash,cr,applyCredit);
       // Calculate net available credit (after unpaid bills)
-      var compBills = state.bills.filter(function(b){return b.companyId === c._id});
+      var compBills = getCompanyBills(c._id);
       var totalUnpaid = 0;
       compBills.forEach(function(b){
         var exPay = (b.extraPayments||[]).reduce(function(s,p){return s+(p.amount||0)},0);
@@ -5884,7 +5970,7 @@
           //   credit pool consumed  = creditApplied on any remaining bill
           // isGeneral entries on real bills are already reflected in partialAmount — do NOT add them.
           try {
-            var remainingCompBills = state.bills.filter(function(b){ return b.companyId === c._id; });
+            var remainingCompBills = getCompanyBills(c._id);
             var newCreditBal = 0;
             remainingCompBills.forEach(function(b){
               var _isHolder = (b.totalDollars||0) === 0 && (b.totalPoints||0) === 0;
@@ -6760,7 +6846,7 @@
       if (typeof c.creditBalance === 'number') return Math.max(0, c.creditBalance);
       // Fallback: derive from bills (for legacy data)
       var totalExtra = 0, totalConsumed = 0;
-      var compBills = state.bills.filter(function(b){ return b.companyId === c._id; });
+      var compBills = getCompanyBills(c._id);
       for (var i = 0; i < compBills.length; i++) {
         var bill = compBills[i];
         var eps = bill.extraPayments || [];
@@ -7333,13 +7419,12 @@
     var _analyticsDateFrom = null;
     var _analyticsDateTo = null;
     var _chartInstances = {};
-    function invalidateAnalyticsCache() { _analyticsCache = {}; _analyticsMutVersion++; }
+    function invalidateAnalyticsCache() { _analyticsCache = {}; _analyticsMutVersion++; _cfSummaryCache = {}; _globalDataCache = {}; }
 
     function computeAnalyticsData(c, fromDate, toDate) {
       var key = c._id + '_' + state.bills.length + '_' + _analyticsMutVersion + '_' + (fromDate||0) + '_' + (toDate||0);
       if (_analyticsCache[key]) return _analyticsCache[key];
-      var compBills = state.bills.filter(function(b) {
-        if (b.companyId !== c._id) return false;
+      var compBills = getCompanyBills(c._id).filter(function(b) {
         if (fromDate || toDate) {
           var bd = billToDate(b.date);
           if (isNaN(bd.getTime())) return true;
@@ -7425,7 +7510,6 @@
       var dRd=dLab.map(function(k){return aggMap[k].rd});
       var gNm=Object.keys(gMap).sort(function(a,b){return gMap[b].rev-gMap[a].rev});
       var gRv=gNm.map(function(g){return +gMap[g].rev.toFixed(2)});
-      console.log('[Analytics] loaded:'+tLP+' redeemed:'+tRP+' recv:$'+tRec.toFixed(2)+' bal:$'+tBal.toFixed(2)+' bills:'+compBills.length);
       // Credit balance: use getCompanyCreditBalance as single source of truth
       var _trueCreditBal = getCompanyCreditBalance(c);
       // tBal = total outstanding across all bills in range
@@ -7692,7 +7776,7 @@
         var displayCredit = currentCredit > 0 ? currentCredit : Math.abs(d.totalBalance);
         if (isCredit) {
           title = 'CREDIT BALANCE LEDGER';
-          var compBillsLedger = state.bills.filter(function(b){ return b.companyId === c._id; })
+          var compBillsLedger = getCompanyBills(c._id)
             .sort(function(a,b2){ return toLocalDate(a.date)-toLocalDate(b2.date); });
           var ledgerEntries = [];
           compBillsLedger.forEach(function(b) {
@@ -8053,7 +8137,7 @@
           c.creditBalance=0;
           // IMPORTANT: Remove all isCredit and isGeneral extraPayments from this company's bills
           // so they don't ghost-reappear next time a new credit entry is added.
-          var _compBills = state.bills.filter(function(b){ return b.companyId === c._id; });
+          var _compBills = getCompanyBills(c._id);
           for(var _ci=0; _ci<_compBills.length; _ci++){
             var _cb = _compBills[_ci];
             var _eps = (_cb.extraPayments||[]);
@@ -8146,7 +8230,7 @@
           if(bid==='__general__'){
             var payDate = dt || localDateStr();
             // Get ALL unpaid bills for this company (not just in date range), oldest first
-            var allCompBills = state.bills.filter(function(b){ return b.companyId===c._id; })
+            var allCompBills = getCompanyBills(c._id)
               .sort(function(a,b){ return toLocalDate(a.date)-toLocalDate(b.date); });
             var unpaidBills = allCompBills.filter(function(b){ return (b.balanceDue||0) > 0.01; });
 
@@ -8317,7 +8401,7 @@
         gRv += _compData ? (_compData.totalReceived || 0) : 0;
         // Outstanding: sum balanceDue across all this company's bills
         var compDue = 0;
-        state.bills.filter(function(b){ return b.companyId===cc._id; }).forEach(function(b){ compDue += Math.max(0, b.balanceDue||0); });
+        getCompanyBills(cc._id).forEach(function(b){ compDue += Math.max(0, b.balanceDue||0); });
         // Credit: single source of truth
         var compCredit = getCompanyCreditBalance(cc);
         // Net: credit offsets outstanding
@@ -8439,7 +8523,10 @@
     // ============================================================
     // GLOBAL ANALYTICS - Full Page View
     // ============================================================
+    var _globalDataCache = {};
     function computeGlobalData(fromDate, toDate) {
+      var _gdKey = (fromDate ? fromDate.getTime() : '0') + '|' + (toDate ? toDate.getTime() : '0') + '|' + _analyticsMutVersion + '|' + state.bills.length;
+      if (_globalDataCache[_gdKey]) return _globalDataCache[_gdKey];
       var companies = Object.values(state.companies), allBills = state.bills;
       var filtered = allBills;
       if (fromDate || toDate) {
@@ -8509,7 +8596,7 @@
       companies.forEach(function(cc) {
         var cn2 = cc.name || 'Unknown';
         var compDue = 0;
-        state.bills.filter(function(b){ return b.companyId===cc._id; }).forEach(function(b){ compDue += Math.max(0, b.balanceDue||0); });
+        getCompanyBills(cc._id).forEach(function(b){ compDue += Math.max(0, b.balanceDue||0); });
         var compCredit = getCompanyCreditBalance(cc);
         var netDue = Math.max(0, compDue - compCredit);
         var netCredit = Math.max(0, compCredit - compDue);
@@ -8518,7 +8605,9 @@
         if (cM[cn2]) { cM[cn2].due = netDue; cM[cn2].credit = netCredit; }
       });
       var gBalNet = _globalOutstandingTotal - _globalCreditTotal;
-      return {gL:gL,gR:gR,gRv:gRv,gBal:gBalNet,gCredit:_globalCreditTotal,gOutstanding:_globalOutstandingTotal,gPr:gPr,gCost:gCost,tC:tC,tG:tG,tU:tU,dLab:dLab,dRev:dRev,dPr:dPr,dPts:dPts,bills:filtered.length,totalDol:filtered.reduce(function(s,b){return s+(b.totalDollars||0)},0)};
+      var _gdResult = {gL:gL,gR:gR,gRv:gRv,gBal:gBalNet,gCredit:_globalCreditTotal,gOutstanding:_globalOutstandingTotal,gPr:gPr,gCost:gCost,tC:tC,tG:tG,tU:tU,dLab:dLab,dRev:dRev,dPr:dPr,dPts:dPts,bills:filtered.length,totalDol:filtered.reduce(function(s,b){return s+(b.totalDollars||0)},0)};
+      _globalDataCache[_gdKey] = _gdResult;
+      return _gdResult;
     }
 
     // Compute operating expenses from salary data for the given date range
@@ -12230,15 +12319,15 @@
     // Existing records (matched by billId = referenceNumber) are NOT overwritten.
     function cfSyncBillsToTransactions() {
       if (!state.bills || !state.bills.length) return;
+      // Build O(1) lookup set of already-tracked bill IDs
+      var _trackedIds = new Set(cfTransactions.map(function(t){ return t.billId; }).filter(Boolean));
       var writes = [];
       state.bills.forEach(function(bill) {
         var status = bill.paymentStatus;
         if (!status || status === 'not_received') return;
         var refId = bill.referenceNumber || bill._id;
         if (!refId) return;
-        // Check if a transaction already exists for this bill
-        var existing = cfTransactions.find(function(t){ return t.billId === refId; });
-        if (existing) return; // already tracked
+        if (_trackedIds.has(refId)) return; // already tracked — O(1)
         var amount = 0;
         if (status === 'received') {
           var grandTotalS = (bill.totalDollars || 0) + (bill.extraFeeAmount || 0);
@@ -12246,35 +12335,28 @@
         } else if (status === 'partial') {
           amount = Math.max(0, (bill.partialAmount || 0) - (bill.creditApplied || 0));
         }
-        if (amount <= 0) return; // credit-only — already recorded as extra payment
-        // Determine payment method: prefer the one stored on the bill, then most-used for company, then first
+        if (amount <= 0) return;
         var pmId = bill.paymentMethodId || cfGetMostUsedPaymentMethod(bill.companyId) || (cfPaymentMethods[0] && cfPaymentMethods[0].id) || '';
         var companyObj = state.companies && state.companies[bill.companyId];
         var tx = {
-          type: 'income',
-          category: 'bill',
+          type: 'income', category: 'bill',
           amount: parseFloat(amount.toFixed(2)),
           paymentMethodId: pmId,
           companyId: bill.companyId || '',
           companyName: (companyObj && companyObj.name) || bill.companyName || '',
           date: bill.date || new Date().toISOString(),
-          billId: refId,
-          note: refId,
-          synced: true // mark as auto-synced
+          billId: refId, note: refId, synced: true
         };
-        // Push locally immediately so UI updates
         var localTx = Object.assign({ id: '_sync_' + refId }, tx);
         cfTransactions.push(localTx);
-        // Persist to Firestore async, then update the local id
+        _trackedIds.add(refId); // prevent duplicate writes in same batch
         writes.push(
           db.collection(cfPath('transactions')).add(tx).then(function(ref) {
             localTx.id = ref.id;
           }).catch(function(){})
         );
       });
-      if (writes.length > 0) {
-        Promise.all(writes).catch(function(){});
-      }
+      if (writes.length > 0) Promise.all(writes).catch(function(){});
     }
 
     // ── Cached cashier salary data for CF (fetched async on CF page open) ──
@@ -12282,7 +12364,13 @@
 
     // ── Compute cash flow summary — derived directly from state.bills (same as computeAnalyticsData) ──
     // fromDate / toDate: YYYY-MM-DD or YYYY-MM-DDThh:mm strings (local time)
+    var _cfSummaryCache = {};
+    var _cfSummaryVersion = 0;
+    function invalidateCfSummaryCache() { _cfSummaryCache = {}; _cfSummaryVersion++; }
+
     function cfComputeSummary(fromDate, toDate) {
+      var _cacheKey = (fromDate||'') + '|' + (toDate||'') + '|' + _cfSummaryVersion + '|' + _analyticsMutVersion + '|' + state.bills.length + '|' + cfTransactions.length;
+      if (_cfSummaryCache[_cacheKey]) return _cfSummaryCache[_cacheKey];
       // Parse bounds — same logic as the bill history and analytics date filters
       // Accept YYYY-MM-DD (date-only) and YYYY-MM-DDThh:mm (datetime-local) formats
       var fD = fromDate ? new Date(fromDate.length === 10 ? fromDate + 'T00:00:00' : fromDate + ':00') : null;
@@ -12302,6 +12390,10 @@
       // Track per-method inflow for the breakdown panel
       var byMethod = {};
       cfPaymentMethods.forEach(function(pm) { byMethod[pm.id] = { name: pm.name, total: 0, txs: [] }; });
+
+      // Pre-build cfTransactions lookup by billId for O(1) access
+      var _cfTxByBillId = {};
+      cfTransactions.forEach(function(t) { if (t.billId) _cfTxByBillId[t.billId] = t; });
 
       // For payment-method breakdown we use cfTransactions (which store the method used per bill).
       // But the TOTALS must come from state.bills directly so they match analytics.
@@ -12337,7 +12429,7 @@
         // Payment-method breakdown: attribute bill inflow to payment method
         if (bFull > 0) {
           var refId = bill.referenceNumber || bill._id;
-          var tx = cfTransactions.find(function(t) { return t.billId === refId; });
+          var tx = _cfTxByBillId[refId]; // O(1) lookup
           // For credit-balance companies, the payment method may be stored on extraPayments
           var pmId = (tx && tx.paymentMethodId) || bill.paymentMethodId || '';
           // If still no pmId, check extraPayments for a stored paymentMethodId
@@ -12455,11 +12547,13 @@
       });
       filteredTxs = filteredTxs.concat(_extraTxRows).sort(function(a,b){ return billToDate(b.date)-billToDate(a.date); });
 
-      return { inflow, billInflow, creditInflow, redemptionCost, opExpTotal, totalOpEx, totalOutflow, grossProfit,
+      var _cfResult = { inflow, billInflow, creditInflow, redemptionCost, opExpTotal, totalOpEx, totalOutflow, grossProfit,
                salaryTotal, salaryEmployees, byMethod,
                bonusTotal, bonusTxs,
                filteredTxs: filteredTxs, opFiltered,
                salaryLoaded: !!_cfSalaryCache };
+      _cfSummaryCache[_cacheKey] = _cfResult;
+      return _cfResult;
     }
 
     // Helper: get stable bill reference ID
