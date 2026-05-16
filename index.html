@@ -1256,10 +1256,11 @@
     const _supabase = window.supabase.createClient(
       'https://kzchxmulktygoqhiwpff.supabase.co',
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg',
-      { auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, flowType: 'implicit' } }
+      { auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true } }
     );
-    // Remove #access_token hash from URL after OAuth redirect without reloading
-    if (window.location.hash && window.location.hash.includes('access_token')) {
+    // Handle PKCE code exchange on redirect
+    // Supabase handles this automatically via detectSessionInUrl
+    if (window.location.search.includes('code=') || window.location.hash.includes('access_token')) {
       window.history.replaceState(null, '', window.location.pathname);
     }
 
