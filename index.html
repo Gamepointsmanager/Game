@@ -1268,12 +1268,14 @@
       where(field, op, val) {
         const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
         const opMap = { '==': 'eq', '!=': 'neq', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte' };
-        clone._wheres.push({ field, op: opMap[op] || 'eq', val });
+        const sbField = _FIELD_TO_SB[field] || field; // translate camelCase → snake_case
+        clone._wheres.push({ field: sbField, op: opMap[op] || 'eq', val });
         return clone;
       }
       orderBy(field, dir) {
         const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
-        clone._orderField = field; clone._orderAsc = (dir !== 'desc');
+        clone._orderField = _FIELD_TO_SB[field] || field; // translate camelCase → snake_case
+        clone._orderAsc = (dir !== 'desc');
         return clone;
       }
       limit(n) {
@@ -1359,19 +1361,22 @@
       // onSnapshot — map Supabase Realtime to same callback shape
       onSnapshot(cb, errCb) {
         const table = this._table;
-        const wheres = this._wheres;
         const channelName = `${table}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        // Initial load
+        // Initial load — fire once immediately
         this.get().then(snap => cb(snap)).catch(e => errCb && errCb(e));
-        // Realtime subscription
+        // Realtime: debounced so rapid changes don't cause multiple re-renders
+        let _sbDebTimer = null;
+        const self = this;
         const sub = _supabase.channel(channelName)
-          .on('postgres_changes', { event: '*', schema: 'public', table }, async () => {
-            const fresh = await this.get();
-            cb(fresh);
+          .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
+            clearTimeout(_sbDebTimer);
+            _sbDebTimer = setTimeout(async () => {
+              try { const fresh = await self.get(); cb(fresh); }
+              catch(e) { errCb && errCb(e); }
+            }, 300);
           })
           .subscribe();
-        // Return unsubscriber
-        return () => _supabase.removeChannel(sub);
+        return () => { clearTimeout(_sbDebTimer); _supabase.removeChannel(sub); };
       }
     }
 
@@ -1443,23 +1448,56 @@
     };
 
     // Convert Firestore field names → snake_case for Supabase (minimal set)
+    // camelCase → snake_case field map (Firestore field names → Supabase column names)
+    const _FIELD_TO_SB = {
+      displayName:'display_name', photoURL:'photo_url', gbUsername:'gb_username',
+      expiryDate:'expiry_date', isDisabled:'is_disabled', isUnlimited:'is_unlimited',
+      lastLogin:'last_login', createdAt:'created_at', updatedAt:'updated_at',
+      subPeriodStart:'sub_period_start', subPeriodEnd:'sub_period_end',
+      subscriptionCost:'subscription_cost', invoiceSettings:'invoice_settings',
+      generalPayments:'general_payments', ownerUid:'owner_uid', ownerEmail:'owner_email',
+      ownerName:'owner_name', employeeId:'employee_id', ownerHasAccess:'owner_has_access',
+      ownerAccessExpiry:'owner_access_expiry', accessGrantedAt:'access_granted_at',
+      targetUid:'target_uid', targetAll:'target_all', dismissedAt:'dismissed_at',
+      gameName:'game_name', totalPoints:'total_points', remainingPoints:'remaining_points',
+      orderedPoints:'ordered_points', costRate:'cost_rate', billingHistory:'billing_history',
+      companyCode:'company_code', referenceNumber:'reference_number',
+      creditBalance:'credit_balance', extraFeeEnabled:'extra_fee_enabled',
+      extraFeePercent:'extra_fee_percent', extraFeeCostRate:'extra_fee_cost_rate',
+      paymentBonuses:'payment_bonuses', extraPayments:'extra_payments',
+      creditApplied:'credit_applied', partialAmount:'partial_amount',
+      paymentStatus:'payment_status', paymentMethodId:'payment_method_id',
+      companyId:'company_id', companyName:'company_name', billId:'bill_id',
+      startTime:'start_time', endTime:'end_time', orgId:'org_id',
+      salaryType:'salary_type', salaryRate:'salary_rate',
+      periodStart:'period_start', periodEnd:'period_end', paidAt:'paid_at',
+      receivedByEmployee:'received_by_employee', receivedAt:'received_at',
+      employeeUid:'employee_uid', linkKey:'link_key',
+    };
+    // snake_case → camelCase (reverse map, built automatically)
+    const _FIELD_FROM_SB = Object.fromEntries(Object.entries(_FIELD_TO_SB).map(([k,v])=>[v,k]));
+
     function _convertToSB(obj) {
       if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
       const out = {};
-      for (const [k, v] of Object.entries(obj)) {
-        let val = v;
-        // Convert Timestamp shims to ISO strings
-        if (val && typeof val === 'object' && val._isTs) val = val.toDate().toISOString();
-        if (typeof val === 'function') val = val(); // serverTimestamp()
-        out[k] = val;
+      for (let [k, v] of Object.entries(obj)) {
+        if (v && typeof v === 'object' && v._isTs) v = v.toDate().toISOString();
+        if (typeof v === 'function') v = v();
+        if (v === undefined) continue; // skip FieldValue.delete()
+        const key = _FIELD_TO_SB[k] || k;
+        out[key] = v;
       }
       return out;
     }
     function _convertFromSB(row) {
       if (!row) return null;
-      // Expose id as _id for compatibility with existing state usage
-      const out = { ...row };
-      if (row.id && !out._id) out._id = row.id;
+      const out = {};
+      for (const [k, v] of Object.entries(row)) {
+        const key = _FIELD_FROM_SB[k] || k;
+        out[key] = v;
+      }
+      // Expose both id and _id for compatibility
+      if (row.id) { out.id = row.id; out._id = row.id; }
       return out;
     }
 
