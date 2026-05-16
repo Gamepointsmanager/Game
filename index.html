@@ -13,7 +13,14 @@
   <link rel="manifest" href="manifest.json" />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-  <script>if(typeof Chart==='undefined'){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"><\/script>')}</script>
+  <script>
+    // Load Chart.js fallback without document.write (blocked by Chrome)
+    if (typeof Chart === 'undefined') {
+      var _s = document.createElement('script');
+      _s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js';
+      document.head.appendChild(_s);
+    }
+  </script>
 
   <!-- Firebase SDKs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -13658,13 +13665,7 @@
       }
     }
 
-    // ============================================================
-    // PWA Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/Game/sw.js', { scope: '/Game/' })
-        .then(reg => console.log('SW registered:', reg.scope))
-        .catch(e => console.log('SW:', e.message));
-    }
+    // Service worker disabled — sw.js not present in repo
     // Initial render
     render();
   </script>
