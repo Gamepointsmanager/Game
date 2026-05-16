@@ -1362,7 +1362,13 @@
       async set(payload){
         const d=_toSB(payload),pk=_pk(this._t);
         if(this._id){const{error}=await _supabase.from(this._t).upsert({[pk]:this._id,...d});if(error){console.error('[db.set]',this._t,error.message);throw error;}}
-        else{const{data:row,error}=await _supabase.from(this._t).insert(d).select().single();if(error){console.error('[db.set]',this._t,error.message);throw error;}this._id=row.id;}
+        else{
+          const _TEXT_PK_TABLES=new Set(['master_games','companies','assigned_games','company_usernames','bills']);
+          if(_TEXT_PK_TABLES.has(this._t)&&!d.id) d.id=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+          const{data:row,error}=await _supabase.from(this._t).insert(d).select().single();
+          if(error){console.error('[db.set]',this._t,error.message);throw error;}
+          this._id=row.id;
+        }
         return this;
       }
       async update(payload){
@@ -1375,7 +1381,13 @@
         else{let q=_supabase.from(this._t).delete();for(const w of this._w)q=q[w.op](w.f,w.v);const{error}=await q;if(error)throw error;}
       }
       async add(payload){
-        const{data:row,error}=await _supabase.from(this._t).insert(_toSB(payload)).select().single();
+        const d = _toSB(payload);
+        // Tables with text PKs (Firebase-style IDs) need an explicit ID on insert
+        const _TEXT_PK_TABLES = new Set(['master_games','companies','assigned_games','company_usernames','bills']);
+        if(_TEXT_PK_TABLES.has(this._t) && !d.id){
+          d.id = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        }
+        const{data:row,error}=await _supabase.from(this._t).insert(d).select().single();
         if(error){console.error('[db.add]',this._t,error.message);throw error;}
         return{id:row.id};
       }
