@@ -16,9 +16,7 @@
   <script>if(typeof Chart==='undefined'){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"><\/script>')}</script>
 
   <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Google Identity Services – for Drive upload token -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
@@ -1245,37 +1243,274 @@
     // ============================================================
     // FIREBASE INIT
     // ============================================================
-    const firebaseConfig = {
-      apiKey: "AIzaSyDjrOg8Q0sIXI6Jo5f4DT2x-kv9rkbaMx0",
-      authDomain: "auth.sweepadmin.com",
-      projectId: "sweepadministrator",
-      storageBucket: "sweepadministrator.firebasestorage.app",
-      messagingSenderId: "909535669253",
-      appId: "1:909535669253:web:8389b6274f269178c3806c",
-      measurementId: "G-0LMKKJRY4X"
+    // ============================================================
+    // SUPABASE INIT
+    // ============================================================
+    const _supabase = window.supabase.createClient(
+      'https://kzchxmulktygoqhiwpff.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg'
+    );
+
+    // ── Compatibility shim: db.collection / db.doc → Supabase ───────────────
+    // This thin wrapper lets existing db.collection() / db.doc() call-sites
+    // work without rewriting every one of them individually.
+    // Each method returns a chainable builder that executes on .get()/.set()/.update()/.delete()/.add()
+    class _SBRef {
+      constructor(table, id, parentRef) {
+        this._table  = table;
+        this._id     = id || null;
+        this._parent = parentRef || null; // for sub-collection foreign key
+        this._wheres = [];
+        this._orderField = null;
+        this._orderAsc   = true;
+        this._limitN     = null;
+      }
+      where(field, op, val) {
+        const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
+        const opMap = { '==': 'eq', '!=': 'neq', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte' };
+        clone._wheres.push({ field, op: opMap[op] || 'eq', val });
+        return clone;
+      }
+      orderBy(field, dir) {
+        const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
+        clone._orderField = field; clone._orderAsc = (dir !== 'desc');
+        return clone;
+      }
+      limit(n) {
+        const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
+        clone._limitN = n; return clone;
+      }
+      collection(subPath) {
+        // returns a ref to a sub-collection, e.g. doc('orgs/x').collection('employees')
+        return new _SBRef(subPath, null, this);
+      }
+      doc(id) {
+        const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
+        clone._id = id; return clone;
+      }
+      _buildQuery(select) {
+        let q = _supabase.from(this._table).select(select || '*');
+        for (const w of this._wheres) q = q[w.op](w.field, w.val);
+        if (this._orderField) q = q.order(this._orderField, { ascending: this._orderAsc });
+        if (this._limitN)     q = q.limit(this._limitN);
+        return q;
+      }
+      _ownerFilter() {
+        // Tables that use owner_uid scoping
+        const ownerTables = ['companies','assigned_games','company_usernames','master_games','bills'];
+        return ownerTables.includes(this._table);
+      }
+      async get() {
+        if (this._id) {
+          const { data, error } = await _supabase.from(this._table).select('*').eq('id', this._id).single();
+          if (error && error.code !== 'PGRST116') console.warn('[db.get]', error);
+          return { exists: !!data, data: () => data ? _convertFromSB(data) : null, id: this._id };
+        }
+        let q = this._buildQuery('*');
+        const { data, error } = await q;
+        if (error) console.warn('[db.get collection]', error);
+        const docs = (data || []).map(row => ({
+          id: row.id, exists: true,
+          data: () => _convertFromSB(row),
+        }));
+        return { docs, empty: docs.length === 0,
+          docChanges: () => docs.map(d => ({ type: 'added', doc: d })) };
+      }
+      async set(payload, opts) {
+        const merge = opts && opts.merge;
+        const data  = _convertToSB(payload);
+        if (this._id) {
+          if (merge) {
+            const { error } = await _supabase.from(this._table).upsert({ id: this._id, ...data });
+            if (error) throw error;
+          } else {
+            const { error } = await _supabase.from(this._table).upsert({ id: this._id, ...data });
+            if (error) throw error;
+          }
+        } else {
+          const { data: row, error } = await _supabase.from(this._table).insert(data).select().single();
+          if (error) throw error;
+          this._id = row.id;
+        }
+        return this;
+      }
+      async update(payload) {
+        if (!this._id) throw new Error('[db.update] No document id');
+        const { error } = await _supabase.from(this._table).update(_convertToSB(payload)).eq('id', this._id);
+        if (error) throw error;
+      }
+      async delete() {
+        if (this._id) {
+          const { error } = await _supabase.from(this._table).delete().eq('id', this._id);
+          if (error) throw error;
+        } else {
+          let q = _supabase.from(this._table).delete();
+          for (const w of this._wheres) q = q[w.op](w.field, w.val);
+          const { error } = await q;
+          if (error) throw error;
+        }
+      }
+      async add(payload) {
+        const data = _convertToSB(payload);
+        const { data: row, error } = await _supabase.from(this._table).insert(data).select().single();
+        if (error) throw error;
+        return { id: row.id };
+      }
+      // onSnapshot — map Supabase Realtime to same callback shape
+      onSnapshot(cb, errCb) {
+        const table = this._table;
+        const wheres = this._wheres;
+        const channelName = `${table}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        // Initial load
+        this.get().then(snap => cb(snap)).catch(e => errCb && errCb(e));
+        // Realtime subscription
+        const sub = _supabase.channel(channelName)
+          .on('postgres_changes', { event: '*', schema: 'public', table }, async () => {
+            const fresh = await this.get();
+            cb(fresh);
+          })
+          .subscribe();
+        // Return unsubscriber
+        return () => _supabase.removeChannel(sub);
+      }
+    }
+
+    // Path helpers — convert Firestore path strings to table/id lookups
+    const _PATH_TABLE_MAP = {
+      'userAccess':        'user_access',
+      'gbUsernames':       'gb_usernames',
+      'popupMessages':     'popup_messages',
+      'employeeLinks':     'employee_links',
+      'employeeUids':      'employee_uids',
+      'organizations':     'organizations',
+      'companies':         'companies',
+      'masterGames':       'master_games',
+      'bills':             'bills',
+      'assignedGames':     'assigned_games',
+      'usernames':         'company_usernames',
+      'employees':         'employees',
+      'shifts':            'shifts',
+      'salaryPayments':    'salary_payments',
+      // CF sub-collections
+      'cf_transactions':   'cf_transactions',
+      'cf_paymentMethods': 'cf_payment_methods',
+      'cf_shareholders':   'cf_shareholders',
+      'cf_opExpenses':     'cf_op_expenses',
+      'cf_dividendPayments': 'cf_dividend_payments',
     };
 
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    // On mobile browsers, Firestore's IndexedDB persistence can cause severe slowdowns
-    // because mobile browsers throttle IndexedDB in background tabs or on low-power mode.
-    // Disable persistence on mobile for much faster writes; desktop keeps multi-tab sync.
-    var _isMobileBrowser = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (!_isMobileBrowser) {
-      db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-    }
-    // Handle redirect result for iOS Safari / PWA
-    auth.getRedirectResult().then(result => {
-      if (result && result.user) {
-        // Redirect sign-in succeeded - onAuthStateChanged will handle the rest
-        console.log('Redirect sign-in success');
+    function _pathToRef(path) {
+      // path like "users/uid/companies" or "users/uid/companies/cid/assignedGames"
+      const parts = path.split('/').filter(Boolean);
+      // strip leading "users/{uid}" ownership prefix
+      if (parts[0] === 'users') parts.splice(0, 2);
+      // strip leading "organizations/{orgId}" prefix
+      if (parts[0] === 'organizations') {
+        if (parts.length === 2) return new _SBRef('organizations', parts[1]);
+        parts.splice(0, 2); // remove 'organizations/{orgId}'
       }
-    }).catch(err => {
-      console.log('Redirect result:', err.code || err.message);
-    });
-    // Set LOCAL persistence for PWA / Safari contexts
-    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+      const colName = parts[0];
+      const docId   = parts[1] || null;
+      const subCol  = parts[2] || null;
+      const subId   = parts[3] || null;
+      const table   = _PATH_TABLE_MAP[subCol || colName] || (subCol || colName);
+      const id      = subId || (subCol ? null : docId);
+      return new _SBRef(table, id);
+    }
+
+    // Compatibility db object with .collection(path) and .doc(path)
+    const db = {
+      collection(path) {
+        // path may be compound like "users/uid/companies"
+        return _pathToRef(path);
+      },
+      doc(path) {
+        const ref = _pathToRef(path);
+        return ref;
+      },
+    };
+
+    // Timestamp / FieldValue shims
+    const _serverTs = () => new Date().toISOString();
+    if (!window.firebase) window.firebase = {};
+    window.firebase.firestore = {
+      FieldValue: { serverTimestamp: _serverTs, arrayUnion: (...a) => a, arrayRemove: (...a) => a },
+      Timestamp: {
+        fromMillis: (ms) => ({ toMillis: () => ms, toDate: () => new Date(ms), seconds: Math.floor(ms/1000), _isTs: true }),
+        fromDate:   (d)  => ({ toMillis: () => d.getTime(), toDate: () => d, seconds: Math.floor(d.getTime()/1000), _isTs: true }),
+        now:        ()   => { const n = Date.now(); return { toMillis: () => n, toDate: () => new Date(n), seconds: Math.floor(n/1000), _isTs: true }; },
+      },
+    };
+
+    // Convert Firestore field names → snake_case for Supabase (minimal set)
+    function _convertToSB(obj) {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+      const out = {};
+      for (const [k, v] of Object.entries(obj)) {
+        let val = v;
+        // Convert Timestamp shims to ISO strings
+        if (val && typeof val === 'object' && val._isTs) val = val.toDate().toISOString();
+        if (typeof val === 'function') val = val(); // serverTimestamp()
+        out[k] = val;
+      }
+      return out;
+    }
+    function _convertFromSB(row) {
+      if (!row) return null;
+      // Expose id as _id for compatibility with existing state usage
+      const out = { ...row };
+      if (row.id && !out._id) out._id = row.id;
+      return out;
+    }
+
+    // Auth shim — wraps Supabase auth to look like Firebase auth
+    const auth = {
+      async signInWithPopup() {
+        const { error } = await _supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin }
+        });
+        if (error) throw error;
+      },
+      async signInWithRedirect() {
+        const { error } = await _supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin }
+        });
+        if (error) throw error;
+      },
+      async getRedirectResult() { return null; },
+      async setPersistence() {},
+      async signOut() { return _supabase.auth.signOut(); },
+      onAuthStateChanged(cb) {
+        // Fire immediately with current session
+        _supabase.auth.getSession().then(({ data: { session } }) => {
+          cb(session ? _sbUserToFirebase(session.user) : null);
+        });
+        // Then listen for changes
+        const { data: { subscription } } = _supabase.auth.onAuthStateChange((_event, session) => {
+          cb(session ? _sbUserToFirebase(session.user) : null);
+        });
+        return () => subscription.unsubscribe();
+      },
+    };
+
+    function _sbUserToFirebase(u) {
+      if (!u) return null;
+      return {
+        uid:         u.id,          // Firebase used .uid; Supabase uses .id
+        id:          u.id,
+        email:       u.email,
+        displayName: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || '',
+        photoURL:    u.user_metadata?.avatar_url || u.user_metadata?.picture || '',
+      };
+    }
+
+    if (!window.firebase.auth) {
+      window.firebase.auth = { Auth: { Persistence: { LOCAL: 'local' } } };
+    }
+    // GoogleAuthProvider shim (never really used now, but avoids ReferenceError)
+    window.firebase.auth.GoogleAuthProvider = function() {};
 
     // ============================================================
     // STATE
@@ -1386,9 +1621,8 @@
     // Tracked write helper for await-style writes (blocks but updates sync indicator)
     async function trackedWrite(promiseFn) {
       startWrite();
+      // Invalidate startup cache so next page load re-fetches fresh data
       _startupCacheInvalidate();
-      // Invalidate lazy cache for the currently open company
-      if (state.selectedCompanyId) _lazyInvalidateCompany(state.selectedCompanyId);
       try {
         var _writePromise = promiseFn();
         var _timeoutPromise = new Promise(function(_, reject){
@@ -1451,12 +1685,15 @@
     }
     function queueSave(fn,onFail){ _saveQueue.push({fn:fn,onFail:onFail||null,retry:0}); flushSaves(); }
 
-    var _STARTUP_CACHE_TTL = 10 * 60 * 1000; // 10 min
+    var _STARTUP_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
     function _startupCacheSave() {
       try {
         localStorage.setItem('gb_startup_'+dataOwnerUid(), JSON.stringify({
-          ts: Date.now(), companies: state.companies
+          ts: Date.now(),
+          mg: state.masterGames,
+          bills: state.bills,
+          companies: state.companies
         }));
       } catch(e) {}
     }
@@ -1475,177 +1712,107 @@
       try { localStorage.removeItem('gb_startup_'+dataOwnerUid()); } catch(e) {}
     }
 
-    // Per-company lazy-load cache: tracks what's loaded per company+tab
-    var _lazyCache = {};   // companyId → { billing, games, analytics, payment }
-    var _lazyCacheTs = {}; // companyId+tab → timestamp
-    var _LAZY_TTL = 8 * 60 * 1000; // 8 min per tab
-
-    function _lazyKey(cid, tab) { return cid + '|' + tab; }
-
-    function _lazyIsLoaded(cid, tab) {
-      var key = _lazyKey(cid, tab);
-      return !!_lazyCacheTs[key] && (Date.now() - _lazyCacheTs[key]) < _LAZY_TTL;
-    }
-
-    function _lazyMarkLoaded(cid, tab) {
-      _lazyCacheTs[_lazyKey(cid, tab)] = Date.now();
-    }
-
-    function _lazyInvalidateCompany(cid) {
-      Object.keys(_lazyCacheTs).filter(function(k){ return k.startsWith(cid+'|'); })
-        .forEach(function(k){ delete _lazyCacheTs[k]; });
-    }
-
     async function loadAllData(force) {
       if (!state.user) return;
+
+      // 1. Try fast localStorage cache first — zero Firestore reads
       if (!force) {
-        // 1. Try localStorage cache — zero reads
         var sc = _startupCacheLoad();
-        if (sc && sc.companies) {
-          state.companies = sc.companies;
-          render(); return;
+        if (sc && sc.mg && sc.bills && sc.companies) {
+          state.masterGames = sc.mg;
+          state.bills       = sc.bills;
+          state.companies   = sc.companies;
+          rebuildBillIndex();
+          render();
+          return; // served fully from cache, no reads
+        }
+        // Legacy cache fallback
+        var cached = _gbCache.get('data');
+        if (cached && cached.mg && cached.bills && cached.companies) {
+          state.masterGames = cached.mg || [];
+          state.bills       = cached.bills || [];
+          state.companies   = cached.companies || {};
+          rebuildBillIndex();
+          render();
+          return;
         }
       }
-      // 2. Load ONLY company stubs: _id, name, companyCode, active, creditBalance, extraFeePercent, paymentBonuses
-      // This is just 1 read per company doc — no bills, no masterGames, no subcollections
+
+      // 2. Cache miss — fetch from Firestore (happens once per 10 min)
       try {
         const compSnap = await db.collection(userPath()+'/companies').get();
-        state.companies = {};
+        const compBasic = {};
         compSnap.docs.forEach(doc => {
-          const d = doc.data();
-          state.companies[doc.id] = {
-            _id: doc.id,
-            name: d.name || '',
-            companyCode: d.companyCode || '',
-            active: d.active !== false,
-            creditBalance: d.creditBalance || 0,
-            extraFeePercent: d.extraFeePercent || 0,
-            extraFeeCostRate: d.extraFeeCostRate || 0,
-            paymentBonuses: d.paymentBonuses || {},
-            // Preserve any locally-loaded subcollection data if already fetched
-            assignedGames: (state.companies[doc.id] && state.companies[doc.id].assignedGames) || [],
-            usernames:     (state.companies[doc.id] && state.companies[doc.id].usernames)     || []
-          };
+          compBasic[doc.id] = { _id: doc.id, ...doc.data(), assignedGames:[], usernames:[] };
         });
-        _startupCacheSave();
-        // Run company code migration in background — no await
-        _migrateCompanyCodes();
+        state.companies = compBasic;
+
+        // Bills: load last 200 only (reduces startup reads dramatically)
+        const [mgSnap, billSnap] = await Promise.all([
+          db.collection(userPath()+'/masterGames').get(),
+          db.collection(userPath()+'/bills').orderBy('date','desc').limit(200).get(),
+        ]);
+        state.masterGames = mgSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        state.bills       = billSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+        // Subcollections in parallel
+        await Promise.all(compSnap.docs.map(async doc => {
+          const [agSnap, unSnap] = await Promise.all([
+            db.collection(userPath()+'/companies/'+doc.id+'/assignedGames').get(),
+            db.collection(userPath()+'/companies/'+doc.id+'/usernames').get(),
+          ]);
+          state.companies[doc.id].assignedGames = agSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+          state.companies[doc.id].usernames     = unSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        }));
+
+        rebuildBillIndex();
+        _startupCacheSave(); // cache for next 10 min
+        _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
       } catch(e) { console.error('Load error:', e); }
     }
 
-    async function _migrateCompanyCodes() {
-      var needCode = Object.values(state.companies).filter(function(c){ return !c.companyCode; });
-      if (!needCode.length) return;
-      var usedCodes = new Set(Object.values(state.companies).map(function(c){ return c.companyCode; }).filter(Boolean));
-      for (var i = 0; i < needCode.length; i++) {
-        try {
-          var code = await generateCompanyCodeFromSet(usedCodes);
-          usedCodes.add(code);
-          state.companies[needCode[i]._id].companyCode = code;
-          await db.doc(userPath()+'/companies/'+needCode[i]._id).update({ companyCode: code });
-        } catch(e) {}
-      }
-    }
-
-    // ── Lazy load: company billing tab (bills for this company only) ──
-    async function lazyLoadBilling(cid) {
-      if (_lazyIsLoaded(cid, 'billing')) return;
-      try {
-        var snap = await db.collection(userPath()+'/bills')
-          .where('companyId', '==', cid)
-          .orderBy('date', 'desc')
-          .limit(100)
-          .get();
-        // Merge into state.bills without duplicating
-        var existing = new Set(state.bills.map(function(b){ return b._id; }));
-        snap.docs.forEach(function(d) {
-          if (!existing.has(d.id)) state.bills.push({ _id: d.id, ...d.data() });
-        });
-        rebuildBillIndex();
-        _lazyMarkLoaded(cid, 'billing');
-        _startupCacheInvalidate(); // bills changed, bust startup cache
-      } catch(e) { console.error('lazyLoadBilling:', e); }
-    }
-
-    // ── Lazy load: company games config tab (assignedGames + usernames + masterGames) ──
-    async function lazyLoadGames(cid) {
-      if (_lazyIsLoaded(cid, 'games')) return;
-      try {
-        var promises = [
-          db.collection(userPath()+'/companies/'+cid+'/assignedGames').get(),
-          db.collection(userPath()+'/companies/'+cid+'/usernames').get(),
-        ];
-        // Load masterGames only once globally
-        if (!state.masterGames.length) {
-          promises.push(db.collection(userPath()+'/masterGames').get());
-        }
-        var results = await Promise.all(promises);
-        if (state.companies[cid]) {
-          state.companies[cid].assignedGames = results[0].docs.map(function(d){ return { _id: d.id, ...d.data() }; });
-          state.companies[cid].usernames     = results[1].docs.map(function(d){ return { _id: d.id, ...d.data() }; });
-        }
-        if (results[2]) {
-          state.masterGames = results[2].docs.map(function(d){ return { _id: d.id, ...d.data() }; });
-        }
-        _lazyMarkLoaded(cid, 'games');
-      } catch(e) { console.error('lazyLoadGames:', e); }
-    }
-
-    // ── Lazy load: analytics tab (bills for all companies, masterGames) ──
-    var _analyticsFullyLoaded = false;
-    async function lazyLoadAnalytics(cid) {
-      // For company analytics: need bills for this company
-      await lazyLoadBilling(cid);
-      // Also need masterGames for game breakdown
-      if (!state.masterGames.length) {
-        try {
-          var mgSnap = await db.collection(userPath()+'/masterGames').get();
-          state.masterGames = mgSnap.docs.map(function(d){ return { _id: d.id, ...d.data() }; });
-        } catch(e) {}
-      }
-      _lazyMarkLoaded(cid, 'analytics');
-    }
-
-    // ── Lazy load: global analytics (needs ALL bills) ──
-    async function lazyLoadGlobalAnalytics() {
-      if (_analyticsFullyLoaded) return;
-      try {
-        var snap = await db.collection(userPath()+'/bills')
-          .orderBy('date', 'desc').limit(500).get();
-        var existing = new Set(state.bills.map(function(b){ return b._id; }));
-        snap.docs.forEach(function(d) {
-          if (!existing.has(d.id)) state.bills.push({ _id: d.id, ...d.data() });
-        });
-        if (!state.masterGames.length) {
-          var mgSnap = await db.collection(userPath()+'/masterGames').get();
-          state.masterGames = mgSnap.docs.map(function(d){ return { _id: d.id, ...d.data() }; });
-        }
-        rebuildBillIndex();
-        _analyticsFullyLoaded = true;
-        invalidateAnalyticsCache();
-      } catch(e) { console.error('lazyLoadGlobalAnalytics:', e); }
-    }
-
-    // ── Lazy load: full company details (for settings modal etc) ──
-    async function lazyLoadCompanyFull(cid) {
-      if (_lazyIsLoaded(cid, 'full')) return;
-      try {
-        var snap = await db.doc(userPath()+'/companies/'+cid).get();
-        if (snap.exists && state.companies[cid]) {
-          Object.assign(state.companies[cid], snap.data());
-        }
-        _lazyMarkLoaded(cid, 'full');
-      } catch(e) {}
-    }
-
-    // Setup listeners — real-time listeners removed to eliminate read explosion.
-    // All data is now loaded lazily per view/tab and managed locally after writes.
+    // Setup realtime listeners after initial load
     function setupListeners() {
       stopListeners();
+      if (!state.user) return;
+      const bp = userPath();
+      // Listen to master games
+      // MASTER GAMES: No real-time listener — managed locally after writes.
+      // Each snapshot re-reads ALL master games. We update state.masterGames locally on save.
+      // Listen to bills (latest 100)
+      // BILLS: No real-time listener — we manage state locally after writes.
+      // onSnapshot on bills re-reads ALL bills every time ANY bill changes = massive reads.
+      // Instead: one-time load at startup, then update state locally on every save/delete.
+      // Listen to companies
+      // COMPANIES: No real-time listener — managed locally after writes.
+      // companies.onSnapshot re-reads ALL companies on every change.
+      // Instead: loaded once at startup, updated locally on add/edit/delete.
+
+      // Run migration for companies missing codes — only once at startup using already-loaded data
+      var _companiesMigrationDone = false;
+      (async function migrateCompanyCodes() {
+        if (_companiesMigrationDone) return;
+        _companiesMigrationDone = true;
+        var companiesNeedingCodes = Object.entries(state.companies)
+          .filter(function(e){ return !e[1].companyCode; }).map(function(e){ return e[0]; });
+        if (companiesNeedingCodes.length === 0) return;
+        var firestoreCodes = new Set(Object.values(state.companies).map(function(c){ return c.companyCode; }).filter(Boolean));
+        for (var _mci = 0; _mci < companiesNeedingCodes.length; _mci++) {
+          var _mid = companiesNeedingCodes[_mci];
+          try {
+            var newCode = await generateCompanyCodeFromSet(firestoreCodes);
+            firestoreCodes.add(newCode);
+            state.companies[_mid].companyCode = newCode;
+            await db.doc(bp+'/companies/'+_mid).update({ companyCode: newCode });
+          } catch(e) { /* silent */ }
+        }
+      })();
     }
 
     const _compSubs = {};
     function setupCompanySubListeners(compId) {
+      // Sub-collections loaded once at startup in loadInitialData — no real-time listeners.
+      // Each onSnapshot re-reads ALL docs for every company on every change = huge read cost.
       if (_compSubs[compId]) return;
       _compSubs[compId] = () => {};
       _unsubs.push(_compSubs[compId]);
@@ -1938,98 +2105,50 @@
 
     function render() {
       const app = $('#app');
-      const cid = state.selectedCompanyId;
       switch (state.view) {
         case 'loading': app.innerHTML = renderLoading(); break;
         case 'login': app.innerHTML = renderLogin(); bindLogin(); break;
         case 'accessDenied': app.innerHTML = renderAccessDenied(); bindAccessDenied(); break;
-
-        case 'companies':
-          var _fab = document.getElementById('fabAddGame'); if (_fab) _fab.remove();
-          app.innerHTML = renderHeader() + renderCompanyList();
-          bindHeader(); bindCompanyList();
-          break;
-
-        case 'company':
-          // Render immediately with whatever we have, then lazy-load tab data
-          app.innerHTML = renderHeader() + renderCompanyScreen();
-          bindHeader(); bindCompanyScreen();
-          // Kick off background lazy load for active tab (no spinner for billing — it's fast)
-          if (cid) {
-            var _tab = state.companyTab;
-            if (_tab === 'billing' && !_lazyIsLoaded(cid, 'billing')) {
-              lazyLoadBilling(cid).then(function(){
-                rebuildBillIndex(); refreshBillHistory();
-              });
-            } else if ((_tab === 'games' || _tab === 'config') && !_lazyIsLoaded(cid, 'games')) {
-              lazyLoadGames(cid).then(function(){ render(); });
-            } else if (_tab === 'analytics' && !_lazyIsLoaded(cid, 'analytics')) {
-              lazyLoadAnalytics(cid).then(function(){
-                invalidateAnalyticsCache(); render();
-              });
-            } else if (_tab === 'payment' && !_lazyIsLoaded(cid, 'billing')) {
-              lazyLoadBilling(cid).then(function(){
-                rebuildBillIndex(); render();
-              });
-            }
+        case 'companies': var _fab=document.getElementById('fabAddGame');if(_fab)_fab.remove(); app.innerHTML = renderHeader() + renderCompanyList(); bindHeader(); bindCompanyList(); break;
+        case 'company': app.innerHTML = renderHeader() + renderCompanyScreen(); bindHeader(); bindCompanyScreen(); break;
+        case 'analytics': app.innerHTML = renderHeader() + renderAnalyticsPage(); bindHeader(); bindAnalyticsPage(); break;
+        case 'globalAnalytics': app.innerHTML = renderHeader() + renderGlobalAnalyticsPage(); bindHeader(); bindGlobalAnalyticsPage(); break;
+        case 'cashFlow': if(state.empRole!=='employee'){
+          if(!_cfLoaded){
+            app.innerHTML = renderHeader() + '<div class="page fade-in" style="display:flex;align-items:center;justify-content:center;padding:60px"><div class="spinner"></div></div>';
+            bindHeader();
+            cfEnsureLoaded().then(()=>{ app.innerHTML = renderHeader() + renderCashFlowPage(); bindHeader(); bindCashFlowPage(); });
+          } else {
+            app.innerHTML = renderHeader() + renderCashFlowPage(); bindHeader(); bindCashFlowPage();
           }
-          break;
-
-        case 'analytics':
-          app.innerHTML = renderHeader() + renderAnalyticsPage();
-          bindHeader(); bindAnalyticsPage();
-          if (cid && !_lazyIsLoaded(cid, 'analytics')) {
-            lazyLoadAnalytics(cid).then(function(){
-              invalidateAnalyticsCache();
-              app.innerHTML = renderHeader() + renderAnalyticsPage();
-              bindHeader(); bindAnalyticsPage();
-            });
-          }
-          break;
-
-        case 'globalAnalytics':
-          app.innerHTML = renderHeader() + renderGlobalAnalyticsPage();
-          bindHeader(); bindGlobalAnalyticsPage();
-          if (!_analyticsFullyLoaded) {
-            lazyLoadGlobalAnalytics().then(function(){
-              app.innerHTML = renderHeader() + renderGlobalAnalyticsPage();
-              bindHeader(); bindGlobalAnalyticsPage();
-            });
-          }
-          break;
-
-        case 'cashFlow':
-          if (state.empRole !== 'employee') {
-            if (!_cfLoaded) {
-              app.innerHTML = renderHeader() + '<div class="page fade-in" style="display:flex;align-items:center;justify-content:center;padding:60px"><div class="spinner"></div></div>';
-              bindHeader();
-              cfEnsureLoaded().then(function(){
-                app.innerHTML = renderHeader() + renderCashFlowPage(); bindHeader(); bindCashFlowPage();
-              });
-            } else {
-              app.innerHTML = renderHeader() + renderCashFlowPage(); bindHeader(); bindCashFlowPage();
-            }
-          } else { state.view = 'companies'; render(); }
-          break;
-
+        } else {state.view='companies';render();} break;
         case 'employees': renderEmployeesPage(); break;
         case 'employment':
+          // Stop owner listener if navigating away from cashiers page
           if (_empShiftListener) { _empShiftListener(); _empShiftListener = null; }
           renderEmploymentPage();
           break;
       }
       if (state.masterGamesModalOpen) { renderMasterGamesModal(); bindMasterGamesModal(); }
+      // Push history state when view, company, or tab changes
       if (!skipPushState && (state.view === 'companies' || state.view === 'company' || state.view === 'analytics' || state.view === 'globalAnalytics')) {
         const curTab = state.view === 'company' ? state.companyTab : null;
-        const changed = state.view !== _lastPushedView || state.selectedCompanyId !== _lastPushedCompany || curTab !== _lastPushedTab;
+        const changed = state.view !== _lastPushedView ||
+                        state.selectedCompanyId !== _lastPushedCompany ||
+                        curTab !== _lastPushedTab;
         if (changed) {
           history.pushState({ view: state.view, companyId: state.selectedCompanyId, tab: curTab }, '');
-          _lastPushedView = state.view; _lastPushedCompany = state.selectedCompanyId; _lastPushedTab = curTab;
+          _lastPushedView = state.view;
+          _lastPushedCompany = state.selectedCompanyId;
+          _lastPushedTab = curTab;
         }
       }
       skipPushState = false;
       persistState();
+      // Update clock in utility bar
       if (typeof updateUtilClock === 'function') updateUtilClock();
+      // Menu analytics - no preview needed
+      // Restore sync indicator state after DOM rebuild
       updateSyncIndicator();
     }
 
@@ -2262,22 +2381,8 @@
         btn.innerHTML = '<span style="animation:pulse 1s infinite">Signing in...</span>';
         btn.disabled = true;
         try {
-          const provider = new firebase.auth.GoogleAuthProvider();
-          try {
-            // Try popup first (works on most browsers)
-            await auth.signInWithPopup(provider);
-          } catch (popupErr) {
-            // If popup fails (iOS Safari, PWA), try redirect
-            if (popupErr.code === 'auth/operation-not-supported-in-this-environment' || 
-                popupErr.code === 'auth/popup-blocked' ||
-                popupErr.code === 'auth/cancelled-popup-request') {
-              // Set persistence to LOCAL before redirect so session survives
-              await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-              await auth.signInWithRedirect(provider);
-            } else {
-              throw popupErr;
-            }
-          }
+          // Supabase Google OAuth — handles popup/redirect automatically
+          await auth.signInWithPopup();
         } catch (e) {
           const err = $('#loginError');
           err.classList.remove('hidden');
@@ -9834,8 +9939,8 @@
             gbUsername: '',
             expiryDate: null,
             isDisabled: false,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+            createdAt: _serverTs(),
+            lastLogin: _serverTs(),
           });
           return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: '' };
         }
@@ -9843,7 +9948,7 @@
         const data = doc.data();
         // Update last login (preserve existing gbUsername)
         db.collection('userAccess').doc(user.uid).update({
-          lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+          lastLogin: _serverTs(),
           email: user.email,
           displayName: user.displayName || '',
           photoURL: user.photoURL || '',
@@ -10044,7 +10149,8 @@
     auth.onAuthStateChanged(async (user) => {
       if (user) {
         state.user = {
-          uid: user.uid,
+          uid: user.uid || user.id,   // Supabase uses .id; shim provides both
+          id:  user.id  || user.uid,
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
@@ -10270,7 +10376,7 @@
             await db.collection('popupMessages').doc(msg.id).update({
               dismissed: true,
               read: true,
-              dismissedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              dismissedAt: _serverTs(),
             });
           } catch(e) { console.warn('Dismiss update error:', e); }
           // Remove snooze key if present
@@ -10436,7 +10542,7 @@
                     employeeId: empDoc.id,
                     active:     true,
                     email:      user.email,
-                    updatedAt:  firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedAt:  _serverTs(),
                   });
                 } catch(e) { console.warn('[resolveRole] employeeUids write failed:', e.message); }
                 return;
@@ -10479,7 +10585,7 @@
           ownerUid: state.user.uid,
           ownerEmail: state.user.email,
           ownerName: state.user.displayName || '',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdAt: _serverTs(),
         });
       }
     }
@@ -10960,7 +11066,7 @@
       const shifts = await getActiveShifts();
       const mine = shifts.find(s => s.employeeId === empId);
       if (mine) throw new Error('You are already on shift. Shift out first.');
-      const now = firebase.firestore.FieldValue.serverTimestamp();
+      const now = _serverTs();
       await db.collection(shiftPath()).add({
         employeeId:   empId,
         employeeName: empName,
@@ -10976,7 +11082,7 @@
       const endMs   = Date.now();
       const durMs   = endMs - startMs;
       await db.collection(shiftPath()).doc(shiftId).update({
-        endTime:    firebase.firestore.FieldValue.serverTimestamp(),
+        endTime:    _serverTs(),
         durationMs: durMs,
         status:     'completed',
       });
@@ -11286,7 +11392,7 @@
           modal.querySelectorAll('.mgr-shift-out-btn').forEach(btn => {
             btn.onclick = async () => {
               btn.disabled = true; btn.textContent = 'Ending…';
-              const startTs = firebase.firestore.Timestamp.fromMillis(parseInt(btn.dataset.startts));
+              const startTs = window.firebase.firestore.Timestamp.fromMillis(parseInt(btn.dataset.startts));
               try {
                 await shiftOut(btn.dataset.shiftid, startTs);
                 clearInterval(timerInterval);
@@ -11396,8 +11502,8 @@
         active:            emp.active !== false,
         ownerHasAccess:    ownerHasAccess,
         ownerAccessExpiry: ownerAccessExpiry,
-        accessGrantedAt:   firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt:         firebase.firestore.FieldValue.serverTimestamp(),
+        accessGrantedAt:   _serverTs(),
+        updatedAt:         _serverTs(),
       });
       console.log('[writeEmployeeLink] ✓ Wrote link for', email,
         '→ key:', linkKey, '| ownerUid:', state.user.uid, '| empId:', empId,
@@ -11663,7 +11769,7 @@
           e.stopPropagation();
           if (!confirm('End this cashier\'s shift now?')) return;
           btn.disabled = true; btn.textContent = 'Ending…';
-          const startTs = firebase.firestore.Timestamp.fromMillis(parseInt(btn.dataset.startts));
+          const startTs = window.firebase.firestore.Timestamp.fromMillis(parseInt(btn.dataset.startts));
           try {
             await shiftOut(btn.dataset.shiftid, startTs);
             await Promise.all([refreshEmployeeList(), refreshOwnerDashboard()]);
@@ -11902,7 +12008,7 @@
           if (!confirm('Mark this salary as received?')) return;
           await db.collection(payPath()).doc(btn.dataset.payid).update({
             receivedByEmployee: true,
-            receivedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            receivedAt: _serverTs(),
           });
           await refreshEmploymentSelf();
         };
@@ -12093,14 +12199,14 @@
               employeeName:       emp.name || '',
               employeeEmail:      emp.email || '',
               periodKey:          periodKey,
-              periodStart:        firebase.firestore.Timestamp.fromDate(pStart),
-              periodEnd:          firebase.firestore.Timestamp.fromDate(pEnd),
+              periodStart:        window.firebase.firestore.Timestamp.fromDate(pStart),
+              periodEnd:          window.firebase.firestore.Timestamp.fromDate(pEnd),
               salaryType:         emp.salaryType,
               totalDurationMs:    pMs,
               amount:             amount,
               paidByOwner:        true,
               receivedByEmployee: false,
-              paidAt:             firebase.firestore.FieldValue.serverTimestamp(),
+              paidAt:             _serverTs(),
             });
             await loadEmpDetail(emp);
           };
@@ -12185,7 +12291,7 @@
           await db.collection(empPath()).doc(existing._id).update(data);
           empId = existing._id;
         } else {
-          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          data.createdAt = _serverTs();
           const ref = await db.collection(empPath()).add(data);
           empId = ref.id;
         }
