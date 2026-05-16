@@ -13,14 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-  <script>
-    // Load Chart.js fallback without document.write (blocked by Chrome)
-    if (typeof Chart === 'undefined') {
-      var _s = document.createElement('script');
-      _s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js';
-      document.head.appendChild(_s);
-    }
-  </script>
+  <script>if(typeof Chart==='undefined'){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js';document.head.appendChild(s);}</script>
 
   <!-- Firebase SDKs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1250,37 +1243,26 @@
     // ============================================================
     // FIREBASE INIT
     // ============================================================
-    // ============================================================
-    // SUPABASE INIT
-    // ============================================================
+    // ── Supabase init ──────────────────────────────────────────────────────────
     const _supabase = window.supabase.createClient(
       'https://kzchxmulktygoqhiwpff.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg',
-      { auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true } }
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg'
     );
-    // Handle PKCE code exchange on redirect
-    // Supabase handles this automatically via detectSessionInUrl
-    if (window.location.search.includes('code=') || window.location.hash.includes('access_token')) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
 
-    // ── Supabase shim: makes db.collection/doc/onSnapshot work like Firestore ──
-
+    // ── Shim: firebase.firestore.FieldValue / Timestamp ────────────────────
     const _serverTs = () => new Date().toISOString();
-    if (!window.firebase) window.firebase = {};
-    window.firebase.firestore = {
-      FieldValue: { serverTimestamp: _serverTs, arrayUnion: (...a) => a, arrayRemove: (...a) => a },
+    window.firebase = { firestore: {
+      FieldValue: { serverTimestamp: _serverTs, arrayUnion: (...a)=>a, arrayRemove: (...a)=>a },
       Timestamp: {
-        fromMillis: (ms) => ({ toMillis: () => ms, toDate: () => new Date(ms), seconds: Math.floor(ms/1000), _isTs: true }),
-        fromDate:   (d)  => ({ toMillis: () => d.getTime(), toDate: () => d, seconds: Math.floor(d.getTime()/1000), _isTs: true }),
-        now:        ()   => { const n = Date.now(); return { toMillis: () => n, toDate: () => new Date(n), seconds: Math.floor(n/1000), _isTs: true }; },
+        fromMillis: ms => ({ toMillis:()=>ms, toDate:()=>new Date(ms), seconds:Math.floor(ms/1000), _isTs:true }),
+        fromDate:   d  => ({ toMillis:()=>d.getTime(), toDate:()=>d, seconds:Math.floor(d.getTime()/1000), _isTs:true }),
+        now:        ()  => { const n=Date.now(); return { toMillis:()=>n, toDate:()=>new Date(n), seconds:Math.floor(n/1000), _isTs:true }; },
       },
-    };
-    window.firebase.auth = { Auth: { Persistence: { LOCAL: 'local' } } };
-    window.firebase.auth.GoogleAuthProvider = function() {};
+    }, auth: { Auth: { Persistence: { LOCAL:'local' } } } };
+    window.firebase.auth.GoogleAuthProvider = function(){};
 
-    // camelCase ↔ snake_case field maps
-    const _FIELD_TO_SB = {
+    // ── camelCase ↔ snake_case maps ────────────────────────────────────────
+    const _F2S = {
       displayName:'display_name', photoURL:'photo_url', gbUsername:'gb_username',
       expiryDate:'expiry_date', isDisabled:'is_disabled', isUnlimited:'is_unlimited',
       lastLogin:'last_login', createdAt:'created_at', updatedAt:'updated_at',
@@ -1303,32 +1285,30 @@
       salaryType:'salary_type', salaryRate:'salary_rate',
       periodStart:'period_start', periodEnd:'period_end', paidAt:'paid_at',
       receivedByEmployee:'received_by_employee', receivedAt:'received_at',
-      employeeUid:'employee_uid', linkKey:'link_key',
     };
-    const _FIELD_FROM_SB = Object.fromEntries(Object.entries(_FIELD_TO_SB).map(([k,v])=>[v,k]));
+    const _S2F = Object.fromEntries(Object.entries(_F2S).map(([k,v])=>[v,k]));
+    const _UID_PK = new Set(['user_access','employee_uids']);
+    const _pk = t => _UID_PK.has(t) ? 'uid' : 'id';
 
     function _toSB(obj) {
       if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
       const out = {};
-      for (let [k, v] of Object.entries(obj)) {
+      for (let [k,v] of Object.entries(obj)) {
         if (v === undefined) continue;
         if (v && typeof v === 'object' && v._isTs) v = v.toDate().toISOString();
         if (typeof v === 'function') v = v();
-        out[_FIELD_TO_SB[k] || k] = v;
+        out[_F2S[k]||k] = v;
       }
       return out;
     }
     function _fromSB(row) {
       if (!row) return null;
       const out = {};
-      for (const [k, v] of Object.entries(row)) out[_FIELD_FROM_SB[k] || k] = v;
+      for (const [k,v] of Object.entries(row)) out[_S2F[k]||k] = v;
       if (row.id)  { out.id = row.id;   out._id = row.id; }
       if (row.uid) { out.uid = row.uid; }
       return out;
     }
-    // Tables that use uid as PK instead of id
-    const _UID_PK_TABLES = new Set(['user_access', 'employee_uids']);
-    function _pk(table) { return _UID_PK_TABLES.has(table) ? 'uid' : 'id'; }
 
     const _PATH_MAP = {
       userAccess:'user_access', gbUsernames:'gb_usernames', popupMessages:'popup_messages',
@@ -1342,159 +1322,94 @@
     };
 
     class _SBRef {
-      constructor(t, id) { this._t = t; this._id = id||null; this._w = []; this._ord = null; this._asc = true; this._lim = null; }
-      _clone() { const c = new _SBRef(this._t, this._id); c._w=[...this._w]; c._ord=this._ord; c._asc=this._asc; c._lim=this._lim; return c; }
-      where(f, op, v) { const c=this._clone(); const m={'==':'eq','!=':'neq','>':'gt','>=':'gte','<':'lt','<=':'lte'}; c._w.push({f:_FIELD_TO_SB[f]||f, op:m[op]||'eq', v}); return c; }
-      orderBy(f, dir) { const c=this._clone(); c._ord=_FIELD_TO_SB[f]||f; c._asc=dir!=='desc'; return c; }
-      limit(n) { const c=this._clone(); c._lim=n; return c; }
-      doc(id) { const c=this._clone(); c._id=id; return c; }
-      collection(sub) { return new _SBRef(_PATH_MAP[sub]||sub, null); }
-      _q(sel) {
-        let q = _supabase.from(this._t).select(sel||'*');
-        for (const w of this._w) q = q[w.op](w.f, w.v);
-        if (this._ord) q = q.order(this._ord, {ascending:this._asc});
-        if (this._lim) q = q.limit(this._lim);
-        return q;
-      }
-      async get() {
-        if (this._id) {
-          const {data, error} = await _supabase.from(this._t).select('*').eq(_pk(this._t), this._id).single();
-          if (error && error.code !== 'PGRST116') console.warn('[db.get]', this._t, error.message);
-          return { exists:!!data, data:()=>_fromSB(data), id:this._id };
+      constructor(t,id){this._t=t;this._id=id||null;this._w=[];this._ord=null;this._asc=true;this._lim=null;}
+      _clone(){const c=new _SBRef(this._t,this._id);c._w=[...this._w];c._ord=this._ord;c._asc=this._asc;c._lim=this._lim;return c;}
+      where(f,op,v){const c=this._clone();const m={'==':'eq','!=':'neq','>':'gt','>=':'gte','<':'lt','<=':'lte'};c._w.push({f:_F2S[f]||f,op:m[op]||'eq',v});return c;}
+      orderBy(f,dir){const c=this._clone();c._ord=_F2S[f]||f;c._asc=dir!=='desc';return c;}
+      limit(n){const c=this._clone();c._lim=n;return c;}
+      doc(id){const c=this._clone();c._id=id;return c;}
+      collection(sub){return new _SBRef(_PATH_MAP[sub]||sub,null);}
+      _q(sel){let q=_supabase.from(this._t).select(sel||'*');for(const w of this._w)q=q[w.op](w.f,w.v);if(this._ord)q=q.order(this._ord,{ascending:this._asc});if(this._lim)q=q.limit(this._lim);return q;}
+      async get(){
+        if(this._id){
+          const{data,error}=await _supabase.from(this._t).select('*').eq(_pk(this._t),this._id).single();
+          if(error&&error.code!=='PGRST116')console.warn('[db.get]',this._t,error.message);
+          return{exists:!!data,data:()=>_fromSB(data),id:this._id};
         }
-        const {data, error} = await this._q('*');
-        if (error) console.warn('[db.get collection]', this._t, error.message);
-        const docs = (data||[]).map(r => ({ id:r.id||r.uid, exists:true, data:()=>_fromSB(r) }));
-        return { docs, empty:!docs.length, docChanges:()=>docs.map(d=>({type:'added',doc:d})) };
+        const{data,error}=await this._q('*');
+        if(error)console.warn('[db.col]',this._t,error.message);
+        const docs=(data||[]).map(r=>{return{id:r.id||r.uid,exists:true,data:()=>_fromSB(r)}});
+        return{docs,empty:!docs.length,docChanges:()=>docs.map(d=>{return{type:'added',doc:d}})};
       }
-      async set(payload) {
-        const d = _toSB(payload);
-        const pk = _pk(this._t);
-        if (this._id) {
-          const {error} = await _supabase.from(this._t).upsert({[pk]:this._id, ...d});
-          if (error) { console.error('[db.set]', this._t, error.message); throw error; }
-        } else {
-          const {data:row, error} = await _supabase.from(this._t).insert(d).select().single();
-          if (error) { console.error('[db.set insert]', this._t, error.message); throw error; }
-          this._id = row.id;
-        }
+      async set(payload){
+        const d=_toSB(payload),pk=_pk(this._t);
+        if(this._id){const{error}=await _supabase.from(this._t).upsert({[pk]:this._id,...d});if(error){console.error('[db.set]',this._t,error.message);throw error;}}
+        else{const{data:row,error}=await _supabase.from(this._t).insert(d).select().single();if(error){console.error('[db.set]',this._t,error.message);throw error;}this._id=row.id;}
         return this;
       }
-      async update(payload) {
-        if (!this._id) throw new Error('[db.update] no id on '+this._t);
-        const clean = Object.fromEntries(Object.entries(_toSB(payload)).filter(([,v])=>v!==undefined));
-        const {error} = await _supabase.from(this._t).update(clean).eq(_pk(this._t), this._id);
-        if (error) { console.error('[db.update]', this._t, error.message); throw error; }
+      async update(payload){
+        const clean=Object.fromEntries(Object.entries(_toSB(payload)).filter(([,v])=>v!==undefined));
+        const{error}=await _supabase.from(this._t).update(clean).eq(_pk(this._t),this._id);
+        if(error){console.error('[db.update]',this._t,error.message);throw error;}
       }
-      async delete() {
-        const pk = _pk(this._t);
-        if (this._id) {
-          const {error} = await _supabase.from(this._t).delete().eq(pk, this._id);
-          if (error) throw error;
-        } else {
-          let q = _supabase.from(this._t).delete();
-          for (const w of this._w) q = q[w.op](w.f, w.v);
-          const {error} = await q;
-          if (error) throw error;
-        }
+      async delete(){
+        if(this._id){const{error}=await _supabase.from(this._t).delete().eq(_pk(this._t),this._id);if(error)throw error;}
+        else{let q=_supabase.from(this._t).delete();for(const w of this._w)q=q[w.op](w.f,w.v);const{error}=await q;if(error)throw error;}
       }
-      async add(payload) {
-        const {data:row, error} = await _supabase.from(this._t).insert(_toSB(payload)).select().single();
-        if (error) { console.error('[db.add]', this._t, error.message); throw error; }
-        return { id:row.id };
+      async add(payload){
+        const{data:row,error}=await _supabase.from(this._t).insert(_toSB(payload)).select().single();
+        if(error){console.error('[db.add]',this._t,error.message);throw error;}
+        return{id:row.id};
       }
-      onSnapshot(cb, errCb) {
-        const self = this;
-        // Initial load
-        this.get().then(cb).catch(e => errCb && errCb(e));
-        // Realtime updates — debounced 400ms to batch rapid changes
-        let _deb = null;
-        const ch = _supabase.channel(this._t+'_'+Date.now())
-          .on('postgres_changes', {event:'*', schema:'public', table:this._t}, () => {
+      onSnapshot(cb,errCb){
+        const self=this;
+        this.get().then(cb).catch(e=>errCb&&errCb(e));
+        let _deb=null;
+        const ch=_supabase.channel(this._t+'_'+Date.now())
+          .on('postgres_changes',{event:'*',schema:'public',table:this._t},()=>{
             clearTimeout(_deb);
-            _deb = setTimeout(() => self.get().then(cb).catch(e => errCb && errCb(e)), 400);
+            _deb=setTimeout(()=>self.get().then(cb).catch(e=>errCb&&errCb(e)),400);
           }).subscribe();
-        return () => { clearTimeout(_deb); _supabase.removeChannel(ch); };
+        return()=>{clearTimeout(_deb);_supabase.removeChannel(ch);};
       }
     }
 
-    function _toRef(path) {
-      const parts = path.split('/').filter(Boolean);
-      if (parts[0]==='users') parts.splice(0,2);
-      if (parts[0]==='organizations') {
-        if (parts.length===2) return new _SBRef(_PATH_MAP.organizations, parts[1]);
-        parts.splice(0,2);
-      }
-      const table = _PATH_MAP[parts[2]||parts[0]] || parts[2] || parts[0];
-      const id    = parts[3] || (!parts[2] ? parts[1] : null) || null;
-      return new _SBRef(table, id);
+    function _toRef(path){
+      const parts=path.split('/').filter(Boolean);
+      if(parts[0]==='users')parts.splice(0,2);
+      if(parts[0]==='organizations'){if(parts.length===2)return new _SBRef(_PATH_MAP.organizations,parts[1]);parts.splice(0,2);}
+      const table=_PATH_MAP[parts[2]||parts[0]]||parts[2]||parts[0];
+      const id=parts[3]||(parts[2]?null:parts[1])||null;
+      return new _SBRef(table,id);
     }
+    const db={collection:_toRef,doc:_toRef};
 
-    const db = { collection: _toRef, doc: _toRef };
-
-    // ── AUTH — single fire, no double-trigger ────────────────────────────────
-    // Supabase fires onAuthStateChange with INITIAL_SESSION on page load,
-    // then SIGNED_IN after OAuth redirect. We only process each unique user once.
-    let _lastAuthUid = null;
-
-    function _sbUser(u) {
-      if (!u) return null;
-      return {
-        uid: u.id, id: u.id, email: u.email,
-        displayName: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || '',
-        photoURL: u.user_metadata?.avatar_url || u.user_metadata?.picture || '',
-      };
+    // ── Auth shim ──────────────────────────────────────────────────────────
+    function _toFbUser(u){
+      if(!u)return null;
+      return{uid:u.id,id:u.id,email:u.email,
+        displayName:u.user_metadata?.full_name||u.user_metadata?.name||u.email?.split('@')[0]||'',
+        photoURL:u.user_metadata?.avatar_url||u.user_metadata?.picture||''};
     }
-
-    const auth = {
-      async signInWithPopup() {
-        const {error} = await _supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: { redirectTo: window.location.origin }
-        });
-        if (error) throw error;
+    const auth={
+      signInWithPopup:async()=>{
+        const{error}=await _supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
+        if(error)throw error;
       },
-      async signInWithRedirect() {
-        const {error} = await _supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: { redirectTo: window.location.origin }
-        });
-        if (error) throw error;
+      signInWithRedirect:async()=>{
+        const{error}=await _supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
+        if(error)throw error;
       },
-      async getRedirectResult() { return null; },
-      async setPersistence() {},
-      async signOut() {
-        _lastAuthUid = null;
-        return _supabase.auth.signOut();
-      },
-      onAuthStateChanged(cb) {
-        let _fired = false;
-        // Check current session immediately — fires cb right away without waiting for event
-        _supabase.auth.getSession().then(({ data: { session } }) => {
-          if (_fired) return; // already handled by onAuthStateChange
-          _fired = true;
-          const user = session?.user ?? null;
-          _lastAuthUid = user?.id ?? null;
-          cb(_sbUser(user));
+      getRedirectResult:async()=>null,
+      setPersistence:async()=>{},
+      signOut:async()=>_supabase.auth.signOut(),
+      onAuthStateChanged(cb){
+        // Use onAuthStateChange only — it fires for both initial session and changes
+        const{data:{subscription}}=_supabase.auth.onAuthStateChange((event,session)=>{
+          console.log('[Auth] event:',event,'user:',session?.user?.email||'none');
+          cb(_toFbUser(session?.user??null));
         });
-        // Also listen for future changes (sign in, sign out, token refresh)
-        const { data: { subscription } } = _supabase.auth.onAuthStateChange((event, session) => {
-          const user = session?.user ?? null;
-          const uid  = user?.id ?? null;
-          if (event === 'INITIAL_SESSION') {
-            // Only use this if getSession hasn't already fired
-            if (_fired) return;
-            _fired = true;
-            _lastAuthUid = uid;
-            cb(_sbUser(user));
-            return;
-          }
-          // For all other events (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED)
-          if (uid === _lastAuthUid && event !== 'SIGNED_OUT') return;
-          _lastAuthUid = uid;
-          cb(_sbUser(user));
-        });
-        return () => subscription.unsubscribe();
+        return()=>subscription.unsubscribe();
       },
     };
 
@@ -2367,7 +2282,6 @@
         btn.innerHTML = '<span style="animation:pulse 1s infinite">Signing in...</span>';
         btn.disabled = true;
         try {
-          // Supabase Google OAuth — handles popup/redirect automatically
           await auth.signInWithPopup();
         } catch (e) {
           const err = $('#loginError');
@@ -8477,7 +8391,7 @@
               date:_payDateFinal,
               billId:'', note:'Bonus ('+_bonusPct+'% via '+_pmBonusName+') – '+(c.name||'')
             };
-            db.collection(cfPath('transactions')).add(_bonusTx).then(function(ref2){
+            db.collection(cfPath('transactions')).add(_bonusTx).then(function(ref2){  // shim returns Promise
               cfTransactions.push(Object.assign({id:ref2.id},_bonusTx)); cfPersist();
             }).catch(function(){});
           }
@@ -9918,21 +9832,16 @@
           } catch(e) { /* ignore */ }
 
           // First-time owner: create record with no access
-          try {
-            await db.collection('userAccess').doc(user.uid).set({
-              email: user.email,
-              displayName: user.displayName || '',
-              photoURL: user.photoURL || '',
-              gbUsername: '',
-              expiryDate: null,
-              isDisabled: false,
-              createdAt: _serverTs(),
-              lastLogin: _serverTs(),
-            });
-            console.log('[checkUserAccess] user_access row created:', user.email);
-          } catch(createErr) {
-            console.error('[checkUserAccess] FAILED to create row:', createErr);
-          }
+          await db.collection('userAccess').doc(user.uid).set({
+            email: user.email,
+            displayName: user.displayName || '',
+            photoURL: user.photoURL || '',
+            gbUsername: '',
+            expiryDate: null,
+            isDisabled: false,
+            createdAt: _serverTs(),
+            lastLogin: _serverTs(),
+          });
           return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: '' };
         }
 
@@ -10137,21 +10046,11 @@
       return { hasAccess: false };
     }
 
-    // Safety net — if auth hasn't resolved in 10s, go to login screen
-    const _authTimeout = setTimeout(() => {
-      if (state.view === 'loading') {
-        console.warn('[Auth] Timeout — forcing login screen');
-        state.view = 'login';
-        render();
-      }
-    }, 10000);
-
     auth.onAuthStateChanged(async (user) => {
-      clearTimeout(_authTimeout);
       if (user) {
         state.user = {
-          uid: user.uid || user.id,   // Supabase uses .id; shim provides both
-          id:  user.id  || user.uid,
+          uid: user.uid||user.id,
+          id: user.id||user.uid,
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
@@ -13666,7 +13565,9 @@
       }
     }
 
-    // Service worker disabled — sw.js not present in repo
+    // ============================================================
+    // PWA Service Worker
+    // sw.js disabled
     // Initial render
     render();
   </script>
