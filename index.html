@@ -1460,11 +1460,28 @@
         return _supabase.auth.signOut();
       },
       onAuthStateChanged(cb) {
-        // Single listener — Supabase fires INITIAL_SESSION immediately, then any changes
-        const {data:{subscription}} = _supabase.auth.onAuthStateChange((event, session) => {
+        let _fired = false;
+        // Check current session immediately — fires cb right away without waiting for event
+        _supabase.auth.getSession().then(({ data: { session } }) => {
+          if (_fired) return; // already handled by onAuthStateChange
+          _fired = true;
+          const user = session?.user ?? null;
+          _lastAuthUid = user?.id ?? null;
+          cb(_sbUser(user));
+        });
+        // Also listen for future changes (sign in, sign out, token refresh)
+        const { data: { subscription } } = _supabase.auth.onAuthStateChange((event, session) => {
           const user = session?.user ?? null;
           const uid  = user?.id ?? null;
-          // Skip if same user already processed (prevents double-fire on redirect)
+          if (event === 'INITIAL_SESSION') {
+            // Only use this if getSession hasn't already fired
+            if (_fired) return;
+            _fired = true;
+            _lastAuthUid = uid;
+            cb(_sbUser(user));
+            return;
+          }
+          // For all other events (SIGNED_IN, SIGNED_OUT, TOKEN_REFRESHED)
           if (uid === _lastAuthUid && event !== 'SIGNED_OUT') return;
           _lastAuthUid = uid;
           cb(_sbUser(user));
@@ -10112,7 +10129,17 @@
       return { hasAccess: false };
     }
 
+    // Safety net — if auth hasn't resolved in 10s, go to login screen
+    const _authTimeout = setTimeout(() => {
+      if (state.view === 'loading') {
+        console.warn('[Auth] Timeout — forcing login screen');
+        state.view = 'login';
+        render();
+      }
+    }, 10000);
+
     auth.onAuthStateChanged(async (user) => {
+      clearTimeout(_authTimeout);
       if (user) {
         state.user = {
           uid: user.uid || user.id,   // Supabase uses .id; shim provides both
