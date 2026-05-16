@@ -1256,192 +1256,8 @@
       window.history.replaceState(null, '', window.location.pathname);
     }
 
-    // ── Compatibility shim: db.collection / db.doc → Supabase ───────────────
-    // This thin wrapper lets existing db.collection() / db.doc() call-sites
-    // work without rewriting every one of them individually.
-    // Each method returns a chainable builder that executes on .get()/.set()/.update()/.delete()/.add()
-    class _SBRef {
-      constructor(table, id, parentRef) {
-        this._table  = table;
-        this._id     = id || null;
-        this._parent = parentRef || null; // for sub-collection foreign key
-        this._wheres = [];
-        this._orderField = null;
-        this._orderAsc   = true;
-        this._limitN     = null;
-      }
-      where(field, op, val) {
-        const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
-        const opMap = { '==': 'eq', '!=': 'neq', '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte' };
-        const sbField = _FIELD_TO_SB[field] || field; // translate camelCase → snake_case
-        clone._wheres.push({ field: sbField, op: opMap[op] || 'eq', val });
-        return clone;
-      }
-      orderBy(field, dir) {
-        const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
-        clone._orderField = _FIELD_TO_SB[field] || field; // translate camelCase → snake_case
-        clone._orderAsc = (dir !== 'desc');
-        return clone;
-      }
-      limit(n) {
-        const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
-        clone._limitN = n; return clone;
-      }
-      collection(subPath) {
-        // returns a ref to a sub-collection, e.g. doc('orgs/x').collection('employees')
-        return new _SBRef(subPath, null, this);
-      }
-      doc(id) {
-        const clone = Object.assign(Object.create(_SBRef.prototype), this, { _wheres: [...this._wheres] });
-        clone._id = id; return clone;
-      }
-      _buildQuery(select) {
-        let q = _supabase.from(this._table).select(select || '*');
-        for (const w of this._wheres) q = q[w.op](w.field, w.val);
-        if (this._orderField) q = q.order(this._orderField, { ascending: this._orderAsc });
-        if (this._limitN)     q = q.limit(this._limitN);
-        return q;
-      }
-      _ownerFilter() {
-        // Tables that use owner_uid scoping
-        const ownerTables = ['companies','assigned_games','company_usernames','master_games','bills'];
-        return ownerTables.includes(this._table);
-      }
-      async get() {
-        if (this._id) {
-          const pkField = (this._table === 'user_access') ? 'uid' : 'id';
-          const { data, error } = await _supabase.from(this._table).select('*').eq(pkField, this._id).single();
-          if (error && error.code !== 'PGRST116') console.warn('[db.get]', this._table, error);
-          return { exists: !!data, data: () => data ? _convertFromSB(data) : null, id: this._id };
-        }
-        let q = this._buildQuery('*');
-        const { data, error } = await q;
-        if (error) console.warn('[db.get collection]', error);
-        const docs = (data || []).map(row => ({
-          id: row.id, exists: true,
-          data: () => _convertFromSB(row),
-        }));
-        return { docs, empty: docs.length === 0,
-          docChanges: () => docs.map(d => ({ type: 'added', doc: d })) };
-      }
-      async set(payload, opts) {
-        const data = _convertToSB(payload);
-        if (this._id) {
-          const pkField = (this._table === 'user_access') ? 'uid' : 'id';
-          const { error } = await _supabase.from(this._table)
-            .upsert({ [pkField]: this._id, ...data });
-          if (error) { console.error('[db.set] upsert error:', this._table, error); throw error; }
-        } else {
-          const { data: row, error } = await _supabase.from(this._table)
-            .insert(data).select().single();
-          if (error) { console.error('[db.set] insert error:', this._table, error); throw error; }
-          this._id = row.id;
-        }
-        return this;
-      }
-      async update(payload) {
-        if (!this._id) throw new Error('[db.update] No document id');
-        const pkField = (this._table === 'user_access') ? 'uid' : 'id';
-        const { error } = await _supabase.from(this._table)
-          .update(_convertToSB(payload)).eq(pkField, this._id);
-        if (error) { console.error('[db.update] error:', this._table, error); throw error; }
-      }
-      async delete() {
-        if (this._id) {
-          const pkField = (this._table === 'user_access') ? 'uid' : 'id';
-          const { error } = await _supabase.from(this._table).delete().eq(pkField, this._id);
-          if (error) throw error;
-        } else {
-          let q = _supabase.from(this._table).delete();
-          for (const w of this._wheres) q = q[w.op](w.field, w.val);
-          const { error } = await q;
-          if (error) throw error;
-        }
-      }
-      async add(payload) {
-        const data = _convertToSB(payload);
-        const { data: row, error } = await _supabase.from(this._table).insert(data).select().single();
-        if (error) throw error;
-        return { id: row.id };
-      }
-      // onSnapshot — map Supabase Realtime to same callback shape
-      onSnapshot(cb, errCb) {
-        const table = this._table;
-        const channelName = `${table}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        // Initial load — fire once immediately
-        this.get().then(snap => cb(snap)).catch(e => errCb && errCb(e));
-        // Realtime: debounced so rapid changes don't cause multiple re-renders
-        let _sbDebTimer = null;
-        const self = this;
-        const sub = _supabase.channel(channelName)
-          .on('postgres_changes', { event: '*', schema: 'public', table }, () => {
-            clearTimeout(_sbDebTimer);
-            _sbDebTimer = setTimeout(async () => {
-              try { const fresh = await self.get(); cb(fresh); }
-              catch(e) { errCb && errCb(e); }
-            }, 300);
-          })
-          .subscribe();
-        return () => { clearTimeout(_sbDebTimer); _supabase.removeChannel(sub); };
-      }
-    }
+    // ── Supabase shim: makes db.collection/doc/onSnapshot work like Firestore ──
 
-    // Path helpers — convert Firestore path strings to table/id lookups
-    const _PATH_TABLE_MAP = {
-      'userAccess':        'user_access',
-      'gbUsernames':       'gb_usernames',
-      'popupMessages':     'popup_messages',
-      'employeeLinks':     'employee_links',
-      'employeeUids':      'employee_uids',
-      'organizations':     'organizations',
-      'companies':         'companies',
-      'masterGames':       'master_games',
-      'bills':             'bills',
-      'assignedGames':     'assigned_games',
-      'usernames':         'company_usernames',
-      'employees':         'employees',
-      'shifts':            'shifts',
-      'salaryPayments':    'salary_payments',
-      // CF sub-collections
-      'cf_transactions':   'cf_transactions',
-      'cf_paymentMethods': 'cf_payment_methods',
-      'cf_shareholders':   'cf_shareholders',
-      'cf_opExpenses':     'cf_op_expenses',
-      'cf_dividendPayments': 'cf_dividend_payments',
-    };
-
-    function _pathToRef(path) {
-      // path like "users/uid/companies" or "users/uid/companies/cid/assignedGames"
-      const parts = path.split('/').filter(Boolean);
-      // strip leading "users/{uid}" ownership prefix
-      if (parts[0] === 'users') parts.splice(0, 2);
-      // strip leading "organizations/{orgId}" prefix
-      if (parts[0] === 'organizations') {
-        if (parts.length === 2) return new _SBRef('organizations', parts[1]);
-        parts.splice(0, 2); // remove 'organizations/{orgId}'
-      }
-      const colName = parts[0];
-      const docId   = parts[1] || null;
-      const subCol  = parts[2] || null;
-      const subId   = parts[3] || null;
-      const table   = _PATH_TABLE_MAP[subCol || colName] || (subCol || colName);
-      const id      = subId || (subCol ? null : docId);
-      return new _SBRef(table, id);
-    }
-
-    // Compatibility db object with .collection(path) and .doc(path)
-    const db = {
-      collection(path) {
-        // path may be compound like "users/uid/companies"
-        return _pathToRef(path);
-      },
-      doc(path) {
-        const ref = _pathToRef(path);
-        return ref;
-      },
-    };
-
-    // Timestamp / FieldValue shims
     const _serverTs = () => new Date().toISOString();
     if (!window.firebase) window.firebase = {};
     window.firebase.firestore = {
@@ -1452,9 +1268,10 @@
         now:        ()   => { const n = Date.now(); return { toMillis: () => n, toDate: () => new Date(n), seconds: Math.floor(n/1000), _isTs: true }; },
       },
     };
+    window.firebase.auth = { Auth: { Persistence: { LOCAL: 'local' } } };
+    window.firebase.auth.GoogleAuthProvider = function() {};
 
-    // Convert Firestore field names → snake_case for Supabase (minimal set)
-    // camelCase → snake_case field map (Firestore field names → Supabase column names)
+    // camelCase ↔ snake_case field maps
     const _FIELD_TO_SB = {
       displayName:'display_name', photoURL:'photo_url', gbUsername:'gb_username',
       expiryDate:'expiry_date', isDisabled:'is_disabled', isUnlimited:'is_unlimited',
@@ -1480,44 +1297,157 @@
       receivedByEmployee:'received_by_employee', receivedAt:'received_at',
       employeeUid:'employee_uid', linkKey:'link_key',
     };
-    // snake_case → camelCase (reverse map, built automatically)
     const _FIELD_FROM_SB = Object.fromEntries(Object.entries(_FIELD_TO_SB).map(([k,v])=>[v,k]));
 
-    function _convertToSB(obj) {
+    function _toSB(obj) {
       if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
       const out = {};
       for (let [k, v] of Object.entries(obj)) {
+        if (v === undefined) continue;
         if (v && typeof v === 'object' && v._isTs) v = v.toDate().toISOString();
         if (typeof v === 'function') v = v();
-        if (v === undefined) continue; // skip FieldValue.delete()
-        const key = _FIELD_TO_SB[k] || k;
-        out[key] = v;
+        out[_FIELD_TO_SB[k] || k] = v;
       }
       return out;
     }
-    function _convertFromSB(row) {
+    function _fromSB(row) {
       if (!row) return null;
       const out = {};
-      for (const [k, v] of Object.entries(row)) {
-        const key = _FIELD_FROM_SB[k] || k;
-        out[key] = v;
-      }
-      // Expose both id and _id for compatibility
-      if (row.id) { out.id = row.id; out._id = row.id; }
+      for (const [k, v] of Object.entries(row)) out[_FIELD_FROM_SB[k] || k] = v;
+      if (row.id)  { out.id = row.id;   out._id = row.id; }
+      if (row.uid) { out.uid = row.uid; }
       return out;
     }
+    // Tables that use uid as PK instead of id
+    const _UID_PK_TABLES = new Set(['user_access', 'employee_uids']);
+    function _pk(table) { return _UID_PK_TABLES.has(table) ? 'uid' : 'id'; }
 
-    // Auth shim — wraps Supabase auth to look like Firebase auth
+    const _PATH_MAP = {
+      userAccess:'user_access', gbUsernames:'gb_usernames', popupMessages:'popup_messages',
+      employeeLinks:'employee_links', employeeUids:'employee_uids', organizations:'organizations',
+      companies:'companies', masterGames:'master_games', bills:'bills',
+      assignedGames:'assigned_games', usernames:'company_usernames',
+      employees:'employees', shifts:'shifts', salaryPayments:'salary_payments',
+      cf_transactions:'cf_transactions', cf_paymentMethods:'cf_payment_methods',
+      cf_shareholders:'cf_shareholders', cf_opExpenses:'cf_op_expenses',
+      cf_dividendPayments:'cf_dividend_payments',
+    };
+
+    class _SBRef {
+      constructor(t, id) { this._t = t; this._id = id||null; this._w = []; this._ord = null; this._asc = true; this._lim = null; }
+      _clone() { const c = new _SBRef(this._t, this._id); c._w=[...this._w]; c._ord=this._ord; c._asc=this._asc; c._lim=this._lim; return c; }
+      where(f, op, v) { const c=this._clone(); const m={'==':'eq','!=':'neq','>':'gt','>=':'gte','<':'lt','<=':'lte'}; c._w.push({f:_FIELD_TO_SB[f]||f, op:m[op]||'eq', v}); return c; }
+      orderBy(f, dir) { const c=this._clone(); c._ord=_FIELD_TO_SB[f]||f; c._asc=dir!=='desc'; return c; }
+      limit(n) { const c=this._clone(); c._lim=n; return c; }
+      doc(id) { const c=this._clone(); c._id=id; return c; }
+      collection(sub) { return new _SBRef(_PATH_MAP[sub]||sub, null); }
+      _q(sel) {
+        let q = _supabase.from(this._t).select(sel||'*');
+        for (const w of this._w) q = q[w.op](w.f, w.v);
+        if (this._ord) q = q.order(this._ord, {ascending:this._asc});
+        if (this._lim) q = q.limit(this._lim);
+        return q;
+      }
+      async get() {
+        if (this._id) {
+          const {data, error} = await _supabase.from(this._t).select('*').eq(_pk(this._t), this._id).single();
+          if (error && error.code !== 'PGRST116') console.warn('[db.get]', this._t, error.message);
+          return { exists:!!data, data:()=>_fromSB(data), id:this._id };
+        }
+        const {data, error} = await this._q('*');
+        if (error) console.warn('[db.get collection]', this._t, error.message);
+        const docs = (data||[]).map(r => ({ id:r.id||r.uid, exists:true, data:()=>_fromSB(r) }));
+        return { docs, empty:!docs.length, docChanges:()=>docs.map(d=>({type:'added',doc:d})) };
+      }
+      async set(payload) {
+        const d = _toSB(payload);
+        const pk = _pk(this._t);
+        if (this._id) {
+          const {error} = await _supabase.from(this._t).upsert({[pk]:this._id, ...d});
+          if (error) { console.error('[db.set]', this._t, error.message); throw error; }
+        } else {
+          const {data:row, error} = await _supabase.from(this._t).insert(d).select().single();
+          if (error) { console.error('[db.set insert]', this._t, error.message); throw error; }
+          this._id = row.id;
+        }
+        return this;
+      }
+      async update(payload) {
+        if (!this._id) throw new Error('[db.update] no id on '+this._t);
+        const clean = Object.fromEntries(Object.entries(_toSB(payload)).filter(([,v])=>v!==undefined));
+        const {error} = await _supabase.from(this._t).update(clean).eq(_pk(this._t), this._id);
+        if (error) { console.error('[db.update]', this._t, error.message); throw error; }
+      }
+      async delete() {
+        const pk = _pk(this._t);
+        if (this._id) {
+          const {error} = await _supabase.from(this._t).delete().eq(pk, this._id);
+          if (error) throw error;
+        } else {
+          let q = _supabase.from(this._t).delete();
+          for (const w of this._w) q = q[w.op](w.f, w.v);
+          const {error} = await q;
+          if (error) throw error;
+        }
+      }
+      async add(payload) {
+        const {data:row, error} = await _supabase.from(this._t).insert(_toSB(payload)).select().single();
+        if (error) { console.error('[db.add]', this._t, error.message); throw error; }
+        return { id:row.id };
+      }
+      onSnapshot(cb, errCb) {
+        const self = this;
+        // Initial load
+        this.get().then(cb).catch(e => errCb && errCb(e));
+        // Realtime updates — debounced 400ms to batch rapid changes
+        let _deb = null;
+        const ch = _supabase.channel(this._t+'_'+Date.now())
+          .on('postgres_changes', {event:'*', schema:'public', table:this._t}, () => {
+            clearTimeout(_deb);
+            _deb = setTimeout(() => self.get().then(cb).catch(e => errCb && errCb(e)), 400);
+          }).subscribe();
+        return () => { clearTimeout(_deb); _supabase.removeChannel(ch); };
+      }
+    }
+
+    function _toRef(path) {
+      const parts = path.split('/').filter(Boolean);
+      if (parts[0]==='users') parts.splice(0,2);
+      if (parts[0]==='organizations') {
+        if (parts.length===2) return new _SBRef(_PATH_MAP.organizations, parts[1]);
+        parts.splice(0,2);
+      }
+      const table = _PATH_MAP[parts[2]||parts[0]] || parts[2] || parts[0];
+      const id    = parts[3] || (!parts[2] ? parts[1] : null) || null;
+      return new _SBRef(table, id);
+    }
+
+    const db = { collection: _toRef, doc: _toRef };
+
+    // ── AUTH — single fire, no double-trigger ────────────────────────────────
+    // Supabase fires onAuthStateChange with INITIAL_SESSION on page load,
+    // then SIGNED_IN after OAuth redirect. We only process each unique user once.
+    let _lastAuthUid = null;
+
+    function _sbUser(u) {
+      if (!u) return null;
+      return {
+        uid: u.id, id: u.id, email: u.email,
+        displayName: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || '',
+        photoURL: u.user_metadata?.avatar_url || u.user_metadata?.picture || '',
+      };
+    }
+
     const auth = {
       async signInWithPopup() {
-        const { error } = await _supabase.auth.signInWithOAuth({
+        const {error} = await _supabase.auth.signInWithOAuth({
           provider: 'google',
           options: { redirectTo: window.location.origin }
         });
         if (error) throw error;
       },
       async signInWithRedirect() {
-        const { error } = await _supabase.auth.signInWithOAuth({
+        const {error} = await _supabase.auth.signInWithOAuth({
           provider: 'google',
           options: { redirectTo: window.location.origin }
         });
@@ -1525,36 +1455,23 @@
       },
       async getRedirectResult() { return null; },
       async setPersistence() {},
-      async signOut() { return _supabase.auth.signOut(); },
+      async signOut() {
+        _lastAuthUid = null;
+        return _supabase.auth.signOut();
+      },
       onAuthStateChanged(cb) {
-        // Fire immediately with current session
-        _supabase.auth.getSession().then(({ data: { session } }) => {
-          cb(session ? _sbUserToFirebase(session.user) : null);
-        });
-        // Then listen for changes
-        const { data: { subscription } } = _supabase.auth.onAuthStateChange((_event, session) => {
-          cb(session ? _sbUserToFirebase(session.user) : null);
+        // Single listener — Supabase fires INITIAL_SESSION immediately, then any changes
+        const {data:{subscription}} = _supabase.auth.onAuthStateChange((event, session) => {
+          const user = session?.user ?? null;
+          const uid  = user?.id ?? null;
+          // Skip if same user already processed (prevents double-fire on redirect)
+          if (uid === _lastAuthUid && event !== 'SIGNED_OUT') return;
+          _lastAuthUid = uid;
+          cb(_sbUser(user));
         });
         return () => subscription.unsubscribe();
       },
     };
-
-    function _sbUserToFirebase(u) {
-      if (!u) return null;
-      return {
-        uid:         u.id,          // Firebase used .uid; Supabase uses .id
-        id:          u.id,
-        email:       u.email,
-        displayName: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || '',
-        photoURL:    u.user_metadata?.avatar_url || u.user_metadata?.picture || '',
-      };
-    }
-
-    if (!window.firebase.auth) {
-      window.firebase.auth = { Auth: { Persistence: { LOCAL: 'local' } } };
-    }
-    // GoogleAuthProvider shim (never really used now, but avoids ReferenceError)
-    window.firebase.auth.GoogleAuthProvider = function() {};
 
     // ============================================================
     // STATE
