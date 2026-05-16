@@ -1248,8 +1248,13 @@
     // ============================================================
     const _supabase = window.supabase.createClient(
       'https://kzchxmulktygoqhiwpff.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg'
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg',
+      { auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, flowType: 'implicit' } }
     );
+    // Remove #access_token hash from URL after OAuth redirect without reloading
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
 
     // ── Compatibility shim: db.collection / db.doc → Supabase ───────────────
     // This thin wrapper lets existing db.collection() / db.doc() call-sites
@@ -1304,8 +1309,9 @@
       }
       async get() {
         if (this._id) {
-          const { data, error } = await _supabase.from(this._table).select('*').eq('id', this._id).single();
-          if (error && error.code !== 'PGRST116') console.warn('[db.get]', error);
+          const pkField = (this._table === 'user_access') ? 'uid' : 'id';
+          const { data, error } = await _supabase.from(this._table).select('*').eq(pkField, this._id).single();
+          if (error && error.code !== 'PGRST116') console.warn('[db.get]', this._table, error);
           return { exists: !!data, data: () => data ? _convertFromSB(data) : null, id: this._id };
         }
         let q = this._buildQuery('*');
@@ -1319,31 +1325,31 @@
           docChanges: () => docs.map(d => ({ type: 'added', doc: d })) };
       }
       async set(payload, opts) {
-        const merge = opts && opts.merge;
-        const data  = _convertToSB(payload);
+        const data = _convertToSB(payload);
         if (this._id) {
-          if (merge) {
-            const { error } = await _supabase.from(this._table).upsert({ id: this._id, ...data });
-            if (error) throw error;
-          } else {
-            const { error } = await _supabase.from(this._table).upsert({ id: this._id, ...data });
-            if (error) throw error;
-          }
+          const pkField = (this._table === 'user_access') ? 'uid' : 'id';
+          const { error } = await _supabase.from(this._table)
+            .upsert({ [pkField]: this._id, ...data });
+          if (error) { console.error('[db.set] upsert error:', this._table, error); throw error; }
         } else {
-          const { data: row, error } = await _supabase.from(this._table).insert(data).select().single();
-          if (error) throw error;
+          const { data: row, error } = await _supabase.from(this._table)
+            .insert(data).select().single();
+          if (error) { console.error('[db.set] insert error:', this._table, error); throw error; }
           this._id = row.id;
         }
         return this;
       }
       async update(payload) {
         if (!this._id) throw new Error('[db.update] No document id');
-        const { error } = await _supabase.from(this._table).update(_convertToSB(payload)).eq('id', this._id);
-        if (error) throw error;
+        const pkField = (this._table === 'user_access') ? 'uid' : 'id';
+        const { error } = await _supabase.from(this._table)
+          .update(_convertToSB(payload)).eq(pkField, this._id);
+        if (error) { console.error('[db.update] error:', this._table, error); throw error; }
       }
       async delete() {
         if (this._id) {
-          const { error } = await _supabase.from(this._table).delete().eq('id', this._id);
+          const pkField = (this._table === 'user_access') ? 'uid' : 'id';
+          const { error } = await _supabase.from(this._table).delete().eq(pkField, this._id);
           if (error) throw error;
         } else {
           let q = _supabase.from(this._table).delete();
@@ -9970,16 +9976,21 @@
           } catch(e) { /* ignore */ }
 
           // First-time owner: create record with no access
-          await db.collection('userAccess').doc(user.uid).set({
-            email: user.email,
-            displayName: user.displayName || '',
-            photoURL: user.photoURL || '',
-            gbUsername: '',
-            expiryDate: null,
-            isDisabled: false,
-            createdAt: _serverTs(),
-            lastLogin: _serverTs(),
-          });
+          try {
+            await db.collection('userAccess').doc(user.uid).set({
+              email: user.email,
+              displayName: user.displayName || '',
+              photoURL: user.photoURL || '',
+              gbUsername: '',
+              expiryDate: null,
+              isDisabled: false,
+              createdAt: _serverTs(),
+              lastLogin: _serverTs(),
+            });
+            console.log('[checkUserAccess] user_access row created:', user.email);
+          } catch(createErr) {
+            console.error('[checkUserAccess] FAILED to create row:', createErr);
+          }
           return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: '' };
         }
 
