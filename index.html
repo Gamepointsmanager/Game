@@ -1386,8 +1386,9 @@
     // Tracked write helper for await-style writes (blocks but updates sync indicator)
     async function trackedWrite(promiseFn) {
       startWrite();
-      // Invalidate startup cache so next page load re-fetches fresh data
       _startupCacheInvalidate();
+      // Invalidate lazy cache for the currently open company
+      if (state.selectedCompanyId) _lazyInvalidateCompany(state.selectedCompanyId);
       try {
         var _writePromise = promiseFn();
         var _timeoutPromise = new Promise(function(_, reject){
@@ -1450,15 +1451,12 @@
     }
     function queueSave(fn,onFail){ _saveQueue.push({fn:fn,onFail:onFail||null,retry:0}); flushSaves(); }
 
-    var _STARTUP_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+    var _STARTUP_CACHE_TTL = 10 * 60 * 1000; // 10 min
 
     function _startupCacheSave() {
       try {
         localStorage.setItem('gb_startup_'+dataOwnerUid(), JSON.stringify({
-          ts: Date.now(),
-          mg: state.masterGames,
-          bills: state.bills,
-          companies: state.companies
+          ts: Date.now(), companies: state.companies
         }));
       } catch(e) {}
     }
@@ -1477,107 +1475,177 @@
       try { localStorage.removeItem('gb_startup_'+dataOwnerUid()); } catch(e) {}
     }
 
+    // Per-company lazy-load cache: tracks what's loaded per company+tab
+    var _lazyCache = {};   // companyId → { billing, games, analytics, payment }
+    var _lazyCacheTs = {}; // companyId+tab → timestamp
+    var _LAZY_TTL = 8 * 60 * 1000; // 8 min per tab
+
+    function _lazyKey(cid, tab) { return cid + '|' + tab; }
+
+    function _lazyIsLoaded(cid, tab) {
+      var key = _lazyKey(cid, tab);
+      return !!_lazyCacheTs[key] && (Date.now() - _lazyCacheTs[key]) < _LAZY_TTL;
+    }
+
+    function _lazyMarkLoaded(cid, tab) {
+      _lazyCacheTs[_lazyKey(cid, tab)] = Date.now();
+    }
+
+    function _lazyInvalidateCompany(cid) {
+      Object.keys(_lazyCacheTs).filter(function(k){ return k.startsWith(cid+'|'); })
+        .forEach(function(k){ delete _lazyCacheTs[k]; });
+    }
+
     async function loadAllData(force) {
       if (!state.user) return;
-
-      // 1. Try fast localStorage cache first — zero Firestore reads
       if (!force) {
+        // 1. Try localStorage cache — zero reads
         var sc = _startupCacheLoad();
-        if (sc && sc.mg && sc.bills && sc.companies) {
-          state.masterGames = sc.mg;
-          state.bills       = sc.bills;
-          state.companies   = sc.companies;
-          rebuildBillIndex();
-          render();
-          return; // served fully from cache, no reads
-        }
-        // Legacy cache fallback
-        var cached = _gbCache.get('data');
-        if (cached && cached.mg && cached.bills && cached.companies) {
-          state.masterGames = cached.mg || [];
-          state.bills       = cached.bills || [];
-          state.companies   = cached.companies || {};
-          rebuildBillIndex();
-          render();
-          return;
+        if (sc && sc.companies) {
+          state.companies = sc.companies;
+          render(); return;
         }
       }
-
-      // 2. Cache miss — fetch from Firestore (happens once per 10 min)
+      // 2. Load ONLY company stubs: _id, name, companyCode, active, creditBalance, extraFeePercent, paymentBonuses
+      // This is just 1 read per company doc — no bills, no masterGames, no subcollections
       try {
         const compSnap = await db.collection(userPath()+'/companies').get();
-        const compBasic = {};
+        state.companies = {};
         compSnap.docs.forEach(doc => {
-          compBasic[doc.id] = { _id: doc.id, ...doc.data(), assignedGames:[], usernames:[] };
+          const d = doc.data();
+          state.companies[doc.id] = {
+            _id: doc.id,
+            name: d.name || '',
+            companyCode: d.companyCode || '',
+            active: d.active !== false,
+            creditBalance: d.creditBalance || 0,
+            extraFeePercent: d.extraFeePercent || 0,
+            extraFeeCostRate: d.extraFeeCostRate || 0,
+            paymentBonuses: d.paymentBonuses || {},
+            // Preserve any locally-loaded subcollection data if already fetched
+            assignedGames: (state.companies[doc.id] && state.companies[doc.id].assignedGames) || [],
+            usernames:     (state.companies[doc.id] && state.companies[doc.id].usernames)     || []
+          };
         });
-        state.companies = compBasic;
-
-        // Bills: load last 200 only (reduces startup reads dramatically)
-        const [mgSnap, billSnap] = await Promise.all([
-          db.collection(userPath()+'/masterGames').get(),
-          db.collection(userPath()+'/bills').orderBy('date','desc').limit(200).get(),
-        ]);
-        state.masterGames = mgSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        state.bills       = billSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-
-        // Subcollections in parallel
-        await Promise.all(compSnap.docs.map(async doc => {
-          const [agSnap, unSnap] = await Promise.all([
-            db.collection(userPath()+'/companies/'+doc.id+'/assignedGames').get(),
-            db.collection(userPath()+'/companies/'+doc.id+'/usernames').get(),
-          ]);
-          state.companies[doc.id].assignedGames = agSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-          state.companies[doc.id].usernames     = unSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        }));
-
-        rebuildBillIndex();
-        _startupCacheSave(); // cache for next 10 min
-        _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
+        _startupCacheSave();
+        // Run company code migration in background — no await
+        _migrateCompanyCodes();
       } catch(e) { console.error('Load error:', e); }
     }
 
-    // Setup realtime listeners after initial load
+    async function _migrateCompanyCodes() {
+      var needCode = Object.values(state.companies).filter(function(c){ return !c.companyCode; });
+      if (!needCode.length) return;
+      var usedCodes = new Set(Object.values(state.companies).map(function(c){ return c.companyCode; }).filter(Boolean));
+      for (var i = 0; i < needCode.length; i++) {
+        try {
+          var code = await generateCompanyCodeFromSet(usedCodes);
+          usedCodes.add(code);
+          state.companies[needCode[i]._id].companyCode = code;
+          await db.doc(userPath()+'/companies/'+needCode[i]._id).update({ companyCode: code });
+        } catch(e) {}
+      }
+    }
+
+    // ── Lazy load: company billing tab (bills for this company only) ──
+    async function lazyLoadBilling(cid) {
+      if (_lazyIsLoaded(cid, 'billing')) return;
+      try {
+        var snap = await db.collection(userPath()+'/bills')
+          .where('companyId', '==', cid)
+          .orderBy('date', 'desc')
+          .limit(100)
+          .get();
+        // Merge into state.bills without duplicating
+        var existing = new Set(state.bills.map(function(b){ return b._id; }));
+        snap.docs.forEach(function(d) {
+          if (!existing.has(d.id)) state.bills.push({ _id: d.id, ...d.data() });
+        });
+        rebuildBillIndex();
+        _lazyMarkLoaded(cid, 'billing');
+        _startupCacheInvalidate(); // bills changed, bust startup cache
+      } catch(e) { console.error('lazyLoadBilling:', e); }
+    }
+
+    // ── Lazy load: company games config tab (assignedGames + usernames + masterGames) ──
+    async function lazyLoadGames(cid) {
+      if (_lazyIsLoaded(cid, 'games')) return;
+      try {
+        var promises = [
+          db.collection(userPath()+'/companies/'+cid+'/assignedGames').get(),
+          db.collection(userPath()+'/companies/'+cid+'/usernames').get(),
+        ];
+        // Load masterGames only once globally
+        if (!state.masterGames.length) {
+          promises.push(db.collection(userPath()+'/masterGames').get());
+        }
+        var results = await Promise.all(promises);
+        if (state.companies[cid]) {
+          state.companies[cid].assignedGames = results[0].docs.map(function(d){ return { _id: d.id, ...d.data() }; });
+          state.companies[cid].usernames     = results[1].docs.map(function(d){ return { _id: d.id, ...d.data() }; });
+        }
+        if (results[2]) {
+          state.masterGames = results[2].docs.map(function(d){ return { _id: d.id, ...d.data() }; });
+        }
+        _lazyMarkLoaded(cid, 'games');
+      } catch(e) { console.error('lazyLoadGames:', e); }
+    }
+
+    // ── Lazy load: analytics tab (bills for all companies, masterGames) ──
+    var _analyticsFullyLoaded = false;
+    async function lazyLoadAnalytics(cid) {
+      // For company analytics: need bills for this company
+      await lazyLoadBilling(cid);
+      // Also need masterGames for game breakdown
+      if (!state.masterGames.length) {
+        try {
+          var mgSnap = await db.collection(userPath()+'/masterGames').get();
+          state.masterGames = mgSnap.docs.map(function(d){ return { _id: d.id, ...d.data() }; });
+        } catch(e) {}
+      }
+      _lazyMarkLoaded(cid, 'analytics');
+    }
+
+    // ── Lazy load: global analytics (needs ALL bills) ──
+    async function lazyLoadGlobalAnalytics() {
+      if (_analyticsFullyLoaded) return;
+      try {
+        var snap = await db.collection(userPath()+'/bills')
+          .orderBy('date', 'desc').limit(500).get();
+        var existing = new Set(state.bills.map(function(b){ return b._id; }));
+        snap.docs.forEach(function(d) {
+          if (!existing.has(d.id)) state.bills.push({ _id: d.id, ...d.data() });
+        });
+        if (!state.masterGames.length) {
+          var mgSnap = await db.collection(userPath()+'/masterGames').get();
+          state.masterGames = mgSnap.docs.map(function(d){ return { _id: d.id, ...d.data() }; });
+        }
+        rebuildBillIndex();
+        _analyticsFullyLoaded = true;
+        invalidateAnalyticsCache();
+      } catch(e) { console.error('lazyLoadGlobalAnalytics:', e); }
+    }
+
+    // ── Lazy load: full company details (for settings modal etc) ──
+    async function lazyLoadCompanyFull(cid) {
+      if (_lazyIsLoaded(cid, 'full')) return;
+      try {
+        var snap = await db.doc(userPath()+'/companies/'+cid).get();
+        if (snap.exists && state.companies[cid]) {
+          Object.assign(state.companies[cid], snap.data());
+        }
+        _lazyMarkLoaded(cid, 'full');
+      } catch(e) {}
+    }
+
+    // Setup listeners — real-time listeners removed to eliminate read explosion.
+    // All data is now loaded lazily per view/tab and managed locally after writes.
     function setupListeners() {
       stopListeners();
-      if (!state.user) return;
-      const bp = userPath();
-      // Listen to master games
-      // MASTER GAMES: No real-time listener — managed locally after writes.
-      // Each snapshot re-reads ALL master games. We update state.masterGames locally on save.
-      // Listen to bills (latest 100)
-      // BILLS: No real-time listener — we manage state locally after writes.
-      // onSnapshot on bills re-reads ALL bills every time ANY bill changes = massive reads.
-      // Instead: one-time load at startup, then update state locally on every save/delete.
-      // Listen to companies
-      // COMPANIES: No real-time listener — managed locally after writes.
-      // companies.onSnapshot re-reads ALL companies on every change.
-      // Instead: loaded once at startup, updated locally on add/edit/delete.
-
-      // Run migration for companies missing codes — only once at startup using already-loaded data
-      var _companiesMigrationDone = false;
-      (async function migrateCompanyCodes() {
-        if (_companiesMigrationDone) return;
-        _companiesMigrationDone = true;
-        var companiesNeedingCodes = Object.entries(state.companies)
-          .filter(function(e){ return !e[1].companyCode; }).map(function(e){ return e[0]; });
-        if (companiesNeedingCodes.length === 0) return;
-        var firestoreCodes = new Set(Object.values(state.companies).map(function(c){ return c.companyCode; }).filter(Boolean));
-        for (var _mci = 0; _mci < companiesNeedingCodes.length; _mci++) {
-          var _mid = companiesNeedingCodes[_mci];
-          try {
-            var newCode = await generateCompanyCodeFromSet(firestoreCodes);
-            firestoreCodes.add(newCode);
-            state.companies[_mid].companyCode = newCode;
-            await db.doc(bp+'/companies/'+_mid).update({ companyCode: newCode });
-          } catch(e) { /* silent */ }
-        }
-      })();
     }
 
     const _compSubs = {};
     function setupCompanySubListeners(compId) {
-      // Sub-collections loaded once at startup in loadInitialData — no real-time listeners.
-      // Each onSnapshot re-reads ALL docs for every company on every change = huge read cost.
       if (_compSubs[compId]) return;
       _compSubs[compId] = () => {};
       _unsubs.push(_compSubs[compId]);
@@ -1870,50 +1938,98 @@
 
     function render() {
       const app = $('#app');
+      const cid = state.selectedCompanyId;
       switch (state.view) {
         case 'loading': app.innerHTML = renderLoading(); break;
         case 'login': app.innerHTML = renderLogin(); bindLogin(); break;
         case 'accessDenied': app.innerHTML = renderAccessDenied(); bindAccessDenied(); break;
-        case 'companies': var _fab=document.getElementById('fabAddGame');if(_fab)_fab.remove(); app.innerHTML = renderHeader() + renderCompanyList(); bindHeader(); bindCompanyList(); break;
-        case 'company': app.innerHTML = renderHeader() + renderCompanyScreen(); bindHeader(); bindCompanyScreen(); break;
-        case 'analytics': app.innerHTML = renderHeader() + renderAnalyticsPage(); bindHeader(); bindAnalyticsPage(); break;
-        case 'globalAnalytics': app.innerHTML = renderHeader() + renderGlobalAnalyticsPage(); bindHeader(); bindGlobalAnalyticsPage(); break;
-        case 'cashFlow': if(state.empRole!=='employee'){
-          if(!_cfLoaded){
-            app.innerHTML = renderHeader() + '<div class="page fade-in" style="display:flex;align-items:center;justify-content:center;padding:60px"><div class="spinner"></div></div>';
-            bindHeader();
-            cfEnsureLoaded().then(()=>{ app.innerHTML = renderHeader() + renderCashFlowPage(); bindHeader(); bindCashFlowPage(); });
-          } else {
-            app.innerHTML = renderHeader() + renderCashFlowPage(); bindHeader(); bindCashFlowPage();
+
+        case 'companies':
+          var _fab = document.getElementById('fabAddGame'); if (_fab) _fab.remove();
+          app.innerHTML = renderHeader() + renderCompanyList();
+          bindHeader(); bindCompanyList();
+          break;
+
+        case 'company':
+          // Render immediately with whatever we have, then lazy-load tab data
+          app.innerHTML = renderHeader() + renderCompanyScreen();
+          bindHeader(); bindCompanyScreen();
+          // Kick off background lazy load for active tab (no spinner for billing — it's fast)
+          if (cid) {
+            var _tab = state.companyTab;
+            if (_tab === 'billing' && !_lazyIsLoaded(cid, 'billing')) {
+              lazyLoadBilling(cid).then(function(){
+                rebuildBillIndex(); refreshBillHistory();
+              });
+            } else if ((_tab === 'games' || _tab === 'config') && !_lazyIsLoaded(cid, 'games')) {
+              lazyLoadGames(cid).then(function(){ render(); });
+            } else if (_tab === 'analytics' && !_lazyIsLoaded(cid, 'analytics')) {
+              lazyLoadAnalytics(cid).then(function(){
+                invalidateAnalyticsCache(); render();
+              });
+            } else if (_tab === 'payment' && !_lazyIsLoaded(cid, 'billing')) {
+              lazyLoadBilling(cid).then(function(){
+                rebuildBillIndex(); render();
+              });
+            }
           }
-        } else {state.view='companies';render();} break;
+          break;
+
+        case 'analytics':
+          app.innerHTML = renderHeader() + renderAnalyticsPage();
+          bindHeader(); bindAnalyticsPage();
+          if (cid && !_lazyIsLoaded(cid, 'analytics')) {
+            lazyLoadAnalytics(cid).then(function(){
+              invalidateAnalyticsCache();
+              app.innerHTML = renderHeader() + renderAnalyticsPage();
+              bindHeader(); bindAnalyticsPage();
+            });
+          }
+          break;
+
+        case 'globalAnalytics':
+          app.innerHTML = renderHeader() + renderGlobalAnalyticsPage();
+          bindHeader(); bindGlobalAnalyticsPage();
+          if (!_analyticsFullyLoaded) {
+            lazyLoadGlobalAnalytics().then(function(){
+              app.innerHTML = renderHeader() + renderGlobalAnalyticsPage();
+              bindHeader(); bindGlobalAnalyticsPage();
+            });
+          }
+          break;
+
+        case 'cashFlow':
+          if (state.empRole !== 'employee') {
+            if (!_cfLoaded) {
+              app.innerHTML = renderHeader() + '<div class="page fade-in" style="display:flex;align-items:center;justify-content:center;padding:60px"><div class="spinner"></div></div>';
+              bindHeader();
+              cfEnsureLoaded().then(function(){
+                app.innerHTML = renderHeader() + renderCashFlowPage(); bindHeader(); bindCashFlowPage();
+              });
+            } else {
+              app.innerHTML = renderHeader() + renderCashFlowPage(); bindHeader(); bindCashFlowPage();
+            }
+          } else { state.view = 'companies'; render(); }
+          break;
+
         case 'employees': renderEmployeesPage(); break;
         case 'employment':
-          // Stop owner listener if navigating away from cashiers page
           if (_empShiftListener) { _empShiftListener(); _empShiftListener = null; }
           renderEmploymentPage();
           break;
       }
       if (state.masterGamesModalOpen) { renderMasterGamesModal(); bindMasterGamesModal(); }
-      // Push history state when view, company, or tab changes
       if (!skipPushState && (state.view === 'companies' || state.view === 'company' || state.view === 'analytics' || state.view === 'globalAnalytics')) {
         const curTab = state.view === 'company' ? state.companyTab : null;
-        const changed = state.view !== _lastPushedView ||
-                        state.selectedCompanyId !== _lastPushedCompany ||
-                        curTab !== _lastPushedTab;
+        const changed = state.view !== _lastPushedView || state.selectedCompanyId !== _lastPushedCompany || curTab !== _lastPushedTab;
         if (changed) {
           history.pushState({ view: state.view, companyId: state.selectedCompanyId, tab: curTab }, '');
-          _lastPushedView = state.view;
-          _lastPushedCompany = state.selectedCompanyId;
-          _lastPushedTab = curTab;
+          _lastPushedView = state.view; _lastPushedCompany = state.selectedCompanyId; _lastPushedTab = curTab;
         }
       }
       skipPushState = false;
       persistState();
-      // Update clock in utility bar
       if (typeof updateUtilClock === 'function') updateUtilClock();
-      // Menu analytics - no preview needed
-      // Restore sync indicator state after DOM rebuild
       updateSyncIndicator();
     }
 
