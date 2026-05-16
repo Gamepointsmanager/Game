@@ -51,7 +51,11 @@
     }
 
     body {
-      background: #07071a;
+      background:
+        radial-gradient(ellipse at 15% 50%, rgba(147,51,234,0.18) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 15%, rgba(0,229,255,0.11) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 85%, rgba(255,62,181,0.10) 0%, transparent 40%),
+        #07071a;
       color: var(--textPrimary);
       font-family: 'Rajdhani', 'Exo 2', sans-serif;
       font-weight: 500;
@@ -59,34 +63,28 @@
       overflow-x: hidden;
     }
 
-    body::before {
+    /* Grid overlay as a non-fixed, non-repainted element */
+    #app::before {
       content: '';
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(ellipse at 15% 50%, rgba(147,51,234,0.22) 0%, transparent 50%),
-        radial-gradient(ellipse at 85% 15%, rgba(0,229,255,0.14) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 85%, rgba(255,62,181,0.12) 0%, transparent 40%),
-        radial-gradient(ellipse at 60% 40%, rgba(176,240,0,0.07) 0%, transparent 50%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    body::after {
-      content: '';
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0;
       background-image:
-        linear-gradient(rgba(147,51,234,0.07) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(147,51,234,0.07) 1px, transparent 1px);
+        linear-gradient(rgba(147,51,234,0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(147,51,234,0.05) 1px, transparent 1px);
       background-size: 40px 40px;
-      pointer-events: none;
-      z-index: 0;
+      pointer-events: none; z-index: 0;
+      /* Promote to its own GPU layer once, never repaint */
+      will-change: transform;
+      transform: translateZ(0);
     }
 
     #app { position: relative; z-index: 1; }
-
-    h1, h2, h3, h4, .heading { font-family: 'Orbitron', monospace; letter-spacing: 1px; }
+    button, .btn, .tab, .company-item, .card[onclick], [onclick], input, select, textarea, a {
+      touch-action: manipulation;
+    }
+    /* Prevent layout thrash on cards */
+    .card { contain: layout style; }
+    /* Page container isolation */
+    .page { contain: layout; }
     input, select, textarea, button { font-family: 'Rajdhani', sans-serif; font-weight: 500; }
 
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -94,12 +92,12 @@
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--purple); }
 
-    @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
     @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
-    @keyframes syncGlow { 0%,100%{ filter:drop-shadow(0 0 2px rgba(6,182,212,0.2)); } 50%{ filter:drop-shadow(0 0 8px rgba(6,182,212,0.8)) drop-shadow(0 0 16px rgba(6,182,212,0.3)); } }
+    @keyframes syncGlow { 0%,100%{ opacity:0.6; } 50%{ opacity:1; } }
     #lastSyncedIndicator.syncing svg { animation: syncGlow 1.4s ease-in-out infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .fade-in { animation: fadeIn 0.3s ease-out; }
+    .fade-in { animation: fadeIn 0.15s ease-out; }
 
     /* ============================================================
        LIQUID GLASS POPUP MESSAGE SYSTEM
@@ -152,8 +150,8 @@
         0 2px 0 rgba(255,255,255,0.09) inset,
         0 -1px 0 rgba(0,0,0,0.3) inset,
         0 0 80px rgba(124,58,237,0.08);
-      backdrop-filter: blur(48px) saturate(2) brightness(0.96);
-      -webkit-backdrop-filter: blur(48px) saturate(2) brightness(0.96);
+      
+      
       animation: popupSlideIn 0.35s cubic-bezier(.22,.68,0,1.15) forwards;
     }
     .popup-glass.closing {
@@ -228,7 +226,7 @@
       cursor: pointer; transition: all 0.15s ease;
       position: relative; overflow: hidden;
     }
-    .popup-btn:hover { filter: brightness(1.1); }
+    .popup-btn:hover {  }
     .popup-btn:active { transform: scale(0.97); transition: transform 0.08s; }
 
     .popup-btn-dismiss {
@@ -254,10 +252,9 @@
     }
     /* HEADER */
     .header {
-      background: var(--glass); border-bottom: 1px solid rgba(120,100,200,0.12);
+      background: rgba(10,8,24,0.97); border-bottom: 1px solid rgba(120,100,200,0.12);
       padding: 0 16px; height: 56px; display: flex; align-items: center;
-      justify-content: space-between; backdrop-filter: blur(20px) saturate(1.3);
-      -webkit-backdrop-filter: blur(20px) saturate(1.3);
+      justify-content: space-between;
       position: sticky; top: 0; z-index: 100;
     }
     .header-logo { display:flex; align-items:center; gap:10px; cursor:pointer; }
@@ -271,22 +268,20 @@
 
     /* UTILITY BAR */
     .utility-bar {
-      background: var(--glass); border-bottom: 1px solid var(--glassBorder);
+      background: rgba(12,10,28,0.97); border-bottom: 1px solid var(--glassBorder);
       padding: 8px 16px; display: flex; align-items: center; justify-content: center;
       gap: 6px; position: sticky; top: 56px; z-index: 99;
-      backdrop-filter: blur(16px) saturate(1.2);
-      -webkit-backdrop-filter: blur(16px) saturate(1.2);
     }
     .util-btn {
       padding: 6px 14px; font-size: 12px; font-weight: 600; border: none;
       border-radius: 8px; cursor: pointer; display: inline-flex;
-      align-items: center; gap: 6px; transition: all 0.2s;
+      align-items: center; gap: 6px; transition: opacity 0.15s;
       font-family: 'Rajdhani', sans-serif; text-transform: uppercase;
       letter-spacing: 0.5px; background: var(--bgInput);
       color: var(--textSecondary); border: 1px solid var(--border);
     }
-    .util-btn:hover { border-color: var(--purple); background: var(--bgHover); color: var(--textPrimary); transform: translateY(-1px); }
-    .util-btn:active { transform: translateY(0); }
+    .util-btn:hover { opacity: 0.8; color: var(--textPrimary); }
+    .util-btn:active { opacity: 0.6; }
     .util-btn svg { width:15px; height:15px; flex-shrink:0; }
     .util-btn.syncing { animation: pulse 1s infinite; }
 
@@ -294,12 +289,11 @@
     .btn {
       padding: 7px 14px; font-size: 13px; font-weight: 600; border: none; border-radius: 10px;
       cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
-      transition: all 0.2s; letter-spacing: 0.5px; text-transform: uppercase;
+      transition: opacity 0.15s, background 0.15s; letter-spacing: 0.5px; text-transform: uppercase;
       font-family: 'Rajdhani', sans-serif; white-space: nowrap;
-      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
     }
-    .btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
-    .btn:active { transform: translateY(0); }
+    .btn:hover { opacity: 0.88; }
+    .btn:active { opacity: 0.75; }
     .btn-purple { background: var(--purple); color: #fff; }
     .btn-cyan { background: var(--cyan); color: #fff; }
     .btn-green { background: var(--green); color: #fff; }
@@ -327,8 +321,8 @@
     .input {
       width: 100%; padding: 10px 12px; background: rgba(15,12,28,0.6);
       border: 1px solid rgba(80,65,130,0.3); border-radius: 10px; color: var(--textPrimary);
-      font-size: 14px; font-weight: 500; outline: none; transition: all 0.2s;
-      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      font-size: 14px; font-weight: 500; outline: none; 
+      
     }
     .input:focus { border-color: var(--purple); box-shadow: 0 0 0 2px rgba(124,58,237,0.15); }
     .input::placeholder { color: #9990b8; font-weight: 500; }
@@ -361,10 +355,8 @@
 
     /* CARD */
     .card {
-      background: rgba(18,16,32,0.82); border: 1px solid rgba(120,100,200,0.2);
+      background: rgba(18,16,32,0.92); border: 1px solid rgba(120,100,200,0.2);
       border-radius: 14px; padding: 20px;
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
     }
 
     /* BADGE */
@@ -388,14 +380,14 @@
 
     /* MODAL */
     .modal-overlay {
-      position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px);
+      position:fixed; inset:0; background:rgba(0,0,0,0.7); 
       display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px;
     }
     .modal {
-      background:rgba(16,13,30,0.85); border:1px solid var(--glassBorder); border-radius:18px;
+      background:rgba(14,11,28,0.98); border:1px solid var(--glassBorder); border-radius:18px;
       padding:24px; width:100%; max-width:550px; max-height:80vh; overflow-y:auto;
-      backdrop-filter: blur(24px) saturate(1.3);
-      -webkit-backdrop-filter: blur(24px) saturate(1.3);
+      
+      
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
     .modal-header {
@@ -459,7 +451,7 @@
       display:flex; align-items:center; padding:14px 18px; background:rgba(18,16,32,0.7);
       border:1px solid var(--glassBorder); border-radius:14px; margin-bottom:10px;
       cursor:pointer; transition: all 0.25s;
-      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      
     }
     .company-item:hover {
       border-color: var(--purple); background: var(--bgHover);
@@ -474,7 +466,7 @@
     .tabs {
       display:flex; gap:4px; margin-bottom:22px; background:rgba(15,12,28,0.5);
       border-radius:14px; padding:4px; border:1px solid var(--glassBorder);
-      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      
     }
     .tab {
       flex:1; padding:11px 14px; border-radius:10px; border:none;
@@ -497,7 +489,7 @@
       flex:1; padding:9px 14px; border-radius:8px; border:none;
       cursor:pointer; font-size:13px; font-weight:600;
       font-family:'Rajdhani',sans-serif; text-transform:uppercase;
-      transition:all 0.2s; background:transparent; color:var(--textSecondary);
+       background:transparent; color:var(--textSecondary);
       display:flex; align-items:center; justify-content:center; gap:6px;
     }
     .subtab.active { background:var(--purple); color:#fff; }
@@ -520,7 +512,7 @@
     .totals-card {
       background: linear-gradient(135deg, rgba(26,10,62,0.6), rgba(18,16,32,0.6));
       border: 1px solid rgba(124,58,237,0.2);
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      
     }
 
     /* GAME TAG */
@@ -537,7 +529,7 @@
     .assigned-row {
       display:flex; align-items:center; padding:12px 14px; background:rgba(18,16,32,0.85);
       border:1px solid var(--glassBorder); border-radius:12px; margin-bottom:6px;
-      transition: all 0.2s;
+      
     }
     .assigned-row:hover { border-color: rgba(124,58,237,0.4); }
 
@@ -559,7 +551,7 @@
       border-radius:12px; cursor:pointer; user-select:none; transition:all 0.3s;
       box-shadow: 0 0 20px rgba(124,58,237,0.15);
     }
-    .conv-toggle:hover { box-shadow: 0 0 30px rgba(124,58,237,0.3); transform: translateY(-1px); }
+    .conv-toggle:hover { box-shadow: 0 0 30px rgba(124,58,237,0.3);  }
     .conv-toggle:active { transform: translateY(0); }
     .conv-toggle .conv-label {
       font-family:'Orbitron',monospace; font-size:15px; font-weight:800; letter-spacing:1px;
@@ -595,9 +587,9 @@
       color:var(--textPrimary); font-size:16px; font-weight:700;
       cursor:pointer; display:flex; align-items:center; justify-content:center;
       gap:12px; transition:all 0.3s; font-family:'Rajdhani',sans-serif;
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      
     }
-    .google-btn:hover { border-color:var(--purpleLight); background:rgba(35,28,65,0.85); box-shadow:0 0 40px rgba(124,58,237,0.3), 0 0 80px rgba(6,182,212,0.12); transform:translateY(-1px); }
+    .google-btn:hover { border-color:var(--purpleLight); background:rgba(35,28,65,0.85); box-shadow:0 0 40px rgba(124,58,237,0.3), 0 0 80px rgba(6,182,212,0.12);  }
 
     /* LOADING */
     .loading-page {
@@ -612,7 +604,7 @@
     /* ACCOUNT DROPDOWN */
     .account-trigger {
       display:flex; align-items:center; gap:8px; cursor:pointer; padding:5px 10px;
-      border-radius:10px; border:1px solid var(--glassBorder); transition:all 0.2s;
+      border-radius:10px; border:1px solid var(--glassBorder); 
       background: rgba(20,16,40,0.4);
     }
     .account-trigger:hover { background:var(--glassHover); border-color:rgba(120,100,200,0.3); }
@@ -626,7 +618,7 @@
       background:rgba(16,13,30,0.9); border:1px solid var(--glassBorder);
       border-radius:14px; padding:8px; min-width:200px;
       box-shadow:0 12px 40px rgba(0,0,0,0.6); z-index:101;
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      
     }
     .account-menu-item {
       padding:8px 12px; cursor:pointer; border-radius:6px;
@@ -715,12 +707,10 @@
 
     .account-panel {
       position: fixed; top: 0; right: -320px; width: 310px; height: 100vh;
-      background: rgba(20,16,40,0.55); border-left: 1px solid rgba(120,100,200,0.2);
-      z-index: 151; transition: right 0.3s ease;
-      backdrop-filter: blur(16px) saturate(1.2);
-      -webkit-backdrop-filter: blur(16px) saturate(1.2);
+      background: #0f0c20; border-left: 1px solid rgba(120,100,200,0.3);
+      z-index: 151; transition: right 0.25s ease;
       display: flex; flex-direction: column; overflow-y: auto;
-      box-shadow: -4px 0 24px rgba(0,0,0,0.2);
+      box-shadow: -8px 0 32px rgba(0,0,0,0.6);
     }
     .account-panel.open { right: 0; }
     @media (max-width: 767px) {
@@ -831,8 +821,8 @@
       border-radius:18px; padding:18px; margin-bottom:14px; cursor:pointer;
       background:rgba(20,14,40,0.55);
       border:1px solid rgba(140,120,220,0.2);
-      backdrop-filter:blur(20px) saturate(1.4);
-      -webkit-backdrop-filter:blur(20px) saturate(1.4);
+      
+      -webkit-
       box-shadow:0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06);
       transition:transform 0.18s, box-shadow 0.18s, border-color 0.18s;
       position:relative; overflow:hidden;
@@ -842,7 +832,7 @@
       background:linear-gradient(135deg,rgba(255,255,255,0.04) 0%,transparent 60%);
       pointer-events:none;
     }
-    .emp-card:hover { transform:translateY(-2px); box-shadow:0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08); }
+    .emp-card:hover {  box-shadow:0 8px 32px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08); }
     .emp-card:active { transform:scale(0.98); }
     .emp-card.clr-0 { border-color:rgba(124,58,237,0.35); background:rgba(124,58,237,0.08); }
     .emp-card.clr-1 { border-color:rgba(6,182,212,0.35); background:rgba(6,182,212,0.07); }
@@ -878,19 +868,19 @@
       background:linear-gradient(135deg,#059669,#10b981); color:#fff; border:none;
       border-radius:14px; padding:15px 28px; font-family:'Orbitron',monospace;
       font-size:13px; font-weight:800; letter-spacing:1px; cursor:pointer;
-      box-shadow:0 4px 20px rgba(16,185,129,0.35); transition:all 0.2s;
+      box-shadow:0 4px 20px rgba(16,185,129,0.35); 
       width:100%; -webkit-tap-highlight-color:transparent;
     }
-    .shift-btn-in:hover { filter:brightness(1.08); transform:translateY(-1px); }
+    .shift-btn-in:hover { filter:brightness(1.08);  }
     .shift-btn-in:disabled { opacity:0.45; cursor:not-allowed; transform:none; }
     .shift-btn-out {
       background:linear-gradient(135deg,#b91c1c,#ef4444); color:#fff; border:none;
       border-radius:14px; padding:15px 28px; font-family:'Orbitron',monospace;
       font-size:13px; font-weight:800; letter-spacing:1px; cursor:pointer;
-      box-shadow:0 4px 20px rgba(239,68,68,0.35); transition:all 0.2s;
+      box-shadow:0 4px 20px rgba(239,68,68,0.35); 
       width:100%; -webkit-tap-highlight-color:transparent;
     }
-    .shift-btn-out:hover { filter:brightness(1.08); transform:translateY(-1px); }
+    .shift-btn-out:hover { filter:brightness(1.08);  }
     .emp-stat-grid {
       display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0;
     }
@@ -898,7 +888,7 @@
       position:relative; border-radius:14px; padding:14px 14px 16px;
       background:rgba(20,14,40,0.55);
       border:1px solid rgba(140,120,220,0.18);
-      backdrop-filter:blur(18px) saturate(1.3); -webkit-backdrop-filter:blur(18px) saturate(1.3);
+      
       box-shadow:0 4px 18px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
       overflow:hidden; cursor:default;
       transition:transform 0.18s, box-shadow 0.18s;
@@ -911,7 +901,7 @@
     .emp-stat::after {
       content:''; position:absolute; bottom:0; left:0; right:0; height:3px; border-radius:0 0 14px 14px;
     }
-    .emp-stat:hover { transform:translateY(-2px); box-shadow:0 8px 28px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07); }
+    .emp-stat:hover {  box-shadow:0 8px 28px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.07); }
     .emp-stat.clickable { cursor:pointer; }
     .emp-stat.sclr-0::after { background:linear-gradient(90deg,#7c3aed,#a78bfa); }
     .emp-stat.sclr-0 { border-color:rgba(124,58,237,0.28); }
@@ -984,7 +974,7 @@
       display:flex; gap:10px; align-items:flex-end; margin-bottom:16px;
       padding:12px 14px; border-radius:14px;
       background:rgba(18,14,38,0.45); border:1px solid rgba(140,120,220,0.12);
-      backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+       -webkit-
     }
     .analytics-date-range .input { font-size:12px; padding:8px 10px; }
     .analytics-summary {
@@ -994,7 +984,7 @@
     .analytics-card {
       border-radius:18px; padding:18px 16px; cursor:pointer;
       position:relative; overflow:hidden; border:none;
-      backdrop-filter:blur(14px) saturate(1.3); -webkit-backdrop-filter:blur(14px) saturate(1.3);
+      
       box-shadow:0 4px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12);
       transition:transform 0.22s ease, box-shadow 0.22s ease;
       -webkit-tap-highlight-color:transparent;
@@ -1033,7 +1023,7 @@
     .analytics-chart-wrap {
       background:rgba(16,12,34,0.5); border:1px solid rgba(130,110,210,0.12);
       border-radius:16px; padding:18px 14px; margin-bottom:14px;
-      backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+       -webkit-
     }
     .analytics-chart-wrap h4 {
       font-family:'Orbitron',monospace; font-size:11px; margin-bottom:14px;
@@ -1086,7 +1076,7 @@
     .company-settings-gear {
       display:inline-flex; align-items:center; gap:6px;
       padding:6px 12px; border-radius:10px;
-      cursor:pointer; transition:all 0.2s; flex-shrink:0;
+      cursor:pointer;  flex-shrink:0;
       font-family:'Orbitron',monospace; font-size:11px; font-weight:700;
       letter-spacing:0.5px; border:none;
     }
@@ -1319,12 +1309,17 @@
       globalDateTo: null,
       _restoreView: _persisted.view || null,
     };
+    var _persistTimer = null;
     function persistState() {
-      try { localStorage.setItem('gb_state', JSON.stringify({
-        view: state.view, selectedCompanyId: state.selectedCompanyId,
-        companyTab: state.companyTab, companyLastUsed: state.companyLastUsed,
-        analyticsAgg: state.analyticsAgg
-      })); } catch(e) {}
+      if (_persistTimer) clearTimeout(_persistTimer);
+      _persistTimer = setTimeout(function() {
+        _persistTimer = null;
+        try { localStorage.setItem('gb_state', JSON.stringify({
+          view: state.view, selectedCompanyId: state.selectedCompanyId,
+          companyTab: state.companyTab, companyLastUsed: state.companyLastUsed,
+          analyticsAgg: state.analyticsAgg
+        })); } catch(e) {}
+      }, 500); // debounce: only write localStorage 500ms after last call
     }
     function touchCompany(id) {
       state.companyLastUsed[id] = Date.now();
@@ -1391,8 +1386,9 @@
     // Tracked write helper for await-style writes (blocks but updates sync indicator)
     async function trackedWrite(promiseFn) {
       startWrite();
+      // Invalidate startup cache so next page load re-fetches fresh data
+      _startupCacheInvalidate();
       try {
-        // Add a 15-second timeout so mobile saves don't hang forever
         var _writePromise = promiseFn();
         var _timeoutPromise = new Promise(function(_, reject){
           setTimeout(function(){ reject(new Error('Save timed out — check your connection and try again.')); }, 15000);
@@ -1406,8 +1402,29 @@
     let _unsubs = []; // Firestore listener unsubscribers
     function stopListeners() { _unsubs.forEach(fn => fn()); _unsubs = []; }
 
+    // === PERFORMANCE: Debounce/schedule helpers ===
+    var _gbCacheWriteTimer = null;
+    function scheduleGbCacheWrite() {
+      if (_gbCacheWriteTimer) clearTimeout(_gbCacheWriteTimer);
+      _gbCacheWriteTimer = setTimeout(function() {
+        _gbCacheWriteTimer = null;
+        _startupCacheSave();
+      }, 2000);
+    }
+
+    var _cfSyncTimer = null;
+    function scheduleCfSync() {
+      if (_cfSyncTimer) clearTimeout(_cfSyncTimer);
+      _cfSyncTimer = setTimeout(function() {
+        _cfSyncTimer = null;
+        cfSyncBillsToTransactions();
+      }, 2000);
+    }
+
+    // Migration: only run once ever per session, not on every snapshot
+    var _migrationDoneSession = false;
+
     // One-time initial load (fast from cache)
-    // === PERFORMANCE: Cache helpers ===
     var _gbCache = {
       get: function(k) { try { var raw = localStorage.getItem('gb_'+dataOwnerUid()+'_'+k); if(!raw) return null; var d=JSON.parse(raw); return d; } catch(e){ return null; } },
       set: function(k,v) { try { localStorage.setItem('gb_'+dataOwnerUid()+'_'+k, JSON.stringify(v)); } catch(e){} },
@@ -1417,7 +1434,7 @@
     function showSaving() {
       if(_saveIndicator) return;
       _saveIndicator = document.createElement('div');
-      _saveIndicator.style.cssText = 'position:fixed;bottom:16px;right:16px;background:rgba(124,58,237,0.92);color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;z-index:99999;font-family:Rajdhani,sans-serif;animation:pulse 1.5s infinite;backdrop-filter:blur(8px)';
+      _saveIndicator.style.cssText = 'position:fixed;bottom:16px;right:16px;background:rgba(124,58,237,0.92);color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;z-index:99999;font-family:Rajdhani,sans-serif;animation:pulse 1.5s infinite';
       _saveIndicator.textContent = 'Saving…';
       document.body.appendChild(_saveIndicator);
     }
@@ -1433,46 +1450,90 @@
     }
     function queueSave(fn,onFail){ _saveQueue.push({fn:fn,onFail:onFail||null,retry:0}); flushSaves(); }
 
+    var _STARTUP_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+    function _startupCacheSave() {
+      try {
+        localStorage.setItem('gb_startup_'+dataOwnerUid(), JSON.stringify({
+          ts: Date.now(),
+          mg: state.masterGames,
+          bills: state.bills,
+          companies: state.companies
+        }));
+      } catch(e) {}
+    }
+
+    function _startupCacheLoad() {
+      try {
+        var raw = localStorage.getItem('gb_startup_'+dataOwnerUid());
+        if (!raw) return null;
+        var d = JSON.parse(raw);
+        if (!d || (Date.now() - d.ts) > _STARTUP_CACHE_TTL) return null;
+        return d;
+      } catch(e) { return null; }
+    }
+
+    function _startupCacheInvalidate() {
+      try { localStorage.removeItem('gb_startup_'+dataOwnerUid()); } catch(e) {}
+    }
+
     async function loadAllData(force) {
       if (!state.user) return;
-      // Cache-first: load cached data instantly, then fetch fresh in background
-      if(!force) {
+
+      // 1. Try fast localStorage cache first — zero Firestore reads
+      if (!force) {
+        var sc = _startupCacheLoad();
+        if (sc && sc.mg && sc.bills && sc.companies) {
+          state.masterGames = sc.mg;
+          state.bills       = sc.bills;
+          state.companies   = sc.companies;
+          rebuildBillIndex();
+          render();
+          return; // served fully from cache, no reads
+        }
+        // Legacy cache fallback
         var cached = _gbCache.get('data');
-        if(cached) {
+        if (cached && cached.mg && cached.bills && cached.companies) {
           state.masterGames = cached.mg || [];
-          state.bills = cached.bills || [];
-          state.companies = cached.companies || {};
-          return; // Use cache, fresh data comes via listeners
+          state.bills       = cached.bills || [];
+          state.companies   = cached.companies || {};
+          rebuildBillIndex();
+          render();
+          return;
         }
       }
+
+      // 2. Cache miss — fetch from Firestore (happens once per 10 min)
       try {
-        // Fetch companies first for fastest render
         const compSnap = await db.collection(userPath()+'/companies').get();
         const compBasic = {};
-        compSnap.docs.forEach(doc => { compBasic[doc.id] = { _id: doc.id, ...doc.data(), assignedGames:[], usernames:[] }; });
+        compSnap.docs.forEach(doc => {
+          compBasic[doc.id] = { _id: doc.id, ...doc.data(), assignedGames:[], usernames:[] };
+        });
         state.companies = compBasic;
-        // Fetch bills + games + subcollections in parallel (non-blocking)
+
+        // Bills: load last 200 only (reduces startup reads dramatically)
         const [mgSnap, billSnap] = await Promise.all([
           db.collection(userPath()+'/masterGames').get(),
-          db.collection(userPath()+'/bills').orderBy('date','desc').limit(100).get(),
+          db.collection(userPath()+'/bills').orderBy('date','desc').limit(200).get(),
         ]);
         state.masterGames = mgSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        state.bills = billSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        // Load subcollections after main data is ready
-        const compPromises = compSnap.docs.map(async doc => {
+        state.bills       = billSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+        // Subcollections in parallel
+        await Promise.all(compSnap.docs.map(async doc => {
           const [agSnap, unSnap] = await Promise.all([
             db.collection(userPath()+'/companies/'+doc.id+'/assignedGames').get(),
             db.collection(userPath()+'/companies/'+doc.id+'/usernames').get(),
           ]);
           state.companies[doc.id].assignedGames = agSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-          state.companies[doc.id].usernames = unSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        });
-        await Promise.all(compPromises);
-        // Cache for next load
+          state.companies[doc.id].usernames     = unSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        }));
+
+        rebuildBillIndex();
+        _startupCacheSave(); // cache for next 10 min
         _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
-      } catch (e) {
-        console.error('Load error:', e);
-      }
+      } catch(e) { console.error('Load error:', e); }
     }
 
     // Setup realtime listeners after initial load
@@ -1481,111 +1542,44 @@
       if (!state.user) return;
       const bp = userPath();
       // Listen to master games
-      _unsubs.push(db.collection(bp+'/masterGames').onSnapshot(snap => {
-        state.masterGames = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-      }));
+      // MASTER GAMES: No real-time listener — managed locally after writes.
+      // Each snapshot re-reads ALL master games. We update state.masterGames locally on save.
       // Listen to bills (latest 100)
-      _unsubs.push(db.collection(bp+'/bills').onSnapshot(snap => {
-        state.bills = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        
-        // Migrate old bills without reference numbers
-        state.bills.forEach(async (bill) => {
-          if (!bill.referenceNumber && bill.companyId) {
-            const company = state.companies[bill.companyId];
-            if (company && company.companyCode) {
-              try {
-                const refNum = await generateReferenceNumber(company.companyCode, bill.date);
-                await db.doc(bp+'/bills/'+bill._id).update({ 
-                  referenceNumber: refNum,
-                  companyCode: company.companyCode 
-                });
-              } catch(e) {
-                console.error('Error migrating reference number for bill', bill._id, e);
-              }
-            }
-          }
-        });
-        
-        _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
-        invalidateAnalyticsCache();
-        // Sync any newly loaded bills into CF transactions if CF is already loaded
-        if (_cfLoaded && state.empRole !== 'employee') cfSyncBillsToTransactions();
-        // Soft-refresh bill history without rebuilding entire page
-        if(state.view === 'company' && state.companyTab === 'billing') {
-          refreshBillHistory();
-        }
-      }));
+      // BILLS: No real-time listener — we manage state locally after writes.
+      // onSnapshot on bills re-reads ALL bills every time ANY bill changes = massive reads.
+      // Instead: one-time load at startup, then update state locally on every save/delete.
       // Listen to companies
-      let _companiesMigrationDone = false;
-      _unsubs.push(db.collection(bp+'/companies').onSnapshot(async snap => {
-        // First pass: update state with all current data
-        snap.docChanges().forEach(change => {
-          const id = change.doc.id;
-          const data = { _id: id, ...change.doc.data() };
-          if (change.type === 'removed') {
-            delete state.companies[id];
-          } else {
-            const existing = state.companies[id];
-            data.assignedGames = existing?.assignedGames || [];
-            data.usernames = existing?.usernames || [];
-            state.companies[id] = data;
-            setupCompanySubListeners(id);
-          }
-        });
-        // Re-render company list immediately when data arrives from Firestore
-        if (state.view === 'companies') render();
-        
-        // Second pass: migrate company codes sequentially (only once on first snapshot)
-        if (!_companiesMigrationDone) {
-          _companiesMigrationDone = true;
-          const companiesNeedingCodes = Object.entries(state.companies)
-            .filter(([id, c]) => !c.companyCode)
-            .map(([id, c]) => id);
-          
-          if (companiesNeedingCodes.length > 0) {
-            // Fetch ALL companies from Firestore to get a complete set of existing codes
-            // This prevents duplicate codes when state is partially loaded
-            try {
-              const allCompSnap = await db.collection(bp+'/companies').get();
-              const firestoreCodes = new Set(
-                allCompSnap.docs.map(d => d.data().companyCode).filter(Boolean)
-              );
-              // Also include codes already assigned in state
-              Object.values(state.companies).forEach(c => { if (c.companyCode) firestoreCodes.add(c.companyCode); });
+      // COMPANIES: No real-time listener — managed locally after writes.
+      // companies.onSnapshot re-reads ALL companies on every change.
+      // Instead: loaded once at startup, updated locally on add/edit/delete.
 
-              for (const id of companiesNeedingCodes) {
-                try {
-                  const newCode = await generateCompanyCodeFromSet(firestoreCodes);
-                  firestoreCodes.add(newCode); // reserve immediately for next iteration
-                  state.companies[id].companyCode = newCode;
-                  await db.doc(bp+'/companies/'+id).update({ companyCode: newCode });
-                } catch(e) {
-                  console.error('Error generating company code for', id, e);
-                }
-              }
-            } catch(e) {
-              console.error('Error fetching companies for code migration', e);
-            }
-          }
+      // Run migration for companies missing codes — only once at startup using already-loaded data
+      var _companiesMigrationDone = false;
+      (async function migrateCompanyCodes() {
+        if (_companiesMigrationDone) return;
+        _companiesMigrationDone = true;
+        var companiesNeedingCodes = Object.entries(state.companies)
+          .filter(function(e){ return !e[1].companyCode; }).map(function(e){ return e[0]; });
+        if (companiesNeedingCodes.length === 0) return;
+        var firestoreCodes = new Set(Object.values(state.companies).map(function(c){ return c.companyCode; }).filter(Boolean));
+        for (var _mci = 0; _mci < companiesNeedingCodes.length; _mci++) {
+          var _mid = companiesNeedingCodes[_mci];
+          try {
+            var newCode = await generateCompanyCodeFromSet(firestoreCodes);
+            firestoreCodes.add(newCode);
+            state.companies[_mid].companyCode = newCode;
+            await db.doc(bp+'/companies/'+_mid).update({ companyCode: newCode });
+          } catch(e) { /* silent */ }
         }
-      }));
+      })();
     }
 
     const _compSubs = {};
     function setupCompanySubListeners(compId) {
-      if (_compSubs[compId]) return; // Already listening
-      const bp = userPath();
-      const unsub1 = db.collection(bp+'/companies/'+compId+'/assignedGames').onSnapshot(snap => {
-        if (state.companies[compId]) {
-          state.companies[compId].assignedGames = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        }
-      });
-      const unsub2 = db.collection(bp+'/companies/'+compId+'/usernames').onSnapshot(snap => {
-        if (state.companies[compId]) {
-          state.companies[compId].usernames = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        }
-      });
-      _compSubs[compId] = () => { unsub1(); unsub2(); };
+      // Sub-collections loaded once at startup in loadInitialData — no real-time listeners.
+      // Each onSnapshot re-reads ALL docs for every company on every change = huge read cost.
+      if (_compSubs[compId]) return;
+      _compSubs[compId] = () => {};
       _unsubs.push(_compSubs[compId]);
     }
 
@@ -1740,7 +1734,7 @@
       var c = state.companies[state.selectedCompanyId];
       if(!c) return;
       // Re-render just the bill history HTML using same logic as renderBilling
-      var companyBills = state.bills.filter(function(b){return b.companyId === c._id}).sort(function(a,b){return toLocalDate(b.date)-toLocalDate(a.date)});
+      var companyBills = getCompanyBills(c._id).sort(function(a,b){return toLocalDate(b.date)-toLocalDate(a.date)});
       if(companyBills.length === 0) {
         histEl.innerHTML = '<div style="padding:16px;text-align:center;color:var(--textMuted);font-size:13px">No bills yet</div>';
       } else {
@@ -1859,6 +1853,19 @@
           if(bill) showBillEditModal(c, bill);
         };
       });
+    }
+
+    var _renderPending = false;
+    var _renderTimer = null;
+    function scheduleRender() {
+      if (_renderPending) return;
+      _renderPending = true;
+      if (_renderTimer) clearTimeout(_renderTimer);
+      _renderTimer = setTimeout(function() {
+        _renderPending = false;
+        _renderTimer = null;
+        render();
+      }, 40); // 40ms debounce — imperceptible but batches rapid Firestore events
     }
 
     function render() {
@@ -2270,7 +2277,7 @@
                 <div id="usernameHint" style="font-size:10px;color:var(--textMuted);margin-top:4px">3–20 chars · must include a letter · one underscore max</div>
               </div>
             </div>
-            <div id="panelSubCard" style="padding:14px 16px;border-radius:10px;background:linear-gradient(135deg,rgba(52,211,153,0.06),rgba(124,58,237,0.06));border:1px solid rgba(52,211,153,0.15);margin-bottom:12px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+            <div id="panelSubCard" style="padding:14px 16px;border-radius:10px;background:linear-gradient(135deg,rgba(52,211,153,0.06),rgba(124,58,237,0.06));border:1px solid rgba(52,211,153,0.15);margin-bottom:12px;">
               <div style="font-size:10px;color:#c4b5fd;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px">Subscription</div>
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
                 <div style="font-size:16px;font-weight:700" id="panelSubStatus">Active</div>
@@ -2285,7 +2292,7 @@
                 <span id="panelSubExpiryLabel"></span>
               </div>
             </div>
-            <div id="panelQuickSummary" style="padding:14px 16px;border-radius:10px;background:linear-gradient(135deg,rgba(124,58,237,0.08),rgba(34,211,238,0.06));border:1px solid rgba(124,58,237,0.15);margin-bottom:12px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)">
+            <div id="panelQuickSummary" style="padding:14px 16px;border-radius:10px;background:linear-gradient(135deg,rgba(124,58,237,0.08),rgba(34,211,238,0.06));border:1px solid rgba(124,58,237,0.15);margin-bottom:12px;">
               <div style="font-size:10px;color:#c4b5fd;text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:8px">Quick Summary</div>
               <div style="display:flex;gap:12px">
                 <div style="flex:1">
@@ -2298,16 +2305,16 @@
                 </div>
               </div>
             </div>
-            <div id="menuGlobalAnalytics" style="display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:14px;background:linear-gradient(135deg,rgba(124,58,237,0.13),rgba(6,182,212,0.07));border:1px solid rgba(124,58,237,0.28);box-shadow:0 2px 16px rgba(124,58,237,0.12),inset 0 1px 0 rgba(255,255,255,0.06);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);margin-bottom:8px;cursor:pointer;transition:transform 0.17s ease,box-shadow 0.17s ease,border-color 0.17s ease;width:auto;box-sizing:border-box;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 24px rgba(124,58,237,0.25),inset 0 1px 0 rgba(255,255,255,0.09)';this.style.borderColor='rgba(167,139,250,0.5)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 16px rgba(124,58,237,0.12),inset 0 1px 0 rgba(255,255,255,0.06)';this.style.borderColor='rgba(124,58,237,0.28)'"><div style="width:40px;height:40px;min-width:40px;flex-shrink:0;border-radius:11px;background:linear-gradient(135deg,#7c3aed,#0891b2);box-shadow:0 3px 14px rgba(124,58,237,0.38);display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg></div><div style="flex:1;min-width:0;overflow:hidden;"><div style="font-family:'Orbitron',monospace;font-weight:800;font-size:13px;color:#ede9fe;letter-spacing:0.7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;">ANALYTICS</div><div style="font-size:10px;color:rgba(160,160,180,0.85);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;">Global overview &amp; insights</div></div><div style="flex-shrink:0;min-width:15px;display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(196,181,253,0.6)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,18 15,12 9,6"/></svg></div></div>
+            <div id="menuGlobalAnalytics" style="display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:14px;background:linear-gradient(135deg,rgba(124,58,237,0.13),rgba(6,182,212,0.07));border:1px solid rgba(124,58,237,0.28);box-shadow:0 2px 16px rgba(124,58,237,0.12),inset 0 1px 0 rgba(255,255,255,0.06);margin-bottom:8px;cursor:pointer;transition:transform 0.17s ease,box-shadow 0.17s ease,border-color 0.17s ease;width:auto;box-sizing:border-box;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 24px rgba(124,58,237,0.25),inset 0 1px 0 rgba(255,255,255,0.09)';this.style.borderColor='rgba(167,139,250,0.5)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 16px rgba(124,58,237,0.12),inset 0 1px 0 rgba(255,255,255,0.06)';this.style.borderColor='rgba(124,58,237,0.28)'"><div style="width:40px;height:40px;min-width:40px;flex-shrink:0;border-radius:11px;background:linear-gradient(135deg,#7c3aed,#0891b2);box-shadow:0 3px 14px rgba(124,58,237,0.38);display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg></div><div style="flex:1;min-width:0;overflow:hidden;"><div style="font-family:'Orbitron',monospace;font-weight:800;font-size:13px;color:#ede9fe;letter-spacing:0.7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;">ANALYTICS</div><div style="font-size:10px;color:rgba(160,160,180,0.85);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;">Global overview &amp; insights</div></div><div style="flex-shrink:0;min-width:15px;display:flex;align-items:center;justify-content:center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(196,181,253,0.6)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,18 15,12 9,6"/></svg></div></div>
             <div style="height:1px;background:linear-gradient(to right,transparent,rgba(167,139,250,0.2),transparent);margin:2px 0 8px"></div>
             <!-- CASH FLOW MANAGEMENT MENU BUTTON — manager only -->
-            ${state.empRole !== 'employee' ? `<div id="menuCashFlow" style="display:flex;align-items:center;gap:10px;padding:11px 12px 11px 14px;border-radius:14px;background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(6,182,212,0.07));border:1px solid rgba(16,185,129,0.28);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 12px rgba(16,185,129,0.1),inset 0 1px 0 rgba(255,255,255,0.05);margin-bottom:8px;cursor:pointer;transition:transform 0.17s ease,box-shadow 0.17s ease;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 18px rgba(16,185,129,0.2),inset 0 1px 0 rgba(255,255,255,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(16,185,129,0.1),inset 0 1px 0 rgba(255,255,255,0.05)'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg><span style="font-weight:700;color:var(--textPrimary);font-size:13px;flex:1">Cash Flow Management</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(52,211,153,0.5)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,18 15,12 9,6"/></svg></div>` : ''}
-            <div id="menuManageEmployees" style="display:flex;align-items:center;gap:10px;padding:11px 12px 11px 14px;border-radius:14px;background:linear-gradient(135deg,rgba(124,58,237,0.1),rgba(192,132,252,0.06));border:1px solid rgba(124,58,237,0.25);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 12px rgba(124,58,237,0.1),inset 0 1px 0 rgba(255,255,255,0.05);margin-bottom:8px;cursor:pointer;transition:transform 0.17s ease,box-shadow 0.17s ease;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 18px rgba(124,58,237,0.18),inset 0 1px 0 rgba(255,255,255,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(124,58,237,0.1),inset 0 1px 0 rgba(255,255,255,0.05)'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span style="font-weight:700;color:var(--textPrimary);font-size:13px;flex:1" id="menuManageEmpLabel">${state.empRole === 'employee' ? 'Manage Employment' : 'Manage Cashiers'}</span></div>
+            ${state.empRole !== 'employee' ? `<div id="menuCashFlow" style="display:flex;align-items:center;gap:10px;padding:11px 12px 11px 14px;border-radius:14px;background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(6,182,212,0.07));border:1px solid rgba(16,185,129,0.28);box-shadow:0 2px 12px rgba(16,185,129,0.1),inset 0 1px 0 rgba(255,255,255,0.05);margin-bottom:8px;cursor:pointer;transition:transform 0.17s ease,box-shadow 0.17s ease;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 18px rgba(16,185,129,0.2),inset 0 1px 0 rgba(255,255,255,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(16,185,129,0.1),inset 0 1px 0 rgba(255,255,255,0.05)'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg><span style="font-weight:700;color:var(--textPrimary);font-size:13px;flex:1">Cash Flow Management</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(52,211,153,0.5)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9,18 15,12 9,6"/></svg></div>` : ''}
+            <div id="menuManageEmployees" style="display:flex;align-items:center;gap:10px;padding:11px 12px 11px 14px;border-radius:14px;background:linear-gradient(135deg,rgba(124,58,237,0.1),rgba(192,132,252,0.06));border:1px solid rgba(124,58,237,0.25);box-shadow:0 2px 12px rgba(124,58,237,0.1),inset 0 1px 0 rgba(255,255,255,0.05);margin-bottom:8px;cursor:pointer;transition:transform 0.17s ease,box-shadow 0.17s ease;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 18px rgba(124,58,237,0.18),inset 0 1px 0 rgba(255,255,255,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 12px rgba(124,58,237,0.1),inset 0 1px 0 rgba(255,255,255,0.05)'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c084fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span style="font-weight:700;color:var(--textPrimary);font-size:13px;flex:1" id="menuManageEmpLabel">${state.empRole === 'employee' ? 'Manage Employment' : 'Manage Cashiers'}</span></div>
             <div class="account-panel-item" id="menuGenReport"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Generate Report</div>
             <!-- Cashier shift controls — shown only for cashier accounts -->
             <div id="menuShiftSection" style="display:none">
               <div style="height:1px;background:linear-gradient(to right,transparent,rgba(6,182,212,0.3),transparent);margin:8px 0 10px"></div>
-              <div id="menuShiftCard" style="border-radius:14px;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.3);border-left:4px solid #0891b2;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);padding:14px 14px 12px 14px;margin-bottom:8px;box-shadow:0 4px 18px rgba(6,182,212,0.15),inset 0 1px 0 rgba(255,255,255,0.06);transition:transform 0.18s,box-shadow 0.18s">
+              <div id="menuShiftCard" style="border-radius:14px;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.3);border-left:4px solid #0891b2;padding:14px 14px 12px 14px;margin-bottom:8px;box-shadow:0 4px 18px rgba(6,182,212,0.15),inset 0 1px 0 rgba(255,255,255,0.06);transition:transform 0.18s,box-shadow 0.18s">
                 <div style="font-size:12px;color:#67e8f9;text-transform:uppercase;letter-spacing:1.2px;font-weight:800;margin-bottom:8px">MY SHIFT</div>
                 <div id="menuShiftStatus" style="font-size:13px;color:rgba(255,255,255,0.8);font-weight:600;margin-bottom:6px">Loading…</div>
                 <div id="menuShiftTimer" style="font-family:'Orbitron',monospace;font-size:22px;font-weight:900;color:#fff;display:none;letter-spacing:2px;text-shadow:0 2px 10px rgba(0,0,0,0.25);line-height:1.1;margin-bottom:4px">00:00:00</div>
@@ -3312,7 +3319,11 @@
     function bindMasterGamesModal() {
       $('#closeMasterGames').onclick = () => { state.masterGamesModalOpen = false; $('#masterGamesModal')?.remove(); };
       $('#masterGamesModal').onclick = (e) => { if (e.target.id === 'masterGamesModal') { state.masterGamesModalOpen = false; e.target.remove(); } };
-      $('#mgSearch').oninput = () => { renderMasterGamesList(); bindMasterGameListEvents(); };
+      var _mgSearchTimer = null;
+      $('#mgSearch').oninput = () => {
+        if (_mgSearchTimer) clearTimeout(_mgSearchTimer);
+        _mgSearchTimer = setTimeout(() => { renderMasterGamesList(); bindMasterGameListEvents(); }, 120);
+      };
 
       // Inject ordered points date filter row above mgList (only show for managers)
       const _mgListEl = $('#mgList');
@@ -4890,6 +4901,21 @@
       }
     }
 
+    // Bills indexed by companyId for O(1) access — rebuilt whenever bills change
+    var _billsByCompany = {};
+    function rebuildBillIndex() {
+      _billsByCompany = {};
+      for (var _bi = 0; _bi < state.bills.length; _bi++) {
+        var _b = state.bills[_bi];
+        if (!_billsByCompany[_b.companyId]) _billsByCompany[_b.companyId] = [];
+        _billsByCompany[_b.companyId].push(_b);
+      }
+    }
+
+    function getCompanyBills(companyId) {
+      return _billsByCompany[companyId] || [];
+    }
+
     // ============================================================
     // BILLING
     // ============================================================
@@ -4898,7 +4924,7 @@
       const items = state.billItems;
       const assignedGames = c.assignedGames || [];
       const usernames = c.usernames || [];
-      const companyBills = state.bills.filter(b => b.companyId === c._id).sort((a,b) => toLocalDate(b.date)-toLocalDate(a.date));
+      const companyBills = getCompanyBills(c._id).slice().sort((a,b) => toLocalDate(b.date)-toLocalDate(a.date));
       const _histToday = (function(){var n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')})();
       const _histFirstOfMonth = _histToday.slice(0,8) + '01';
 
@@ -5259,7 +5285,7 @@
       var cash=state.paymentStatus==='received'?gt:state.paymentStatus==='partial'?(parseFloat(state.partialAmount)||0):0;
       var s=calcSettlement(gt,cash,cr,applyCredit);
       // Calculate net available credit (after unpaid bills)
-      var compBills = state.bills.filter(function(b){return b.companyId === c._id});
+      var compBills = getCompanyBills(c._id);
       var totalUnpaid = 0;
       compBills.forEach(function(b){
         var exPay = (b.extraPayments||[]).reduce(function(s,p){return s+(p.amount||0)},0);
@@ -5884,7 +5910,7 @@
           //   credit pool consumed  = creditApplied on any remaining bill
           // isGeneral entries on real bills are already reflected in partialAmount — do NOT add them.
           try {
-            var remainingCompBills = state.bills.filter(function(b){ return b.companyId === c._id; });
+            var remainingCompBills = getCompanyBills(c._id);
             var newCreditBal = 0;
             remainingCompBills.forEach(function(b){
               var _isHolder = (b.totalDollars||0) === 0 && (b.totalPoints||0) === 0;
@@ -6760,7 +6786,7 @@
       if (typeof c.creditBalance === 'number') return Math.max(0, c.creditBalance);
       // Fallback: derive from bills (for legacy data)
       var totalExtra = 0, totalConsumed = 0;
-      var compBills = state.bills.filter(function(b){ return b.companyId === c._id; });
+      var compBills = getCompanyBills(c._id);
       for (var i = 0; i < compBills.length; i++) {
         var bill = compBills[i];
         var eps = bill.extraPayments || [];
@@ -7333,13 +7359,12 @@
     var _analyticsDateFrom = null;
     var _analyticsDateTo = null;
     var _chartInstances = {};
-    function invalidateAnalyticsCache() { _analyticsCache = {}; _analyticsMutVersion++; }
+    function invalidateAnalyticsCache() { _analyticsCache = {}; _analyticsMutVersion++; _cfSummaryCache = {}; _globalDataCache = {}; }
 
     function computeAnalyticsData(c, fromDate, toDate) {
       var key = c._id + '_' + state.bills.length + '_' + _analyticsMutVersion + '_' + (fromDate||0) + '_' + (toDate||0);
       if (_analyticsCache[key]) return _analyticsCache[key];
-      var compBills = state.bills.filter(function(b) {
-        if (b.companyId !== c._id) return false;
+      var compBills = getCompanyBills(c._id).filter(function(b) {
         if (fromDate || toDate) {
           var bd = billToDate(b.date);
           if (isNaN(bd.getTime())) return true;
@@ -7425,7 +7450,6 @@
       var dRd=dLab.map(function(k){return aggMap[k].rd});
       var gNm=Object.keys(gMap).sort(function(a,b){return gMap[b].rev-gMap[a].rev});
       var gRv=gNm.map(function(g){return +gMap[g].rev.toFixed(2)});
-      console.log('[Analytics] loaded:'+tLP+' redeemed:'+tRP+' recv:$'+tRec.toFixed(2)+' bal:$'+tBal.toFixed(2)+' bills:'+compBills.length);
       // Credit balance: use getCompanyCreditBalance as single source of truth
       var _trueCreditBal = getCompanyCreditBalance(c);
       // tBal = total outstanding across all bills in range
@@ -7504,7 +7528,7 @@
         +'<div class="analytics-card ac-balance" data-card="balance" style="background:'+bG+'"><div class="ac-label">'+(bV<0?'CREDIT BALANCE':'OUTSTANDING BALANCE')+'</div><div class="'+acV(bS)+'">'+bS+'</div><div class="ac-sub">'+bSub+'</div></div>';
       var ownerCards = '<div class="analytics-card ac-profit" data-card="profit"><div class="ac-label">PROFIT / LOSS</div><div class="'+acV(plS+'$'+Math.abs(d.totalProfit).toFixed(2))+'" style="color:'+plC+'">'+plS+'$'+d.totalProfit.toFixed(2)+'</div><div class="ac-sub">Cost: $'+d.totalCost.toFixed(2)+'</div></div>'
         +'<div class="analytics-card ac-report" data-card="report"><div class="ac-label">GENERATE REPORT</div><div class="ac-value" style="font-size:clamp(12px,3vw,15px)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>EXPORT CSV</div><div class="ac-sub">All report types</div></div>';
-      var charts = '<div class="analytics-chart-wrap"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h4 style="margin:0">REVENUE & PROFIT TREND</h4><div id="compAggToggle" style="display:flex;gap:2px;background:rgba(15,12,28,0.5);border-radius:8px;padding:3px;border:1px solid var(--glassBorder);backdrop-filter:blur(10px)"><button class="btn btn-sm ca-agg" data-agg="D" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;'+(state.analyticsAgg==='D'?'background:var(--cyan);color:#000':'')+'">D</button><button class="btn btn-sm ca-agg" data-agg="W" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;'+(state.analyticsAgg==='W'?'background:var(--cyan);color:#000':'')+'">W</button><button class="btn btn-sm ca-agg" data-agg="M" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;'+(state.analyticsAgg==='M'?'background:var(--cyan);color:#000':'')+'">M</button></div></div><div style="position:relative;height:250px"><canvas id="analyticsLineChart"></canvas></div></div>'
+      var charts = '<div class="analytics-chart-wrap"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h4 style="margin:0">REVENUE & PROFIT TREND</h4><div id="compAggToggle" style="display:flex;gap:2px;background:rgba(15,12,28,0.5);border-radius:8px;padding:3px;border:1px solid var(--glassBorder);"><button class="btn btn-sm ca-agg" data-agg="D" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;'+(state.analyticsAgg==='D'?'background:var(--cyan);color:#000':'')+'">D</button><button class="btn btn-sm ca-agg" data-agg="W" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;'+(state.analyticsAgg==='W'?'background:var(--cyan);color:#000':'')+'">W</button><button class="btn btn-sm ca-agg" data-agg="M" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;'+(state.analyticsAgg==='M'?'background:var(--cyan);color:#000':'')+'">M</button></div></div><div style="position:relative;height:250px"><canvas id="analyticsLineChart"></canvas></div></div>'
         +'<div class="analytics-charts-grid"><div class="analytics-chart-wrap" style="margin-bottom:0"><h4>REVENUE BY GAME</h4><div style="position:relative;height:220px"><canvas id="analyticsBarChart"></canvas></div></div><div class="analytics-chart-wrap" style="margin-bottom:0"><h4>PROFIT BY GAME</h4><div style="position:relative;height:220px"><canvas id="analyticsPieChart"></canvas></div></div></div>'
         +renderTopUsers(d);
       return '<div class="analytics-container"><div class="analytics-date-range"><div style="flex:1;min-width:0"><span class="label" style="font-size:9px;margin-bottom:3px">FROM</span><input class="input" type="date" id="analyticsFrom" value="'+_analyticsDateFrom+'"/></div><div style="flex:1;min-width:0"><span class="label" style="font-size:9px;margin-bottom:3px">TO</span><input class="input" type="date" id="analyticsTo" value="'+_analyticsDateTo+'"/></div><button class="btn btn-purple btn-sm" id="analyticsApplyRange" style="align-self:flex-end">Apply</button></div><div class="analytics-summary">'
@@ -7692,7 +7716,7 @@
         var displayCredit = currentCredit > 0 ? currentCredit : Math.abs(d.totalBalance);
         if (isCredit) {
           title = 'CREDIT BALANCE LEDGER';
-          var compBillsLedger = state.bills.filter(function(b){ return b.companyId === c._id; })
+          var compBillsLedger = getCompanyBills(c._id)
             .sort(function(a,b2){ return toLocalDate(a.date)-toLocalDate(b2.date); });
           var ledgerEntries = [];
           compBillsLedger.forEach(function(b) {
@@ -8053,7 +8077,7 @@
           c.creditBalance=0;
           // IMPORTANT: Remove all isCredit and isGeneral extraPayments from this company's bills
           // so they don't ghost-reappear next time a new credit entry is added.
-          var _compBills = state.bills.filter(function(b){ return b.companyId === c._id; });
+          var _compBills = getCompanyBills(c._id);
           for(var _ci=0; _ci<_compBills.length; _ci++){
             var _cb = _compBills[_ci];
             var _eps = (_cb.extraPayments||[]);
@@ -8146,7 +8170,7 @@
           if(bid==='__general__'){
             var payDate = dt || localDateStr();
             // Get ALL unpaid bills for this company (not just in date range), oldest first
-            var allCompBills = state.bills.filter(function(b){ return b.companyId===c._id; })
+            var allCompBills = getCompanyBills(c._id)
               .sort(function(a,b){ return toLocalDate(a.date)-toLocalDate(b.date); });
             var unpaidBills = allCompBills.filter(function(b){ return (b.balanceDue||0) > 0.01; });
 
@@ -8247,7 +8271,7 @@
               billId:'', note:'Bonus ('+_bonusPct+'% via '+_pmBonusName+') – '+(c.name||'')
             };
             db.collection(cfPath('transactions')).add(_bonusTx).then(function(ref2){
-              cfTransactions.push(Object.assign({id:ref2.id},_bonusTx));
+              cfTransactions.push(Object.assign({id:ref2.id},_bonusTx)); cfPersist();
             }).catch(function(){});
           }
           invalidateAnalyticsCache();
@@ -8317,7 +8341,7 @@
         gRv += _compData ? (_compData.totalReceived || 0) : 0;
         // Outstanding: sum balanceDue across all this company's bills
         var compDue = 0;
-        state.bills.filter(function(b){ return b.companyId===cc._id; }).forEach(function(b){ compDue += Math.max(0, b.balanceDue||0); });
+        getCompanyBills(cc._id).forEach(function(b){ compDue += Math.max(0, b.balanceDue||0); });
         // Credit: single source of truth
         var compCredit = getCompanyCreditBalance(cc);
         // Net: credit offsets outstanding
@@ -8439,7 +8463,10 @@
     // ============================================================
     // GLOBAL ANALYTICS - Full Page View
     // ============================================================
+    var _globalDataCache = {};
     function computeGlobalData(fromDate, toDate) {
+      var _gdKey = (fromDate ? fromDate.getTime() : '0') + '|' + (toDate ? toDate.getTime() : '0') + '|' + _analyticsMutVersion + '|' + state.bills.length;
+      if (_globalDataCache[_gdKey]) return _globalDataCache[_gdKey];
       var companies = Object.values(state.companies), allBills = state.bills;
       var filtered = allBills;
       if (fromDate || toDate) {
@@ -8509,7 +8536,7 @@
       companies.forEach(function(cc) {
         var cn2 = cc.name || 'Unknown';
         var compDue = 0;
-        state.bills.filter(function(b){ return b.companyId===cc._id; }).forEach(function(b){ compDue += Math.max(0, b.balanceDue||0); });
+        getCompanyBills(cc._id).forEach(function(b){ compDue += Math.max(0, b.balanceDue||0); });
         var compCredit = getCompanyCreditBalance(cc);
         var netDue = Math.max(0, compDue - compCredit);
         var netCredit = Math.max(0, compCredit - compDue);
@@ -8518,7 +8545,9 @@
         if (cM[cn2]) { cM[cn2].due = netDue; cM[cn2].credit = netCredit; }
       });
       var gBalNet = _globalOutstandingTotal - _globalCreditTotal;
-      return {gL:gL,gR:gR,gRv:gRv,gBal:gBalNet,gCredit:_globalCreditTotal,gOutstanding:_globalOutstandingTotal,gPr:gPr,gCost:gCost,tC:tC,tG:tG,tU:tU,dLab:dLab,dRev:dRev,dPr:dPr,dPts:dPts,bills:filtered.length,totalDol:filtered.reduce(function(s,b){return s+(b.totalDollars||0)},0)};
+      var _gdResult = {gL:gL,gR:gR,gRv:gRv,gBal:gBalNet,gCredit:_globalCreditTotal,gOutstanding:_globalOutstandingTotal,gPr:gPr,gCost:gCost,tC:tC,tG:tG,tU:tU,dLab:dLab,dRev:dRev,dPr:dPr,dPts:dPts,bills:filtered.length,totalDol:filtered.reduce(function(s,b){return s+(b.totalDollars||0)},0)};
+      _globalDataCache[_gdKey] = _gdResult;
+      return _gdResult;
     }
 
     // Compute operating expenses from salary data for the given date range
@@ -8654,8 +8683,8 @@
         +'<div class="analytics-card" data-gcard="cost" style="background:linear-gradient(135deg,#78350f,#92400e,#b45309)"><div class="ac-label">TOTAL COST</div><div class="'+acV('$'+d.gCost.toFixed(2))+'">$'+d.gCost.toFixed(2)+'</div><div class="ac-sub">All games combined</div></div>'
         +(state.empRole!=='employee'?'<div class="analytics-card" data-gcard="opex" style="background:linear-gradient(135deg,rgba(219,39,119,0.85),rgba(236,72,153,0.7));cursor:pointer;border:1px solid rgba(236,72,153,0.4);box-shadow:0 4px 20px rgba(236,72,153,0.15)"><div class="ac-label">OPERATING EXPENSES</div><div class="'+acV('$'+opExTotal.toFixed(2))+'" id="gaOpExVal">$'+opExTotal.toFixed(2)+'</div><div class="ac-sub" id="gaOpExSub">'+(opEx.loaded?'Paid: $'+opEx.paid.toFixed(2)+' · To Pay: $'+opEx.unpaid.toFixed(2):'Loading…')+'</div></div>':'')
         +'</div>'
-        +'<div class="analytics-chart-wrap"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h4 style="margin:0">TREND</h4><div style="display:flex;gap:2px;background:rgba(15,12,28,0.5);border-radius:8px;padding:3px;border:1px solid var(--glassBorder);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)"><button class="btn btn-sm ga-agg '+(agg==='D'?'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;background:var(--cyan);color:#000':'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace')+'" data-agg="D">D</button><button class="btn btn-sm ga-agg '+(agg==='W'?'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;background:var(--cyan);color:#000':'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace')+'" data-agg="W">W</button><button class="btn btn-sm ga-agg '+(agg==='M'?'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;background:var(--cyan);color:#000':'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace')+'" data-agg="M">M</button></div></div><div style="position:relative;height:260px;overflow-x:auto"><div style="min-width:'+(Math.max(d.dLab.length*40,300))+'px;height:100%"><canvas id="gaLineChart"></canvas></div></div></div>'
-        +'<div style="margin-bottom:14px"><div style="display:flex;gap:2px;background:rgba(15,12,28,0.5);border-radius:8px;padding:3px;border:1px solid var(--glassBorder);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);margin-bottom:12px"><button class="btn btn-sm ga-section btn-cyan" data-sec="companies" style="flex:1;padding:6px;font-size:11px;border-radius:6px">Companies</button><button class="btn btn-sm ga-section btn-outline" data-sec="games" style="flex:1;padding:6px;font-size:11px;border-radius:6px">Games</button><button class="btn btn-sm ga-section btn-outline" data-sec="users" style="flex:1;padding:6px;font-size:11px;border-radius:6px">Top Users</button></div><input class="input" id="gaRankSearch" placeholder="Search companies..." style="font-size:11px;padding:7px 12px;margin-bottom:8px" /><div id="gaRankSection" style="max-height:400px;overflow-y:auto"></div></div>'
+        +'<div class="analytics-chart-wrap"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h4 style="margin:0">TREND</h4><div style="display:flex;gap:2px;background:rgba(15,12,28,0.5);border-radius:8px;padding:3px;border:1px solid var(--glassBorder);-webkit-"><button class="btn btn-sm ga-agg '+(agg==='D'?'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;background:var(--cyan);color:#000':'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace')+'" data-agg="D">D</button><button class="btn btn-sm ga-agg '+(agg==='W'?'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;background:var(--cyan);color:#000':'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace')+'" data-agg="W">W</button><button class="btn btn-sm ga-agg '+(agg==='M'?'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace;background:var(--cyan);color:#000':'" style="padding:5px 12px;font-size:10px;border-radius:6px;font-family:Orbitron,monospace')+'" data-agg="M">M</button></div></div><div style="position:relative;height:260px;overflow-x:auto"><div style="min-width:'+(Math.max(d.dLab.length*40,300))+'px;height:100%"><canvas id="gaLineChart"></canvas></div></div></div>'
+        +'<div style="margin-bottom:14px"><div style="display:flex;gap:2px;background:rgba(15,12,28,0.5);border-radius:8px;padding:3px;border:1px solid var(--glassBorder);margin-bottom:12px"><button class="btn btn-sm ga-section btn-cyan" data-sec="companies" style="flex:1;padding:6px;font-size:11px;border-radius:6px">Companies</button><button class="btn btn-sm ga-section btn-outline" data-sec="games" style="flex:1;padding:6px;font-size:11px;border-radius:6px">Games</button><button class="btn btn-sm ga-section btn-outline" data-sec="users" style="flex:1;padding:6px;font-size:11px;border-radius:6px">Top Users</button></div><input class="input" id="gaRankSearch" placeholder="Search companies..." style="font-size:11px;padding:7px 12px;margin-bottom:8px" /><div id="gaRankSection" style="max-height:400px;overflow-y:auto"></div></div>'
         +'<div class="analytics-charts-grid"><div class="analytics-chart-wrap" style="margin-bottom:0"><h4>REVENUE BY GAME</h4><div style="position:relative;height:240px"><canvas id="gaBarChart"></canvas></div></div><div class="analytics-chart-wrap" style="margin-bottom:0"><h4>PROFIT BY GAME</h4><div style="position:relative;height:240px"><canvas id="gaPieChart"></canvas></div></div></div>'
         +'</div>';
     }
@@ -8965,7 +8994,8 @@
         var lm=rankEl.querySelector('.ga-load-more');
         if(lm){lm.onclick=function(){_gaShowAll=(typeof _gaShowAll==='number'?_gaShowAll:10)+10;_gaRenderAndBind()}}
       }
-      if(gaSearchEl){gaSearchEl.oninput=function(){_gaRenderAndBind()}}
+      var _gaSearchTimer = null;
+      if(gaSearchEl){gaSearchEl.oninput=function(){ if(_gaSearchTimer)clearTimeout(_gaSearchTimer); _gaSearchTimer=setTimeout(function(){_gaRenderAndBind()},120); }}
       _gaRenderAndBind();
       document.querySelectorAll('.ga-section').forEach(function(b){b.onclick=function(){
         gaSection=b.dataset.sec;
@@ -10918,14 +10948,10 @@
       await ensureOrgDoc();
       await Promise.all([refreshEmployeeList(), refreshOwnerDashboard()]);
 
-      // Live listener: refresh dashboard when any shift changes
-      if (_empShiftListener) _empShiftListener();
-      _empShiftListener = db.collection(shiftPath())
-        .where('status', '==', 'active')
-        .onSnapshot(() => {
-          refreshEmployeeList();
-          refreshOwnerDashboard();
-        }, () => {});
+      // NO live listener for shifts — it fires on every shift change triggering
+      // multiple expensive Firestore reads (fetchEmployees + getActiveShifts + fetchShifts).
+      // The owner dashboard timer already updates the UI every second for active shifts.
+      // User can tap the refresh button to reload shift data manually.
 
       // Start owner dashboard live timer — restarts after each DOM rebuild
       function _startOwnerTimer() {
@@ -10956,9 +10982,12 @@
       }, 100);
     }
 
-    let _empShiftListener = null;
-    let _empSummaries = []; // module-level so stat card clicks can access it
-    let _empCashierList = []; // same for cashier list
+    var _empPaymentCache = {}; // empId → payments array
+    var _empAllShiftsCache = {}; // empId → all-time shifts
+    var _empCacheTs = 0;
+    var _EMP_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    function _clearEmpCache() { _empPaymentCache = {}; _empAllShiftsCache = {}; _empCacheTs = 0; }
 
     async function refreshOwnerDashboard() {
       const wrap = document.getElementById('empDashboardSummary');
@@ -10994,9 +11023,17 @@
         const earned = calcEarnings(emp, ms);
         totalHours += hoursFromMs(ms);
 
-        // Fetch ALL payments ever (no date filter) so carry-over from last month is included
+        // Fetch ALL payments ever (cached per employee)
         let payments = [];
-        try { payments = await fetchSalaryPayments(emp._id); } catch(e) { console.warn('pay fetch:', e.code); }
+        try {
+          if (_empPaymentCache[emp._id] && (Date.now()-_empCacheTs) < _EMP_CACHE_TTL) {
+            payments = _empPaymentCache[emp._id];
+          } else {
+            payments = await fetchSalaryPayments(emp._id);
+            _empPaymentCache[emp._id] = payments;
+            _empCacheTs = Date.now();
+          }
+        } catch(e) { console.warn('pay fetch:', e.code); }
 
         // Total ever paid (all time, not just this range)
         const allTimePaid = payments
@@ -11011,7 +11048,14 @@
         // Unpaid = all-time earned (within date range for hours shown) minus all-time paid
         // But we need all-time shifts to compute total ever earned for accurate balance
         let allTimeShifts = [];
-        try { allTimeShifts = await fetchShifts(null, null, emp._id); } catch(e) { allTimeShifts = empShifts; }
+        try {
+          if (_empAllShiftsCache[emp._id] && (Date.now()-_empCacheTs) < _EMP_CACHE_TTL) {
+            allTimeShifts = _empAllShiftsCache[emp._id];
+          } else {
+            allTimeShifts = await fetchShifts(null, null, emp._id);
+            _empAllShiftsCache[emp._id] = allTimeShifts;
+          }
+        } catch(e) { allTimeShifts = empShifts; }
         const allTimeEarned = calcEarnings(emp, allTimeShifts.reduce((s, sh) => s + (sh.durationMs||0), 0));
         const unpaid = Math.max(0, allTimeEarned - allTimePaid);
 
@@ -12120,21 +12164,64 @@
     }
 
     // ── Load all CF data from Firestore ──
-    async function cfLoadAll() {
-      // Employees can see payment methods (needed for billing dropdown) but not full CF data
+    var _CF_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+    function cfSaveCache() {
+      try {
+        localStorage.setItem('cf_cache_'+dataOwnerUid(), JSON.stringify({
+          ts: Date.now(),
+          paymentMethods: cfPaymentMethods,
+          transactions: cfTransactions,
+          shareholders: cfShareholders,
+          opExpenses: cfOperatingExpenses,
+          dividendPayments: cfDividendPayments
+        }));
+      } catch(e) {}
+    }
+
+    function cfLoadCache() {
+      try {
+        var raw = localStorage.getItem('cf_cache_'+dataOwnerUid());
+        if (!raw) return null;
+        var d = JSON.parse(raw);
+        if (!d || (Date.now() - d.ts) > _CF_CACHE_TTL) return null;
+        return d;
+      } catch(e) { return null; }
+    }
+
+    async function cfLoadAll(forceRefresh) {
       var isEmployee = state.empRole === 'employee';
       try {
-        // Always load payment methods — needed for billing panel for all roles
+        // Try cache first (saves hundreds of reads per session)
+        if (!forceRefresh) {
+          var cached = cfLoadCache();
+          if (cached) {
+            cfPaymentMethods    = cached.paymentMethods    || [];
+            if (!isEmployee) {
+              cfTransactions      = cached.transactions      || [];
+              cfShareholders      = cached.shareholders      || [];
+              cfOperatingExpenses = cached.opExpenses        || [];
+              cfDividendPayments  = cached.dividendPayments  || [];
+            }
+            if (cfPaymentMethods.length > 0) {
+              var _initBest = cfGetMostUsedPaymentMethod(state.selectedCompanyId);
+              if (!state.selectedPaymentMethodId || !cfPaymentMethods.find(p=>p.id===state.selectedPaymentMethodId))
+                state.selectedPaymentMethodId = _initBest || cfPaymentMethods[0].id;
+            }
+            return; // served from cache — 0 Firestore reads
+          }
+        }
+
+        // Cache miss or forced — read from Firestore
         var pmSnap = await db.collection(cfPath('paymentMethods')).get();
         cfPaymentMethods = pmSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
         if (cfPaymentMethods.length > 0) {
-          var _initBest = cfGetMostUsedPaymentMethod(state.selectedCompanyId);
-          if (!state.selectedPaymentMethodId || !cfPaymentMethods.find(p=>p.id===state.selectedPaymentMethodId)) {
-            state.selectedPaymentMethodId = _initBest || cfPaymentMethods[0].id;
-          }
+          var _initBest2 = cfGetMostUsedPaymentMethod(state.selectedCompanyId);
+          if (!state.selectedPaymentMethodId || !cfPaymentMethods.find(p=>p.id===state.selectedPaymentMethodId))
+            state.selectedPaymentMethodId = _initBest2 || cfPaymentMethods[0].id;
         }
-        if (isEmployee) return; // employees only need payment methods
-        // Full load for managers/owners
+        if (isEmployee) { cfSaveCache(); return; }
+
         var [txSnap, shSnap, opSnap, divSnap] = await Promise.all([
           db.collection(cfPath('transactions')).get(),
           db.collection(cfPath('shareholders')).get(),
@@ -12145,8 +12232,8 @@
         cfShareholders      = shSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
         cfOperatingExpenses = opSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
         cfDividendPayments  = divSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-        // Auto-sync historical bills that were never tracked as CF transactions
         cfSyncBillsToTransactions();
+        cfSaveCache(); // persist for next load
       } catch(e) { console.warn('[CF] load error:', e.message); }
     }
 
@@ -12219,6 +12306,7 @@
       };
       db.collection(cfPath('transactions')).add(tx).then(ref => {
         cfTransactions.push(Object.assign({ id: ref.id }, tx));
+        cfPersist();
       }).catch(e => { console.error('cfRecordExtraPayment:', e); });
     }
 
@@ -12229,16 +12317,16 @@
     // available, otherwise falls back to the most-used method for the company or cfPaymentMethods[0].
     // Existing records (matched by billId = referenceNumber) are NOT overwritten.
     function cfSyncBillsToTransactions() {
+      if (cfTransactions.length > 0) return;
       if (!state.bills || !state.bills.length) return;
+      var _trackedIds = new Set(cfTransactions.map(function(t){ return t.billId; }).filter(Boolean));
       var writes = [];
       state.bills.forEach(function(bill) {
         var status = bill.paymentStatus;
         if (!status || status === 'not_received') return;
         var refId = bill.referenceNumber || bill._id;
         if (!refId) return;
-        // Check if a transaction already exists for this bill
-        var existing = cfTransactions.find(function(t){ return t.billId === refId; });
-        if (existing) return; // already tracked
+        if (_trackedIds.has(refId)) return;
         var amount = 0;
         if (status === 'received') {
           var grandTotalS = (bill.totalDollars || 0) + (bill.extraFeeAmount || 0);
@@ -12246,35 +12334,22 @@
         } else if (status === 'partial') {
           amount = Math.max(0, (bill.partialAmount || 0) - (bill.creditApplied || 0));
         }
-        if (amount <= 0) return; // credit-only — already recorded as extra payment
-        // Determine payment method: prefer the one stored on the bill, then most-used for company, then first
+        if (amount <= 0) return;
         var pmId = bill.paymentMethodId || cfGetMostUsedPaymentMethod(bill.companyId) || (cfPaymentMethods[0] && cfPaymentMethods[0].id) || '';
         var companyObj = state.companies && state.companies[bill.companyId];
         var tx = {
-          type: 'income',
-          category: 'bill',
-          amount: parseFloat(amount.toFixed(2)),
-          paymentMethodId: pmId,
-          companyId: bill.companyId || '',
+          type: 'income', category: 'bill', amount: parseFloat(amount.toFixed(2)),
+          paymentMethodId: pmId, companyId: bill.companyId || '',
           companyName: (companyObj && companyObj.name) || bill.companyName || '',
           date: bill.date || new Date().toISOString(),
-          billId: refId,
-          note: refId,
-          synced: true // mark as auto-synced
+          billId: refId, note: refId, synced: true
         };
-        // Push locally immediately so UI updates
         var localTx = Object.assign({ id: '_sync_' + refId }, tx);
         cfTransactions.push(localTx);
-        // Persist to Firestore async, then update the local id
-        writes.push(
-          db.collection(cfPath('transactions')).add(tx).then(function(ref) {
-            localTx.id = ref.id;
-          }).catch(function(){})
-        );
+        _trackedIds.add(refId);
+        writes.push(db.collection(cfPath('transactions')).add(tx).then(function(ref){ localTx.id = ref.id; }).catch(function(){}));
       });
-      if (writes.length > 0) {
-        Promise.all(writes).catch(function(){});
-      }
+      if (writes.length > 0) Promise.all(writes).then(function(){ cfPersist(); }).catch(function(){});
     }
 
     // ── Cached cashier salary data for CF (fetched async on CF page open) ──
@@ -12282,7 +12357,13 @@
 
     // ── Compute cash flow summary — derived directly from state.bills (same as computeAnalyticsData) ──
     // fromDate / toDate: YYYY-MM-DD or YYYY-MM-DDThh:mm strings (local time)
+    var _cfSummaryCache = {};
+    var _cfSummaryVersion = 0;
+    function invalidateCfSummaryCache() { _cfSummaryCache = {}; _cfSummaryVersion++; }
+
     function cfComputeSummary(fromDate, toDate) {
+      var _cacheKey = (fromDate||'') + '|' + (toDate||'') + '|' + _cfSummaryVersion + '|' + _analyticsMutVersion + '|' + state.bills.length + '|' + cfTransactions.length;
+      if (_cfSummaryCache[_cacheKey]) return _cfSummaryCache[_cacheKey];
       // Parse bounds — same logic as the bill history and analytics date filters
       // Accept YYYY-MM-DD (date-only) and YYYY-MM-DDThh:mm (datetime-local) formats
       var fD = fromDate ? new Date(fromDate.length === 10 ? fromDate + 'T00:00:00' : fromDate + ':00') : null;
@@ -12302,6 +12383,10 @@
       // Track per-method inflow for the breakdown panel
       var byMethod = {};
       cfPaymentMethods.forEach(function(pm) { byMethod[pm.id] = { name: pm.name, total: 0, txs: [] }; });
+
+      // Pre-build cfTransactions lookup by billId for O(1) access
+      var _cfTxByBillId = {};
+      cfTransactions.forEach(function(t) { if (t.billId) _cfTxByBillId[t.billId] = t; });
 
       // For payment-method breakdown we use cfTransactions (which store the method used per bill).
       // But the TOTALS must come from state.bills directly so they match analytics.
@@ -12337,7 +12422,7 @@
         // Payment-method breakdown: attribute bill inflow to payment method
         if (bFull > 0) {
           var refId = bill.referenceNumber || bill._id;
-          var tx = cfTransactions.find(function(t) { return t.billId === refId; });
+          var tx = _cfTxByBillId[refId]; // O(1) lookup
           // For credit-balance companies, the payment method may be stored on extraPayments
           var pmId = (tx && tx.paymentMethodId) || bill.paymentMethodId || '';
           // If still no pmId, check extraPayments for a stored paymentMethodId
@@ -12455,11 +12540,13 @@
       });
       filteredTxs = filteredTxs.concat(_extraTxRows).sort(function(a,b){ return billToDate(b.date)-billToDate(a.date); });
 
-      return { inflow, billInflow, creditInflow, redemptionCost, opExpTotal, totalOpEx, totalOutflow, grossProfit,
+      var _cfResult = { inflow, billInflow, creditInflow, redemptionCost, opExpTotal, totalOpEx, totalOutflow, grossProfit,
                salaryTotal, salaryEmployees, byMethod,
                bonusTotal, bonusTxs,
                filteredTxs: filteredTxs, opFiltered,
                salaryLoaded: !!_cfSalaryCache };
+      _cfSummaryCache[_cacheKey] = _cfResult;
+      return _cfResult;
     }
 
     // Helper: get stable bill reference ID
@@ -12576,7 +12663,7 @@
           <button class="btn btn-sm" id="cfExportBtn" style="background:rgba(52,211,153,0.12);border:1px solid rgba(52,211,153,0.25);color:#34d399;font-size:11px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin-bottom:16px">
-          ${tabs.map(t => `<button class="btn btn-sm cf-tab-btn" data-tab="${t.id}" style="padding:9px 4px;border-radius:9px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;white-space:nowrap;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:4px;width:100%;${tab===t.id?'background:rgba(52,211,153,0.2);color:#34d399;border:1px solid rgba(52,211,153,0.3)':'background:rgba(15,12,28,0.5);color:var(--textMuted);border:1px solid rgba(120,100,200,0.15)'}">${tabSvgs[t.id]} ${t.label}</button>`).join('')}
+          ${tabs.map(t => `<button class="btn btn-sm cf-tab-btn" data-tab="${t.id}" style="padding:9px 4px;border-radius:9px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;white-space:nowrap;display:flex;align-items:center;justify-content:center;gap:4px;width:100%;${tab===t.id?'background:rgba(52,211,153,0.2);color:#34d399;border:1px solid rgba(52,211,153,0.3)':'background:rgba(15,12,28,0.5);color:var(--textMuted);border:1px solid rgba(120,100,200,0.15)'}">${tabSvgs[t.id]} ${t.label}</button>`).join('')}
         </div>
         ${content}
       </div>`;
@@ -13032,7 +13119,7 @@
           var name = ($('#cfPmName').value || '').trim();
           if (!name) { $('#cfPmName').focus(); return; }
           var doc = await db.collection(cfPath('paymentMethods')).add({ name, createdAt: new Date().toISOString() });
-          cfPaymentMethods.push({ id: doc.id, name, createdAt: new Date().toISOString() });
+          cfPaymentMethods.push({ id: doc.id, name, createdAt: new Date().toISOString() }); cfPersist();
           var _pmEl = $('#cfPmName'); if (_pmEl) _pmEl.value = '';
           render();
         };
@@ -13057,7 +13144,7 @@
           if (!pm) return;
           if (!confirm('Delete payment method "' + pm.name + '"? This will remove it from all transaction records.')) return;
           await db.doc(cfPath('paymentMethods') + '/' + pm.id).delete();
-          cfPaymentMethods = cfPaymentMethods.filter(p => p.id !== pm.id);
+          cfPaymentMethods = cfPaymentMethods.filter(p => p.id !== pm.id); cfPersist();
           // Remove paymentMethodId from all cfTransactions that used this method
           var _txToUpdate = cfTransactions.filter(function(tx){ return tx.paymentMethodId === pm.id; });
           for(var _ti=0; _ti<_txToUpdate.length; _ti++){
@@ -13129,7 +13216,7 @@
           if (!amount || isNaN(amount) || amount <= 0) { $('#cfExpAmount').focus(); return; }
           var rec = { title, amount: parseFloat(amount.toFixed(2)), date, createdAt: new Date().toISOString() };
           var doc = await db.collection(cfPath('opExpenses')).add(rec);
-          cfOperatingExpenses.push(Object.assign({ id: doc.id }, rec));
+          cfOperatingExpenses.push(Object.assign({ id: doc.id }, rec)); cfPersist();
           var _etEl=$('#cfExpTitle'); if(_etEl) _etEl.value='';
           var _eaEl=$('#cfExpAmount'); if(_eaEl) _eaEl.value='';
           render();
@@ -13142,7 +13229,7 @@
           if (!exp) return;
           if (!confirm('Delete expense "' + exp.title + '"?')) return;
           await db.doc(cfPath('opExpenses') + '/' + exp.id).delete();
-          cfOperatingExpenses = cfOperatingExpenses.filter(e => e.id !== exp.id);
+          cfOperatingExpenses = cfOperatingExpenses.filter(e => e.id !== exp.id); cfPersist();
           render();
         };
       });
@@ -13168,7 +13255,7 @@
             var sh = cfShareholders.find(s => s.id === shId);
             rec.shareholderName = sh ? sh.name : '';
             var doc = await db.collection(cfPath('dividendPayments')).add(rec).catch(() => null);
-            if (doc) cfDividendPayments.push(Object.assign({ id: doc.id }, rec));
+            if (doc) { cfDividendPayments.push(Object.assign({ id: doc.id }, rec)); cfPersist(); }
           }
           render();
         };
@@ -13185,7 +13272,7 @@
           if (totalPct + pct > 100.01) { alert('Total shareholding would exceed 100%. Current total: ' + totalPct.toFixed(1) + '%'); return; }
           var rec = { name, percentage: pct, createdAt: new Date().toISOString() };
           var doc = await db.collection(cfPath('shareholders')).add(rec);
-          cfShareholders.push(Object.assign({ id: doc.id }, rec));
+          cfShareholders.push(Object.assign({ id: doc.id }, rec)); cfPersist();
           var _snEl=$('#cfShName'); if(_snEl) _snEl.value='';
           var _spEl=$('#cfShPct'); if(_spEl) _spEl.value='';
           render();
@@ -13216,7 +13303,7 @@
           if (!sh) return;
           if (!confirm('Remove shareholder "' + sh.name + '"?')) return;
           await db.doc(cfPath('shareholders') + '/' + sh.id).delete();
-          cfShareholders = cfShareholders.filter(s => s.id !== sh.id);
+          cfShareholders = cfShareholders.filter(s => s.id !== sh.id); cfPersist();
           render();
         };
       });
@@ -13337,8 +13424,18 @@
 
     // ── Load CF data when auth resolves ──
     // Hooked into the existing loadAllData flow
+    function cfInvalidateCache() {
+      try { localStorage.removeItem('cf_cache_'+dataOwnerUid()); } catch(e) {}
+      _cfSummaryCache = {};
+    }
+
+    // Call after any CF array mutation to keep localStorage cache in sync
+    function cfPersist() {
+      cfInvalidateCache();
+      cfSaveCache();
+    }
+
     var _cfLoaded = false;
-    var _cfLoadOrig = loadAllData;
     async function cfEnsureLoaded() {
       if (!_cfLoaded && state.user) {
         _cfLoaded = true;
