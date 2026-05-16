@@ -1263,32 +1263,47 @@
 
     // ── camelCase ↔ snake_case maps ────────────────────────────────────────
     const _F2S = {
+      // user fields
       displayName:'display_name', photoURL:'photo_url', gbUsername:'gb_username',
       expiryDate:'expiry_date', isDisabled:'is_disabled', isUnlimited:'is_unlimited',
       lastLogin:'last_login', createdAt:'created_at', updatedAt:'updated_at',
       subPeriodStart:'sub_period_start', subPeriodEnd:'sub_period_end',
       subscriptionCost:'subscription_cost', invoiceSettings:'invoice_settings',
-      generalPayments:'general_payments', ownerUid:'owner_uid', ownerEmail:'owner_email',
-      ownerName:'owner_name', employeeId:'employee_id', ownerHasAccess:'owner_has_access',
-      ownerAccessExpiry:'owner_access_expiry', accessGrantedAt:'access_granted_at',
-      targetUid:'target_uid', targetAll:'target_all', dismissedAt:'dismissed_at',
-      gameName:'game_name', totalPoints:'total_points', remainingPoints:'remaining_points',
-      orderedPoints:'ordered_points', costRate:'cost_rate', billingHistory:'billing_history',
-      companyCode:'company_code', referenceNumber:'reference_number',
-      creditBalance:'credit_balance', extraFeeEnabled:'extra_fee_enabled',
-      extraFeePercent:'extra_fee_percent', extraFeeCostRate:'extra_fee_cost_rate',
-      paymentBonuses:'payment_bonuses', extraPayments:'extra_payments',
-      creditApplied:'credit_applied', partialAmount:'partial_amount',
-      paymentStatus:'payment_status', paymentMethodId:'payment_method_id',
-      companyId:'company_id', companyName:'company_name', billId:'bill_id',
-      startTime:'start_time', endTime:'end_time', orgId:'org_id',
-      salaryType:'salary_type', salaryRate:'salary_rate',
-      periodStart:'period_start', periodEnd:'period_end', paidAt:'paid_at',
-      receivedByEmployee:'received_by_employee', receivedAt:'received_at',
+      generalPayments:'general_payments',
+      // company fields
+      ownerUid:'owner_uid', ownerEmail:'owner_email', ownerName:'owner_name',
+      companyCode:'company_code', creditBalance:'credit_balance',
+      extraFeeEnabled:'extra_fee_enabled', extraFeePercent:'extra_fee_percent',
+      extraFeeCostRate:'extra_fee_cost_rate', invoiceEnabled:'invoice_enabled',
+      invoiceCode:'invoice_code',
+      // master_games fields
+      totalPoints:'total_points', remainingPoints:'remaining_points',
+      orderedPoints:'ordered_points', costRate:'cost_rate',
       assignedUsername:'assigned_username', assignedLevel:'assigned_level',
       highestLevel:'highest_level', billingHistory:'billing_history',
-      orderedPoints:'ordered_points',
-    };
+      stockHistory:'stock_history', orderHistory:'order_history',
+      // bill fields
+      companyId:'company_id', companyName:'company_name',
+      referenceNumber:'reference_number', convMode:'conv_mode',
+      totalDollars:'total_dollars', creditApplied:'credit_applied',
+      partialAmount:'partial_amount', balanceDue:'balance_due',
+      extraFeeAmount:'extra_fee_amount', extraFeeProfit:'extra_fee_profit',
+      paymentStatus:'payment_status', paymentMethodId:'payment_method_id',
+      extraPayments:'extra_payments',
+      // assigned_games / usernames
+      gameName:'game_name',
+      // employee / shift / salary
+      employeeId:'employee_id', orgId:'org_id', ownerHasAccess:'owner_has_access',
+      ownerAccessExpiry:'owner_access_expiry', accessGrantedAt:'access_granted_at',
+      salaryType:'salary_type', salaryRate:'salary_rate',
+      startTime:'start_time', endTime:'end_time',
+      periodStart:'period_start', periodEnd:'period_end', paidAt:'paid_at',
+      receivedByEmployee:'received_by_employee', receivedAt:'received_at',
+      // popup
+      targetUid:'target_uid', targetAll:'target_all', dismissedAt:'dismissed_at', sentBy:'sent_by',
+      // cf
+      billId:'bill_id',
+    }
     const _S2F = Object.fromEntries(Object.entries(_F2S).map(([k,v])=>[v,k]));
     const _UID_PK = new Set(['user_access','employee_uids']);
     const _pk = t => _UID_PK.has(t) ? 'uid' : 'id';
@@ -1380,10 +1395,14 @@
     function _toRef(path){
       const parts=path.split('/').filter(Boolean);
       if(parts[0]==='users')parts.splice(0,2);
-      if(parts[0]==='organizations'){if(parts.length===2)return new _SBRef(_PATH_MAP.organizations,parts[1]);parts.splice(0,2);}
-      const table=_PATH_MAP[parts[2]||parts[0]]||parts[2]||parts[0];
-      const id=parts[3]||(parts[2]?null:parts[1])||null;
-      return new _SBRef(table,id);
+      if(parts[0]==='organizations'){
+        if(parts.length===2)return new _SBRef(_PATH_MAP.organizations||'organizations',parts[1]);
+        parts.splice(0,2);
+      }
+      // parts: [collection, docId?, subCollection?, subDocId?]
+      const col=parts[0], docId=parts[1]||null, subCol=parts[2]||null, subId=parts[3]||null;
+      if(subCol){ return new _SBRef(_PATH_MAP[subCol]||subCol, subId); }
+      return new _SBRef(_PATH_MAP[col]||col, docId);
     }
     const db={collection:_toRef,doc:_toRef};
 
@@ -9869,7 +9888,7 @@
         if (!data.expiryDate) return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: data.gbUsername || '', isUnlimited: false };
 
         const now = new Date();
-        const expiry = data.expiryDate.toDate();
+        const expiry = data.expiryDate instanceof Date ? data.expiryDate : new Date(data.expiryDate);
         const diffMs = expiry - now;
         const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
@@ -13575,7 +13594,11 @@
 
     // ============================================================
     // PWA Service Worker
-    // sw.js disabled
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('[SW] registered:', reg.scope))
+        .catch(e => console.log('[SW] failed:', e.message));
+    }
     // Initial render
     render();
   </script>
