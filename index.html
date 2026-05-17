@@ -2027,6 +2027,432 @@
         _pendingActivationExtra = true;
       }
 
+      // ── REDESIGNED PENDING ACTIVATION PAGE ──────────────────────────────────
+      const _isPendingNew = _pendingActivationExtra;
+      const _isExpired = !!expiry && daysLeft <= 0 && !state.accessUnlimited;
+      const _isLow = !state.accessUnlimited && daysLeft > 0 && daysLeft <= 3;
+
+      if (_isPendingNew || _isExpired || _isLow) {
+        return `<div class="login-page" style="align-items:flex-start;overflow-y:auto;min-height:100vh;padding:0">
+          <style>
+            :root {
+              --pa-bg:#07060f;
+              --pa-card:#0f0d1c;
+              --pa-border:rgba(255,255,255,0.07);
+              --pa-purple:#7c3aed;
+              --pa-purple-light:#a78bfa;
+              --pa-cyan:#06b6d4;
+              --pa-green:#10b981;
+              --pa-orange:#f59e0b;
+              --pa-red:#ef4444;
+              --pa-gold:#f59e0b;
+            }
+            .pa-page { width:100%;background:var(--pa-bg);min-height:100vh;font-family:'Rajdhani',sans-serif; }
+            /* ── HEADER STRIP ─── */
+            .pa-header {
+              display:flex;align-items:center;justify-content:space-between;
+              padding:14px 24px;
+              background:rgba(255,255,255,0.02);
+              border-bottom:1px solid var(--pa-border);
+            }
+            .pa-brand { display:flex;align-items:center;gap:10px; }
+            .pa-brand-icon {
+              width:34px;height:34px;border-radius:9px;
+              background:linear-gradient(135deg,#7c3aed,#06b6d4);
+              display:flex;align-items:center;justify-content:center;
+              box-shadow:0 0 16px rgba(124,58,237,0.45);
+            }
+            .pa-brand-name { font-family:'Orbitron',monospace;font-size:15px;font-weight:700;color:#e0d8ff;letter-spacing:2px; }
+            .pa-signout-btn {
+              padding:7px 16px;border-radius:8px;
+              border:1px solid rgba(239,68,68,0.25);
+              background:rgba(239,68,68,0.07);
+              color:#f87171;font-size:12px;font-weight:700;cursor:pointer;
+              font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;
+              transition:all 0.2s;
+            }
+            .pa-signout-btn:hover { background:rgba(239,68,68,0.14);border-color:rgba(239,68,68,0.4); }
+            /* ── STATUS BANNER ── */
+            .pa-status-banner {
+              padding:10px 24px;
+              display:flex;align-items:center;gap:10px;
+              font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+            }
+            .pa-status-pending { background:linear-gradient(90deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05)); color:#fbbf24; border-bottom:1px solid rgba(245,158,11,0.2); }
+            .pa-status-expired { background:linear-gradient(90deg,rgba(239,68,68,0.18),rgba(239,68,68,0.05)); color:#f87171; border-bottom:1px solid rgba(239,68,68,0.2); }
+            .pa-status-low { background:linear-gradient(90deg,rgba(245,158,11,0.14),rgba(245,158,11,0.04)); color:#fbbf24; border-bottom:1px solid rgba(245,158,11,0.15); }
+            /* ── LAYOUT ── */
+            .pa-body {
+              display:grid;
+              grid-template-columns:1fr;
+              gap:16px;
+              padding:20px 16px 40px;
+              max-width:1200px;
+              margin:0 auto;
+            }
+            @media(min-width:900px){
+              .pa-body {
+                grid-template-columns:1fr 1.55fr;
+                gap:20px;
+                padding:28px 28px 48px;
+                align-items:start;
+              }
+            }
+            /* ── CARDS ── */
+            .pa-card {
+              border-radius:16px;
+              border:1px solid var(--pa-border);
+              background:var(--pa-card);
+              overflow:hidden;
+              position:relative;
+            }
+            .pa-card-head {
+              padding:16px 20px;
+              border-bottom:1px solid var(--pa-border);
+              display:flex;align-items:center;gap:10px;
+            }
+            .pa-card-head-icon {
+              width:32px;height:32px;border-radius:8px;
+              display:flex;align-items:center;justify-content:center;
+              flex-shrink:0;
+            }
+            .pa-card-title { font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase; }
+            .pa-card-body { padding:18px 20px; }
+            /* ── ACCOUNT STATUS CARD ── */
+            .pa-status-card { border-color:rgba(245,158,11,0.2); }
+            .pa-status-card.expired { border-color:rgba(239,68,68,0.2); }
+            /* ── PLAN CARDS ── */
+            .plan-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+            @media(min-width:500px){ .plan-grid { grid-template-columns:repeat(3,1fr); } }
+            .plan-card {
+              border-radius:12px;border:1px solid rgba(255,255,255,0.07);
+              background:rgba(255,255,255,0.02);
+              padding:14px 12px;text-align:center;cursor:pointer;
+              transition:all 0.22s;position:relative;overflow:hidden;
+            }
+            .plan-card:hover { border-color:rgba(124,58,237,0.45);background:rgba(124,58,237,0.07); }
+            .plan-card.featured {
+              border-color:rgba(124,58,237,0.5);
+              background:linear-gradient(145deg,rgba(124,58,237,0.12),rgba(6,182,212,0.05));
+              box-shadow:0 0 24px rgba(124,58,237,0.18);
+            }
+            .plan-badge {
+              position:absolute;top:0;right:0;
+              background:linear-gradient(135deg,#7c3aed,#06b6d4);
+              font-size:9px;font-weight:800;color:#fff;letter-spacing:0.8px;
+              padding:3px 8px;border-bottom-left-radius:8px;text-transform:uppercase;
+            }
+            .plan-label { font-size:10px;color:#9ca3af;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px; }
+            .plan-price { font-family:'Orbitron',monospace;font-size:22px;font-weight:700;color:#fff;line-height:1; }
+            .plan-price span { font-size:12px;color:#9ca3af;font-family:'Rajdhani',sans-serif;font-weight:600; }
+            .plan-price-big { font-size:26px; }
+            .plan-sub { font-size:10px;color:#6b7280;margin-top:5px; }
+            .plan-custom {
+              border-radius:12px;border:1px solid rgba(6,182,212,0.2);
+              background:rgba(6,182,212,0.04);
+              padding:13px 16px;margin-top:10px;
+              display:flex;align-items:center;gap:12px;
+            }
+            /* ── PAYMENT METHOD CARD ── */
+            .pm-tabs { display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px; }
+            .pm-tab {
+              padding:8px 14px;border-radius:9px;
+              border:1px solid rgba(255,255,255,0.08);
+              background:rgba(255,255,255,0.03);
+              color:#9ca3af;font-size:12px;font-weight:700;cursor:pointer;
+              transition:all 0.2s;font-family:'Rajdhani',sans-serif;letter-spacing:0.3px;
+              display:flex;align-items:center;gap:7px;
+            }
+            .pm-tab.active {
+              border-color:rgba(124,58,237,0.55);
+              background:rgba(124,58,237,0.13);
+              color:#c4b5fd;
+              box-shadow:0 0 12px rgba(124,58,237,0.18);
+            }
+            .pm-tab:hover:not(.active) { border-color:rgba(255,255,255,0.14);color:#e0d0ff; }
+            .pm-addr-box {
+              background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.07);
+              border-radius:10px;padding:11px 14px;
+              font-family:monospace;font-size:12px;color:#c4b5fd;
+              word-break:break-all;letter-spacing:0.3px;line-height:1.5;
+            }
+            .pm-action-row { display:flex;gap:8px;margin-top:10px; }
+            .btn-copy {
+              flex:1;padding:10px;border-radius:9px;
+              border:1px solid rgba(124,58,237,0.3);
+              background:rgba(124,58,237,0.1);color:#a78bfa;
+              font-size:12px;font-weight:700;cursor:pointer;
+              font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;
+              transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;
+            }
+            .btn-copy:hover { background:rgba(124,58,237,0.2);border-color:rgba(124,58,237,0.5); }
+            .btn-qr {
+              flex:1;padding:10px;border-radius:9px;
+              border:1px solid rgba(6,182,212,0.25);
+              background:rgba(6,182,212,0.06);color:#22d3ee;
+              font-size:12px;font-weight:700;cursor:pointer;
+              font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;
+              transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;
+            }
+            .btn-qr:hover { background:rgba(6,182,212,0.12);border-color:rgba(6,182,212,0.4); }
+            /* ── INSTRUCTION CARD ── */
+            .instr-step {
+              display:flex;gap:14px;align-items:flex-start;
+              padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);
+            }
+            .instr-step:last-child { border-bottom:none;padding-bottom:0; }
+            .instr-num {
+              width:26px;height:26px;border-radius:50%;flex-shrink:0;
+              background:linear-gradient(135deg,#7c3aed,#5b21b6);
+              display:flex;align-items:center;justify-content:center;
+              font-size:11px;font-weight:800;color:#fff;font-family:'Orbitron',monospace;
+              box-shadow:0 0 10px rgba(124,58,237,0.35);
+            }
+            /* ── MEMO NOTICE ── */
+            .memo-box {
+              margin-top:14px;padding:13px 14px;border-radius:10px;
+              background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);
+            }
+            /* ── SUPPORT CARD ── */
+            .support-item {
+              display:flex;align-items:center;gap:12px;
+              padding:11px 14px;border-radius:10px;
+              background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);
+              margin-bottom:8px;
+            }
+            .support-item:last-child { margin-bottom:0; }
+            .support-icon {
+              width:34px;height:34px;border-radius:9px;flex-shrink:0;
+              background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);
+              display:flex;align-items:center;justify-content:center;
+            }
+            /* ── WELCOME CARD ── */
+            .welcome-card {
+              border-color:rgba(124,58,237,0.2);
+              background:linear-gradient(145deg,rgba(15,13,28,1),rgba(30,12,70,0.5));
+            }
+            /* ── WARNING BAR ── */
+            .pa-warn {
+              margin:0 0 16px;padding:11px 16px;border-radius:11px;
+              background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.18);
+              font-size:12px;color:#fbbf24;line-height:1.6;
+              display:flex;gap:9px;align-items:flex-start;
+            }
+            /* ── HERO LABEL ── */
+            .pa-hero-label {
+              display:flex;align-items:center;gap:6px;
+              font-size:11px;color:#6b7280;font-weight:700;letter-spacing:1.5px;
+              text-transform:uppercase;margin-bottom:10px;
+            }
+            /* ── GLOW ACCENTS ── */
+            .glow-purple { box-shadow:0 0 30px rgba(124,58,237,0.15); }
+            .glow-cyan { box-shadow:0 0 30px rgba(6,182,212,0.1); }
+          </style>
+
+          <div class="pa-page">
+
+            <!-- HEADER -->
+            <div class="pa-header">
+              <div class="pa-brand">
+                <div class="pa-brand-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </div>
+                <span class="pa-brand-name">SWEEPADMIN</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:11px;color:#6b7280;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${state.user ? state.user.email : ''}</span>
+                <button id="adSignOut" class="pa-signout-btn">Sign Out</button>
+              </div>
+            </div>
+
+            <!-- STATUS BANNER -->
+            <div class="pa-status-banner ${_isPendingNew ? 'pa-status-pending' : _isExpired ? 'pa-status-expired' : 'pa-status-low'}">
+              ${_isPendingNew ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> Account Pending Activation` : _isExpired ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Subscription Expired — ${expiryStr}` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg> Subscription expiring soon — ${daysLeft} day${daysLeft!==1?'s':''} left`}
+            </div>
+
+            <!-- BODY GRID -->
+            <div class="pa-body">
+
+              <!-- LEFT COLUMN -->
+              <div style="display:flex;flex-direction:column;gap:16px">
+
+                <!-- ACCOUNT STATUS CARD -->
+                <div class="pa-card pa-status-card${_isExpired?' expired':''}">
+                  <div class="pa-card-head" style="background:rgba(245,158,11,0.05);border-color:rgba(245,158,11,0.15)">
+                    <div class="pa-card-head-icon" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2">
+                        ${_isPendingNew ? '<circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>' : _isExpired ? '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' : '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>'}
+                      </svg>
+                    </div>
+                    <span class="pa-card-title" style="color:#f59e0b">Account Status</span>
+                  </div>
+                  <div class="pa-card-body">
+                    <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;letter-spacing:1.5px;color:${_isExpired?'#f87171':'#fbbf24'};margin-bottom:6px">
+                      ${_isPendingNew ? 'PENDING ACTIVATION' : _isExpired ? 'SUBSCRIPTION EXPIRED' : 'EXPIRING SOON'}
+                    </div>
+                    <p style="font-size:13px;color:#9ca3af;line-height:1.65;margin:0">
+                      ${_isPendingNew ? 'Your account is awaiting activation. Complete the subscription payment below to unlock full access.' : _isExpired ? `Your access expired on <strong style="color:#f87171">${expiryStr}</strong>. Renew your subscription to restore access immediately.` : `Your subscription expires in <strong style="color:#fbbf24">${daysLeft} day${daysLeft!==1?'s':''}</strong>. Renew now to avoid service interruption.`}
+                    </p>
+                    <div style="margin-top:12px;padding:10px 12px;border-radius:9px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.12);font-size:11px;color:#f59e0b;line-height:1.6;display:flex;gap:8px;align-items:flex-start">
+                      <svg width="12" height="12" style="flex-shrink:0;margin-top:1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      Accounts without an active subscription may be disabled or removed without prior notice.
+                    </div>
+                  </div>
+                </div>
+
+                <!-- WELCOME CARD -->
+                <div class="pa-card welcome-card glow-purple">
+                  <div class="pa-card-head" style="background:rgba(124,58,237,0.06);border-color:rgba(124,58,237,0.15)">
+                    <div class="pa-card-head-icon" style="background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    </div>
+                    <span class="pa-card-title" style="color:#a78bfa">Welcome to SweepAdmin</span>
+                  </div>
+                  <div class="pa-card-body">
+                    <p style="font-size:13px;color:#9ca3af;line-height:1.7;margin:0 0 14px">
+                      SweepAdmin is your all-in-one platform for game points billing, cashier management, and analytics. Subscribe to unlock the full suite of tools.
+                    </p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                      ${[['Billing & Invoicing','#7c3aed','M9 14H5l-1-4h12l-1 4H9zm0 0v3m6-3v3m-6-7V4m6 3V4'],['Employee Tracking','#06b6d4','M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75'],['Analytics Dashboard','#10b981','M18 20V10M12 20V4M6 20v-6'],['Admin Controls','#f59e0b','M12 1l3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 8l6-1 3-6z']].map(([label,color,path])=>`
+                      <div style="padding:10px;border-radius:9px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:8px">
+                        <div style="width:26px;height:26px;border-radius:7px;background:${color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><path d="${path}"/></svg>
+                        </div>
+                        <span style="font-size:11px;font-weight:700;color:#d1d5db;letter-spacing:0.3px">${label}</span>
+                      </div>`).join('')}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SUBSCRIPTION PLANS CARD -->
+                <div class="pa-card glow-purple">
+                  <div class="pa-card-head" style="background:rgba(124,58,237,0.06);border-color:rgba(124,58,237,0.15)">
+                    <div class="pa-card-head-icon" style="background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                    </div>
+                    <span class="pa-card-title" style="color:#a78bfa">Subscription Plans</span>
+                  </div>
+                  <div class="pa-card-body">
+                    <div class="pa-hero-label">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>
+                      Choose your plan
+                    </div>
+                    <div class="plan-grid">
+                      <div class="plan-card" onclick="this.classList.toggle('featured')">
+                        <div class="plan-label">Monthly</div>
+                        <div class="plan-price plan-price-big"><strong>$20</strong><span>/mo</span></div>
+                        <div class="plan-sub">Billed monthly</div>
+                      </div>
+                      <div class="plan-card featured" onclick="this.classList.toggle('featured')">
+                        <div class="plan-badge">Best Value</div>
+                        <div class="plan-label">Quarterly</div>
+                        <div class="plan-price plan-price-big"><strong>$60</strong><span>/3mo</span></div>
+                        <div class="plan-sub">$20/mo · Save 0%</div>
+                      </div>
+                      <div class="plan-card" style="grid-column:1/-1" onclick="this.classList.toggle('featured')">
+                        <div class="plan-badge" style="background:linear-gradient(135deg,#10b981,#06b6d4)">Most Popular</div>
+                        <div class="plan-label">Annual</div>
+                        <div class="plan-price"><strong style="font-size:28px;font-family:Orbitron,monospace">$230</strong><span>/year</span></div>
+                        <div class="plan-sub" style="color:#10b981;font-weight:700">Save ~$10 vs monthly</div>
+                      </div>
+                    </div>
+                    <div class="plan-custom">
+                      <div style="width:36px;height:36px;border-radius:9px;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                      </div>
+                      <div style="flex:1;min-width:0">
+                        <div style="font-size:12px;font-weight:800;color:#22d3ee;letter-spacing:0.5px;margin-bottom:2px">Custom Plan (12+ Months)</div>
+                        <div style="font-size:11px;color:#6b7280;line-height:1.5">Need a longer commitment or multi-account deal? Contact Customer Support for custom pricing.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div><!-- /LEFT COLUMN -->
+
+              <!-- RIGHT COLUMN -->
+              <div style="display:flex;flex-direction:column;gap:16px">
+
+                <!-- PAYMENT METHOD HERO CARD -->
+                <div class="pa-card glow-cyan" style="border-color:rgba(6,182,212,0.2)">
+                  <div class="pa-card-head" style="background:linear-gradient(90deg,rgba(6,182,212,0.1),rgba(124,58,237,0.06));border-color:rgba(6,182,212,0.2)">
+                    <div class="pa-card-head-icon" style="background:linear-gradient(135deg,rgba(6,182,212,0.2),rgba(124,58,237,0.15));border:1px solid rgba(6,182,212,0.3)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2.2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                    </div>
+                    <div>
+                      <div class="pa-card-title" style="color:#22d3ee">Payment Method</div>
+                      <div style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600;letter-spacing:0.5px">WE ACCEPT</div>
+                    </div>
+                  </div>
+                  <div class="pa-card-body">
+                    <div id="payInfoPanel"></div>
+                    <div style="margin-top:6px;padding:8px 12px;border-radius:9px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:11px;color:#6b7280;display:flex;align-items:center;gap:8px">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>
+                      After sending payment, notify your upline manager to activate your account.
+                    </div>
+                  </div>
+                </div>
+
+                <!-- PAYMENT INSTRUCTIONS CARD -->
+                <div class="pa-card">
+                  <div class="pa-card-head" style="background:rgba(16,185,129,0.04);border-color:rgba(16,185,129,0.12)">
+                    <div class="pa-card-head-icon" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                    </div>
+                    <span class="pa-card-title" style="color:#10b981">How to Pay</span>
+                  </div>
+                  <div class="pa-card-body">
+                    <div class="instr-step">
+                      <div class="instr-num">1</div>
+                      <div>
+                        <div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Choose a Subscription Plan</div>
+                        <div style="font-size:12px;color:#6b7280;line-height:1.55">Select the plan that fits your needs from the plans card on the left.</div>
+                      </div>
+                    </div>
+                    <div class="instr-step">
+                      <div class="instr-num">2</div>
+                      <div>
+                        <div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Select a Payment Method</div>
+                        <div style="font-size:12px;color:#6b7280;line-height:1.55">Pick any of the accepted payment channels shown above and copy the address.</div>
+                      </div>
+                    </div>
+                    <div class="instr-step">
+                      <div class="instr-num">3</div>
+                      <div>
+                        <div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Include Your Email in Memo</div>
+                        <div style="font-size:12px;color:#6b7280;line-height:1.55">Always add your account email in the memo/remarks field so we can identify your payment.</div>
+                      </div>
+                    </div>
+                    <div class="instr-step">
+                      <div class="instr-num">4</div>
+                      <div>
+                        <div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Send Payment &amp; Notify</div>
+                        <div style="font-size:12px;color:#6b7280;line-height:1.55">Complete the transfer then notify your upline manager with your payment receipt to get activated.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- CUSTOMER SUPPORT CARD -->
+                <div class="pa-card" id="payContactPanel" style="display:none;border-color:rgba(16,185,129,0.12)">
+                  <div class="pa-card-head" style="background:rgba(16,185,129,0.04);border-color:rgba(16,185,129,0.12)">
+                    <div class="pa-card-head-icon" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.81 19.79 19.79 0 01.1 2.18 2 2 0 012.08 0h3a2 2 0 012 1.72c.13 1.01.37 2 .72 2.96a2 2 0 01-.45 2.11L6.01 8.09a16 16 0 006.24 6.24l1.3-1.3a2 2 0 012.11-.45c.96.34 1.95.58 2.96.72A2 2 0 0122 16.92z"/></svg>
+                    </div>
+                    <span class="pa-card-title" style="color:#10b981">Customer Support</span>
+                  </div>
+                  <div class="pa-card-body" id="payContactBody"></div>
+                </div>
+
+              </div><!-- /RIGHT COLUMN -->
+
+            </div><!-- /BODY GRID -->
+
+          </div><!-- /pa-page -->
+        </div>`;
+      }
+
+      // ── FALLBACK: original layout for unlimited/in-range access ──────────────
       return `<div class="login-page">
         <div class="login-box fade-in" style="max-width:440px;width:100%">
           <div style="margin-bottom:32px;text-align:center">
@@ -2120,77 +2546,97 @@
     }
 
     function renderPaymentInfoPanel(container, addresses, contacts, userEmail) {
+
+      // ── TAB ICONS for well-known payment methods ──────────────────────────
+      function getPayIcon(label) {
+        const l = label.toLowerCase();
+        if (l.includes('gcash')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>`;
+        if (l.includes('maya') || l.includes('paymaya')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`;
+        if (l.includes('paypal')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 11C5.3 11 4 9.7 4 8s1.3-3 3-3h7c1.9 0 3.5 1.1 4 2.7"/><path d="M11 15H7l1-8h5c2.5 0 4 1.5 3.5 4-.4 1.8-2 3-3.5 3z"/></svg>`;
+        if (l.includes('bank') || l.includes('transfer')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="22" x2="21" y2="22"/><path d="M2 8l10-6 10 6"/><rect x="4" y="8" width="4" height="10"/><rect x="10" y="8" width="4" height="10"/><rect x="16" y="8" width="4" height="10"/></svg>`;
+        if (l.includes('crypto') || l.includes('btc') || l.includes('usdt') || l.includes('eth')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 0v20M2 12h20"/></svg>`;
+        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`;
+      }
+
       const addrTabs = addresses.map((a, i) => `
-        <button onclick="switchPayTab(${i})" id="payTab_${i}" style="padding:6px 12px;border-radius:7px;border:1px solid ${i===0?'rgba(124,58,237,0.5)':'rgba(255,255,255,0.08)'};background:${i===0?'rgba(124,58,237,0.15)':'transparent'};color:${i===0?'#c4b5fd':'var(--textMuted)'};font-size:11px;font-weight:600;cursor:pointer;font-family:'Rajdhani',sans-serif;transition:all 0.2s;white-space:nowrap">${escHtml(a.label)}</button>
+        <button onclick="switchPayTab(${i})" id="payTab_${i}" class="pm-tab ${i===0?'active':''}">
+          ${getPayIcon(a.label)}
+          ${escHtml(a.label)}
+        </button>
       `).join('');
 
       const addrPanels = addresses.map((a, i) => `
         <div id="payPanel_${i}" style="display:${i===0?'block':'none'}">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <div style="flex:1;min-width:0;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px 12px;font-size:11px;color:#e0d0ff;word-break:break-all;font-family:monospace;letter-spacing:0.3px">${escHtml(a.address)}</div>
-            <button onclick="copyPayAddress('${escHtml(a.address).replace(/'/g,"\\'")}',this)" style="flex-shrink:0;padding:7px 10px;border-radius:7px;border:1px solid rgba(124,58,237,0.3);background:rgba(124,58,237,0.1);color:#a78bfa;font-size:11px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:600">Copy</button>
+          <div class="pm-addr-box">${escHtml(a.address)}</div>
+          <div class="pm-action-row">
+            <button onclick="copyPayAddress('${escHtml(a.address).replace(/'/g,"\\'")}',this)" class="btn-copy">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              Copy Address
+            </button>
+            <button onclick="toggleQR('qr_${i}','${escHtml(a.address).replace(/'/g,"\\'")}',this)" class="btn-qr">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3m0 4v-4m4 4V14h-4"/></svg>
+              QR Code
+            </button>
           </div>
-          <button onclick="toggleQR('qr_${i}','${escHtml(a.address).replace(/'/g,"\\'")}',this)" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(6,182,212,0.2);background:rgba(6,182,212,0.06);color:#22d3ee;font-size:12px;font-weight:600;cursor:pointer;font-family:'Rajdhani',sans-serif;transition:all 0.2s">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3m0 4v-4m4 4V14h-4"/></svg>
-            Show QR Code
-          </button>
-          <div id="qr_${i}" style="display:none;margin-top:10px;text-align:center">
+          <div id="qr_${i}" style="display:none;margin-top:12px;text-align:center;padding:14px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
             <div id="qrCanvas_${i}" style="display:inline-block;padding:10px;background:#fff;border-radius:8px"></div>
-            <p style="font-size:10px;color:var(--textMuted);margin-top:6px;word-break:break-all">${escHtml(a.address)}</p>
+            <p style="font-size:10px;color:var(--textMuted);margin-top:8px;word-break:break-all">${escHtml(a.address)}</p>
           </div>
         </div>
       `).join('');
 
-      const contactHtml = contacts.map(c => `
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)">
-          <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);display:flex;align-items:center;justify-content:center">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.81 19.79 19.79 0 01.1 2.18 2 2 0 012.08 0h3a2 2 0 012 1.72c.13 1.01.37 2 .72 2.96a2 2 0 01-.45 2.11L6.01 8.09a16 16 0 006.24 6.24l1.3-1.3a2 2 0 012.11-.45c.96.34 1.95.58 2.96.72A2 2 0 0122 16.92z"/></svg>
+      const memoNote = userEmail ? `
+        <div class="memo-box">
+          <div style="font-size:11px;font-weight:800;color:#fbbf24;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Include in Memo / Remarks
           </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:10px;color:var(--textMuted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px">${escHtml(c.label)}</div>
-            <div style="font-size:12px;color:#e0d0ff;word-break:break-all">${escHtml(c.value)}</div>
+          <div style="font-size:12px;color:#9ca3af;line-height:1.6;margin-bottom:8px">
+            Add your email <strong style="color:#fde68a;font-family:monospace">${escHtml(userEmail)}</strong> so we can identify your payment.
           </div>
-          <button onclick="copyPayAddress('${escHtml(c.value).replace(/'/g,"\\'")}',this)" style="flex-shrink:0;padding:5px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:var(--textMuted);font-size:10px;cursor:pointer;font-family:'Rajdhani',sans-serif">Copy</button>
-        </div>
-      `).join('');
+          <button onclick="copyPayAddress('${escHtml(userEmail).replace(/'/g,"\\'")}',this)" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.08);color:#fbbf24;font-size:11px;font-weight:700;cursor:pointer;font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;transition:all 0.2s">
+            Copy Email
+          </button>
+        </div>` : '';
 
-      const memoNote = userEmail ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15)">
-        <p style="font-size:11px;color:#fbbf24;margin:0;line-height:1.6">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:3px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <strong>Important:</strong> When sending payment, include your email <strong style="color:#fde68a">${escHtml(userEmail)}</strong> in the memo/remarks field so we can identify your payment.
-        </p>
-        <button onclick="copyPayAddress('${escHtml(userEmail).replace(/'/g,"\\'")}',this)" style="margin-top:6px;padding:4px 10px;border-radius:6px;border:1px solid rgba(245,158,11,0.25);background:rgba(245,158,11,0.08);color:#fbbf24;font-size:10px;font-weight:600;cursor:pointer;font-family:'Rajdhani',sans-serif">Copy Email</button>
-      </div>` : '';
-
+      // ── Fill the payment panel ──────────────────────────────────────────────
       container.innerHTML = `
-        <div style="border-radius:12px;overflow:hidden;border:1px solid rgba(124,58,237,0.15);background:rgba(124,58,237,0.03)">
-          <div style="padding:12px 14px 0;background:rgba(124,58,237,0.06);border-bottom:1px solid rgba(124,58,237,0.1)">
-            <div style="font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:4px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-              Payment Instructions
+        ${addresses.length > 0 ? `
+          <div class="pm-tabs">${addrTabs}</div>
+          ${addrPanels}
+          ${memoNote}
+        ` : '<div style="font-size:12px;color:#6b7280;text-align:center;padding:12px">No payment addresses configured yet.</div>'}
+      `;
+
+      // ── Fill contact support card if contacts exist ─────────────────────────
+      if (contacts.length) {
+        const panel = document.getElementById('payContactPanel');
+        const body = document.getElementById('payContactBody');
+        if (panel && body) {
+          panel.style.display = '';
+          body.innerHTML = contacts.map(c => `
+            <div class="support-item">
+              <div class="support-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.81 19.79 19.79 0 01.1 2.18 2 2 0 012.08 0h3a2 2 0 012 1.72c.13 1.01.37 2 .72 2.96a2 2 0 01-.45 2.11L6.01 8.09a16 16 0 006.24 6.24l1.3-1.3a2 2 0 012.11-.45c.96.34 1.95.58 2.96.72A2 2 0 0122 16.92z"/></svg>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">${escHtml(c.label)}</div>
+                <div style="font-size:13px;color:#e0d0ff;word-break:break-all;font-weight:600">${escHtml(c.value)}</div>
+              </div>
+              <button onclick="copyPayAddress('${escHtml(c.value).replace(/'/g,"\\'")}',this)" style="flex-shrink:0;padding:6px 10px;border-radius:7px;border:1px solid rgba(16,185,129,0.2);background:rgba(16,185,129,0.06);color:#34d399;font-size:10px;font-weight:700;cursor:pointer;font-family:'Rajdhani',sans-serif">Copy</button>
             </div>
-            ${addresses.length > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;padding-bottom:10px">${addrTabs}</div>` : ''}
-          </div>
-          <div style="padding:12px 14px">
-            ${addrPanels}
-            ${memoNote}
-            ${contacts.length ? `
-            <div style="margin-top:12px">
-              <div style="font-size:10px;color:var(--textMuted);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:8px">Contact Support</div>
-              <div style="display:flex;flex-direction:column;gap:6px">${contactHtml}</div>
-            </div>` : ''}
-          </div>
-        </div>`;
+          `).join('');
+        }
+      }
     }
 
+    // ── keep legacy function signature for old callers ─────────────────────────
     window.switchPayTab = function(idx) {
       const tabs = document.querySelectorAll('[id^="payTab_"]');
       const panels = document.querySelectorAll('[id^="payPanel_"]');
       tabs.forEach((t,i) => {
         const active = i === idx;
-        t.style.background = active ? 'rgba(124,58,237,0.15)' : 'transparent';
-        t.style.borderColor = active ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.08)';
-        t.style.color = active ? '#c4b5fd' : 'var(--textMuted)';
+        t.classList.toggle('active', active);
       });
       panels.forEach((p,i) => { p.style.display = i === idx ? 'block' : 'none'; });
     };
