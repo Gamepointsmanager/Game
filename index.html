@@ -1293,7 +1293,7 @@
       const out = {};
       for (let [k,v] of Object.entries(obj)) {
         if (v === undefined) continue;
-        if (v && typeof v === 'object' && v._isTs) v = v.toDate().toISOString();
+        if (v && typeof v === 'object' && v._isTs) v = _safeDate(v).toISOString();
         if (typeof v === 'function') v = v();
         out[_F2S[k]||k] = v;
       }
@@ -2244,7 +2244,7 @@
       }
       const daysLeft = state.accessDaysLeft;
       const expiry = state.accessExpiry;
-      const expiryStr = expiry ? new Date(expiry.seconds * 1000).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) : '';
+      const expiryStr = expiry ? _safeDate(expiry).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) : '';
 
       let statusBlock = '';
       let noticeBlock = '';
@@ -8795,7 +8795,7 @@
             const paySnap = await db.collection(payPath()).where('employeeId', '==', emp._id).get();
             payments = paySnap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(p => {
               if (!p.paidAt) return false;
-              const pt = p.paidAt.toDate ? p.paidAt.toDate() : new Date(p.paidAt);
+              const pt = p.paidAt.toDate ? p._safeDate(paidAt) : new Date(p.paidAt);
               return pt >= fromDate && pt <= toDate;
             });
             paid = payments.reduce((s, p) => s + (p.amount || 0), 0);
@@ -9969,7 +9969,7 @@
         if (!data.expiryDate) return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: data.gbUsername || '', isUnlimited: false };
 
         const now = new Date();
-        const expiry = data.expiryDate.toDate();
+        const expiry = _safeDate(data.expiryDate);
         const diffMs = expiry - now;
         const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
@@ -10006,7 +10006,7 @@
 
       if (myShift) {
         // Store startMs once — all subsequent ticks use local Date.now() only (no Firestore reads)
-        const startMs = myShift.startTime?.toDate ? myShift.startTime.toDate().getTime() : Date.now();
+        const startMs = myShift.startTime?.toDate ? myShift._safeDate(startTime).getTime() : Date.now();
 
         statusEl.textContent = 'On shift';
         statusEl.style.color = 'rgba(255,255,255,0.9)';
@@ -10103,7 +10103,7 @@
           }
           // Fallback: check expiry date embedded at sync time
           if (link.ownerAccessExpiry) {
-            const exp = link.ownerAccessExpiry.toDate ? link.ownerAccessExpiry.toDate() : new Date(link.ownerAccessExpiry);
+            const exp = link.ownerAccessExpiry.toDate ? link._safeDate(ownerAccessExpiry) : new Date(link.ownerAccessExpiry);
             const daysLeft = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
             console.log('[checkAccess] ownerAccessExpiry daysLeft:', daysLeft);
             if (daysLeft > 0) return { hasAccess: true };
@@ -10127,12 +10127,12 @@
           console.log('[checkAccess] userAccess data:', JSON.stringify({
             isDisabled: data.isDisabled,
             isUnlimited: data.isUnlimited,
-            expiryDate: data.expiryDate ? (data.expiryDate.toDate ? data.expiryDate.toDate().toISOString() : String(data.expiryDate)) : null,
+            expiryDate: data.expiryDate ? (data.expiryDate.toDate ? data._safeDate(expiryDate).toISOString() : String(data.expiryDate)) : null,
           }));
           if (data.isDisabled) return { hasAccess: false };
           if (data.isUnlimited) return { hasAccess: true };
           if (data.expiryDate) {
-            const exp = data.expiryDate.toDate ? data.expiryDate.toDate() : new Date(data.expiryDate);
+            const exp = data.expiryDate.toDate ? data._safeDate(expiryDate) : new Date(data.expiryDate);
             const days = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
             console.log('[checkAccess] userAccess daysLeft:', days);
             if (days > 0) return { hasAccess: true };
@@ -10631,7 +10631,7 @@
     function groupShiftsByPeriod(shifts, emp) {
       const periods = {};
       shifts.forEach(sh => {
-        const t = sh.startTime?.toDate ? sh.startTime.toDate() : new Date(sh.startTime || 0);
+        const t = sh.startTime?.toDate ? sh._safeDate(startTime) : new Date(sh.startTime || 0);
         const key = getSalaryPeriodKey(t, emp.salaryType);
         if (!periods[key]) periods[key] = { key, durationMs: 0 };
         periods[key].durationMs += sh.durationMs || 0;
@@ -10652,14 +10652,14 @@
       const type = emp.salaryType || 'hourly';
       const rate = emp.salaryRate || 0;
       const sorted = [...shifts].sort((a,b) => {
-        const ta = a.startTime?.toDate ? a.startTime.toDate().getTime() : 0;
-        const tb = b.startTime?.toDate ? b.startTime.toDate().getTime() : 0;
+        const ta = a.startTime?.toDate ? a._safeDate(startTime).getTime() : 0;
+        const tb = b.startTime?.toDate ? b._safeDate(startTime).getTime() : 0;
         return ta - tb;
       });
 
       // getPeriodKey: returns a string key for what period a shift belongs to
       function getPeriodKey(shift) {
-        const d = shift.startTime?.toDate ? shift.startTime.toDate() : new Date(shift.startTime);
+        const d = shift.startTime?.toDate ? shift._safeDate(startTime) : new Date(shift.startTime);
         // Use local date components — toISOString() gives UTC which mis-buckets late-night shifts
         const localDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
         if (type === 'hourly') return localDate; // group by local day for hourly
@@ -10681,7 +10681,7 @@
       }
 
       function getPeriodLabel(key, shift) {
-        const d = shift.startTime?.toDate ? shift.startTime.toDate() : new Date(shift.startTime);
+        const d = shift.startTime?.toDate ? shift._safeDate(startTime) : new Date(shift.startTime);
         if (type === 'hourly') return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
         if (type === 'daily')  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
         if (type === 'weekly') {
@@ -10712,7 +10712,7 @@
       return Object.values(periodMap).map(p => {
         p.label    = getPeriodLabel(p.key, p.firstShift);
         p.earned   = calcEarnings(emp, p.durationMs);
-        const d    = p.firstShift.startTime?.toDate ? p.firstShift.startTime.toDate() : new Date();
+        const d    = p.firstShift.startTime?.toDate ? p.firstShift._safeDate(startTime) : new Date();
         p.periodStart = p.key;
         p.periodEnd   = p.key;
         return p;
@@ -10792,7 +10792,7 @@
       const periods = {};
       shifts.forEach(sh => {
         if (!sh.startTime) return;
-        const d = sh.startTime.toDate ? sh.startTime.toDate() : new Date(sh.startTime);
+        const d = sh.startTime.toDate ? sh._safeDate(startTime) : new Date(sh.startTime);
         const key = getPeriodKey(d);
         if (!periods[key]) periods[key] = { key, label: getPeriodLabel(key), totalMs: 0, shifts: [] };
         periods[key].totalMs += sh.durationMs || 0;
@@ -10816,7 +10816,7 @@
 
     // Get period key for a date (groups shifts into salary periods)
     function shiftPeriodKey(date, salaryType) {
-      const d = date instanceof Date ? date : (date.toDate ? date.toDate() : new Date(date));
+      const d = date instanceof Date ? date : (date.toDate ? _safeDate(date) : new Date(date));
       const y = d.getFullYear(), m = d.getMonth() + 1, day = d.getDate();
       switch(salaryType) {
         case 'hourly': {
@@ -10851,7 +10851,7 @@
     function groupShiftsByPeriod(shifts, empDoc) {
       const groups = {};
       shifts.forEach(sh => {
-        const t = sh.startTime?.toDate ? sh.startTime.toDate() : new Date(sh.startTime);
+        const t = sh.startTime?.toDate ? sh._safeDate(startTime) : new Date(sh.startTime);
         const key = shiftPeriodKey(t, empDoc.salaryType);
         if (!groups[key]) {
           groups[key] = { periodKey: key, shifts: [], totalMs: 0 };
@@ -10923,7 +10923,7 @@
     // Check if a payment record matches a period key
     function periodMatchesKey(pay, key, empDoc) {
       if (!pay.periodStart) return false;
-      const ps = pay.periodStart?.toDate ? pay.periodStart.toDate() : new Date(pay.periodStart);
+      const ps = pay.periodStart?.toDate ? pay._safeDate(periodStart) : new Date(pay.periodStart);
       const type = empDoc.salaryType;
       function periodKey(date) {
         const d = new Date(date);
@@ -11000,7 +11000,7 @@
 
       const grouped = {};
       shifts.forEach(sh => {
-        const t = sh.startTime?.toDate ? sh.startTime.toDate() : new Date(sh.startTime);
+        const t = sh.startTime?.toDate ? sh._safeDate(startTime) : new Date(sh.startTime);
         const k = periodKey(t);
         if (!grouped[k]) grouped[k] = { key: k, shifts: [], totalMs: 0 };
         grouped[k].shifts.push(sh);
@@ -11012,7 +11012,7 @@
         // Find matching payment for this period
         const periodPaid = payments.filter(p => {
           if (!p.paidByOwner) return false;
-          const ps = p.periodStart?.toDate ? p.periodStart.toDate() : new Date(p.periodStart||0);
+          const ps = p.periodStart?.toDate ? p._safeDate(periodStart) : new Date(p.periodStart||0);
           const k2 = periodKey(ps);
           return k2 === g.key;
         }).reduce((s,p) => s + (p.amount||0), 0);
@@ -11085,7 +11085,7 @@
     }
 
     async function shiftOut(shiftId, startTimestamp) {
-      const startMs = startTimestamp.toDate ? startTimestamp.toDate().getTime() : startTimestamp;
+      const startMs = startTimestamp.toDate ? _safeDate(startTimestamp).getTime() : startTimestamp;
       const endMs   = Date.now();
       const durMs   = endMs - startMs;
       await db.collection(shiftPath()).doc(shiftId).update({
@@ -11110,7 +11110,7 @@
       return snap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(s => {
         if (!s.startTime) return false;
         if (!fromDate && !toDate) return true;
-        const t = s.startTime.toDate ? s.startTime.toDate() : new Date(s.startTime);
+        const t = s.startTime.toDate ? s._safeDate(startTime) : new Date(s.startTime);
         if (fromDate && t < fromDate) return false;
         if (toDate && t > toDate) return false;
         return true;
@@ -11239,7 +11239,7 @@
       const activeCount   = activeEmpObjs.length;
       const activeEmpName = activeCount === 1 ? activeEmpObjs[0].name
                           : activeCount  >  1 ? activeCount + ' cashiers' : null;
-      const activeStartMs = activeShift?.startTime?.toDate ? activeShift.startTime.toDate().getTime() : 0;
+      const activeStartMs = activeShift?.startTime?.toDate ? activeShift._safeDate(startTime).getTime() : 0;
 
       // Total hours & unpaid salary per cashier
       // "Unpaid" = total ever earned (all shifts) − total ever paid (all payments)
@@ -11271,7 +11271,7 @@
 
         // Payments within current filter window (for "Paid" column display)
         const paidThisRange = payments
-          .filter(p => p.paidByOwner && p.paidAt?.toDate && p.paidAt.toDate() >= fromDate && p.paidAt.toDate() <= toDate)
+          .filter(p => p.paidByOwner && p.paidAt?.toDate && p._safeDate(paidAt) >= fromDate && p._safeDate(paidAt) <= toDate)
           .reduce((s, p) => s + (p.amount||0), 0);
 
         // Unpaid = all-time earned (within date range for hours shown) minus all-time paid
@@ -11309,7 +11309,7 @@
               : activeCount===1 ? activeEmpObjs[0].name.split(' ')[0]
               : activeCount
             }</div>
-            ${activeCount===1 && activeShift?.startTime?.toDate ? '<div style=\"font-family:Orbitron,monospace;font-size:12px;color:#22d3ee;margin-top:4px\" id=\"ownerLiveTimer\" data-start=\"'+activeShift.startTime.toDate().getTime()+'\">' + formatHHMMSS(Date.now()-activeShift.startTime.toDate().getTime())+'</div>' : ''}
+            ${activeCount===1 && activeShift?.startTime?.toDate ? '<div style=\"font-family:Orbitron,monospace;font-size:12px;color:#22d3ee;margin-top:4px\" id=\"ownerLiveTimer\" data-start=\"'+activeShift._safeDate(startTime).getTime()+'\">' + formatHHMMSS(Date.now()-activeShift._safeDate(startTime).getTime())+'</div>' : ''}
             <div style="font-size:9px;color:var(--textMuted);margin-top:5px">${activeCount>0?'Tap to manage':'No one on shift'}</div>
           </div>
           <div class="emp-stat sclr-2 clickable" id="dashHoursCard">
@@ -11378,7 +11378,7 @@
           if (!shifts.length) { showStatModal('ON SHIFT NOW', '<div style="padding:18px;text-align:center;color:var(--textMuted)">No one currently on shift</div>'); return; }
           const rows = shifts.map(s => {
             const emp = emps.find(e => e._id === s.employeeId);
-            const startMs = s.startTime?.toDate ? s.startTime.toDate().getTime() : Date.now();
+            const startMs = s.startTime?.toDate ? s._safeDate(startTime).getTime() : Date.now();
             return '<div style="padding:12px 14px;border-bottom:1px solid rgba(120,100,200,0.1)" id="shiftRow_'+s._id+'">'
               +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
               +'<div><div style="font-weight:700;font-size:14px">'+esc(emp?.name||s.employeeName||'Unknown')+'</div>'
@@ -11476,7 +11476,7 @@
           } else if (od.isUnlimited) {
             ownerHasAccess = true;
           } else if (od.expiryDate) {
-            const exp = od.expiryDate.toDate ? od.expiryDate.toDate() : new Date(od.expiryDate);
+            const exp = od.expiryDate.toDate ? od._safeDate(expiryDate) : new Date(od.expiryDate);
             const days = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
             ownerHasAccess = days > 0;
             ownerAccessExpiry = od.expiryDate;
@@ -11484,7 +11484,7 @@
           // Backend stores "unlimited" as far-future date (100 years), not isUnlimited flag
           // Check for that pattern too
           if (!ownerHasAccess && od.expiryDate) {
-            const exp = od.expiryDate.toDate ? od.expiryDate.toDate() : new Date(od.expiryDate);
+            const exp = od.expiryDate.toDate ? od._safeDate(expiryDate) : new Date(od.expiryDate);
             const daysLeft = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
             if (daysLeft > 36500) { // >100 years = unlimited
               ownerHasAccess = true;
@@ -11495,7 +11495,7 @@
           }
         }
         console.log('[writeEmployeeLink] Owner access snapshot: hasAccess=', ownerHasAccess,
-          '| expiry=', ownerAccessExpiry ? (ownerAccessExpiry.toDate ? ownerAccessExpiry.toDate().toISOString() : ownerAccessExpiry) : null);
+          '| expiry=', ownerAccessExpiry ? (ownerAccessExpiry.toDate ? _safeDate(ownerAccessExpiry).toISOString() : ownerAccessExpiry) : null);
       } catch(e) {
         console.warn('[writeEmployeeLink] Could not read owner userAccess:', e.message);
         // If we can't read it, assume owner has access (they are logged in and using the app)
@@ -11721,7 +11721,7 @@
       wrap.innerHTML = employees.map((emp, idx) => {
         const myShift     = activeShifts.find(s => s.employeeId === emp._id);
         const isActive    = !!myShift;
-        const activeDurMs = isActive && myShift.startTime?.toDate ? Math.max(0, now - myShift.startTime.toDate().getTime()) : 0;
+        const activeDurMs = isActive && myShift.startTime?.toDate ? Math.max(0, now - myShift._safeDate(startTime).getTime()) : 0;
         const clr         = colors[idx % colors.length];
         const isDeactivated = emp.active === false;
         const isLinked    = linkMap[emp._id];
@@ -11743,7 +11743,7 @@
             </div>
             <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
               ${isActive ? `<div style="text-align:right"><div style="font-size:9px;color:#34d399;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px;font-weight:700">Live</div><div class="shift-timer" style="font-size:15px;line-height:1.1" id="ot_${emp._id}">${formatHHMM(activeDurMs)}</div></div>` : ''}
-              ${isActive ? `<button class="btn btn-sm emp-shiftout-btn" data-empid="${emp._id}" data-shiftid="${myShift._id}" data-startts="${myShift.startTime?.toDate ? myShift.startTime.toDate().getTime() : Date.now()}" style="font-size:11px;padding:6px 10px;gap:4px;flex-shrink:0;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);border-radius:8px;color:#f87171;font-weight:700"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg> Out</button>` : ''}
+              ${isActive ? `<button class="btn btn-sm emp-shiftout-btn" data-empid="${emp._id}" data-shiftid="${myShift._id}" data-startts="${myShift.startTime?.toDate ? myShift._safeDate(startTime).getTime() : Date.now()}" style="font-size:11px;padding:6px 10px;gap:4px;flex-shrink:0;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.4);border-radius:8px;color:#f87171;font-weight:700"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg> Out</button>` : ''}
               <button class="btn btn-ghost btn-sm emp-edit-btn" data-empid="${emp._id}" style="font-size:12px;padding:6px 14px;gap:4px;flex-shrink:0;background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.3);border-radius:8px;color:#a78bfa;font-weight:700">${editSvg} Edit</button>
               <button class="btn btn-ghost btn-sm emp-perm-btn" data-empid="${emp._id}" title="Manage Permissions" style="font-size:12px;padding:6px 10px;gap:4px;flex-shrink:0;background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.3);border-radius:8px;color:#22d3ee;font-weight:700"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
             </div>
@@ -11758,7 +11758,7 @@
           activeShifts.forEach(s => {
             const el = document.getElementById('ot_' + s.employeeId);
             if (!el) return;
-            const ms = s.startTime?.toDate ? Math.max(0, Date.now() - s.startTime.toDate().getTime()) : 0;
+            const ms = s.startTime?.toDate ? Math.max(0, Date.now() - s._safeDate(startTime).getTime()) : 0;
             el.textContent = formatHHMMSS(ms);
           });
         }, 1000);
@@ -11881,7 +11881,7 @@
 
       const totalMs  = shifts.reduce((s, sh) => s + (sh.durationMs || 0), 0);
       const earnings = calcEarnings(emp, totalMs);
-      const startMs  = myShift?.startTime?.toDate ? myShift.startTime.toDate().getTime() : 0;
+      const startMs  = myShift?.startTime?.toDate ? myShift._safeDate(startTime).getTime() : 0;
       const liveDurMs = myShift ? Date.now() - startMs : 0;
       const salaryLabel = { hourly:'Hourly', daily:'Daily', weekly:'Weekly', biweekly:'Bi-Weekly', monthly:'Monthly' }[emp.salaryType] || emp.salaryType;
 
@@ -11943,8 +11943,8 @@
         <div class="card" style="padding:0;overflow:hidden">
           ${shifts.length
             ? shifts.sort((a,b)=>(b.startTime?.seconds||0)-(a.startTime?.seconds||0)).slice(0,30).map(sh => {
-                const d   = sh.startTime?.toDate ? sh.startTime.toDate() : new Date();
-                const end = sh.endTime?.toDate   ? sh.endTime.toDate()   : null;
+                const d   = sh.startTime?.toDate ? sh._safeDate(startTime) : new Date();
+                const end = sh.endTime?.toDate   ? sh._safeDate(endTime)   : null;
                 const delSvgStr = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/><path d="M10,11v6M14,11v6"/></svg>';
                 return `<div class="salary-row">
                   <div style="flex:1;min-width:0">
@@ -12075,7 +12075,7 @@
           fetchShifts(null, null, emp._id),
         ]);
         const myActiveShift = activeShift && activeShift.employeeId === emp._id ? activeShift : null;
-        const liveMs = myActiveShift?.startTime?.toDate ? Date.now() - myActiveShift.startTime.toDate().getTime() : 0;
+        const liveMs = myActiveShift?.startTime?.toDate ? Date.now() - myActiveShift._safeDate(startTime).getTime() : 0;
         const liveBonusMs = myActiveShift ? liveMs : 0;
         const totalMs  = shifts.reduce((s, sh) => s + (sh.durationMs||0), 0) + liveBonusMs;
         const earnings = calcEarnings(emp, totalMs);
@@ -12137,7 +12137,7 @@
           <div class="card" style="padding:0;overflow:hidden;max-height:260px;overflow-y:auto">
             ${shifts.length
               ? shifts.sort((a,b)=>(b.startTime?.seconds||0)-(a.startTime?.seconds||0)).map(sh => {
-                  const d = sh.startTime?.toDate ? sh.startTime.toDate() : new Date();
+                  const d = sh.startTime?.toDate ? sh._safeDate(startTime) : new Date();
                   return `<div class="salary-row">
                     <div><div style="font-weight:600;font-size:12px">${d.toLocaleDateString()} ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true})}</div></div>
                     <div style="text-align:right">
@@ -12152,8 +12152,8 @@
           <div class="card" style="padding:0;overflow:hidden">
             ${payments.length
               ? payments.sort((a,b)=>(b.periodEnd?.seconds||0)-(a.periodEnd?.seconds||0)).map(pay => {
-                  const pf = pay.periodStart?.toDate ? pay.periodStart.toDate().toLocaleDateString() : '-';
-                  const pt = pay.periodEnd?.toDate   ? pay.periodEnd.toDate().toLocaleDateString()   : '-';
+                  const pf = pay.periodStart?.toDate ? pay._safeDate(periodStart).toLocaleDateString() : '-';
+                  const pt = pay.periodEnd?.toDate   ? pay._safeDate(periodEnd).toLocaleDateString()   : '-';
                   const sc = pay.receivedByEmployee ? 'received' : pay.paidByOwner ? 'paid' : 'unpaid';
                   const sl = pay.receivedByEmployee ? 'Received by Cashier' : pay.paidByOwner ? 'Paid' : 'Pending';
                   return `<div class="salary-row">
@@ -12170,7 +12170,7 @@
 
         // Live timer for currently active shift in detail modal
         if (myActiveShift) {
-          const detailStartMs = myActiveShift.startTime?.toDate ? myActiveShift.startTime.toDate().getTime() : 0;
+          const detailStartMs = myActiveShift.startTime?.toDate ? myActiveShift._safeDate(startTime).getTime() : 0;
           clearInterval(_shiftTimerInterval);
           _shiftTimerInterval = setInterval(() => {
             const timerEl = document.getElementById('detailLiveTimer');
@@ -12199,8 +12199,8 @@
             const thisPeriod = periods2.find(p => p.key === periodKey);
             const pShifts = thisPeriod ? thisPeriod.shifts : [];
             const pMs = thisPeriod ? thisPeriod.totalMs : 0;
-            const pStart = pShifts.length ? (pShifts[pShifts.length-1].startTime?.toDate ? pShifts[pShifts.length-1].startTime.toDate() : new Date()) : from;
-            const pEnd   = pShifts.length ? (pShifts[0].startTime?.toDate ? pShifts[0].startTime.toDate() : new Date()) : to;
+            const pStart = pShifts.length ? (pShifts[pShifts.length-1].startTime?.toDate ? pShifts[pShifts.length-1]._safeDate(startTime) : new Date()) : from;
+            const pEnd   = pShifts.length ? (pShifts[0].startTime?.toDate ? pShifts[0]._safeDate(startTime) : new Date()) : to;
             await db.collection(payPath()).add({
               employeeId:         emp._id,
               employeeName:       emp.name || '',
