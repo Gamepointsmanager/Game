@@ -1406,20 +1406,43 @@
 
     function _toRef(path){
       const parts=path.split('/').filter(Boolean);
-      if(parts[0]==='users')parts.splice(0,2);
-      if(parts[0]==='organizations'){
-        if(parts.length===2)return new _SBRef(_PATH_MAP.organizations||'organizations',parts[1]);
+      let _ownerUid = null;
+
+      // Extract owner uid from users/{uid}/... paths
+      if(parts[0]==='users'){
+        _ownerUid = parts[1];
         parts.splice(0,2);
       }
+
+      if(parts[0]==='organizations'){
+        if(parts.length===2) return new _SBRef(_PATH_MAP.organizations||'organizations',parts[1]);
+        parts.splice(0,2);
+      }
+
       // parts: [collection, docId?, subCollection?, subDocId?]
       const col=parts[0], docId=parts[1]||null, subCol=parts[2]||null, subId=parts[3]||null;
+
+      // Owner-scoped tables — add owner_uid filter automatically
+      const _OWNER_TABLES = new Set(['companies','master_games','bills','assigned_games','company_usernames',
+        'cf_transactions','cf_payment_methods','cf_shareholders','cf_op_expenses','cf_dividend_payments']);
+
       if(subCol){
+        // Sub-collection e.g. companies/{id}/assignedGames
         const ref = new _SBRef(_PATH_MAP[subCol]||subCol, subId);
-        // Filter sub-collection by parent ID (e.g. assignedGames by company_id)
         if(docId) ref._w.push({f:'company_id', op:'eq', v:docId});
+        if(_ownerUid && _OWNER_TABLES.has(_PATH_MAP[subCol]||subCol)){
+          ref._w.push({f:'owner_uid', op:'eq', v:_ownerUid});
+        }
         return ref;
       }
-      return new _SBRef(_PATH_MAP[col]||col, docId);
+
+      const table = _PATH_MAP[col]||col;
+      const ref = new _SBRef(table, docId);
+      // Add owner_uid filter for owner-scoped collections
+      if(_ownerUid && !docId && _OWNER_TABLES.has(table)){
+        ref._w.push({f:'owner_uid', op:'eq', v:_ownerUid});
+      }
+      return ref;
     }
     const db={collection:_toRef,doc:_toRef};
 
@@ -1711,9 +1734,11 @@
         }));
 
         rebuildBillIndex();
-        _startupCacheSave(); // cache for next 10 min
+        _startupCacheSave();
         _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
-      } catch(e) { console.error('Load error:', e); }
+        console.log('[loadAllData] Loaded:', state.masterGames.length, 'games,', Object.keys(state.companies).length, 'companies,', state.bills.length, 'bills');
+        render(); // ← re-render with fresh data from Supabase
+      } catch(e) { console.error('[loadAllData] error:', e); }
     }
 
     // Setup realtime listeners after initial load
@@ -9847,6 +9872,7 @@
     const ADMIN_EMAIL = 'service@sweepadmin.com';
 
     async function checkUserAccess(user) {
+      console.log('[checkUserAccess] checking uid:', user.uid);
       // Admin always has access
       if (user.email === ADMIN_EMAIL) return { hasAccess: true, daysLeft: 999, expiry: null, gbUsername: 'admin' };
 
@@ -9887,6 +9913,7 @@
         }
 
         const data = doc.data();
+        console.log('[checkUserAccess] raw data:', JSON.stringify(data));
         // Update last login (preserve existing gbUsername)
         db.collection('userAccess').doc(user.uid).update({
           lastLogin: _serverTs(),
@@ -13609,8 +13636,13 @@
     // ============================================================
     // PWA Service Worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('[SW] registered:', reg.scope))
+      navigator.serviceWorker.register('./sw.js', {updateViaCache: 'none'})
+        .then(reg => {
+          console.log('[SW] registered:', reg.scope);
+          // Check for updates immediately and every 60s
+          reg.update();
+          setInterval(() => reg.update(), 60000);
+        })
         .catch(e => console.log('[SW] failed:', e.message));
     }
     // Initial render
