@@ -1244,6 +1244,15 @@
     // FIREBASE INIT
     // ============================================================
     // ── Supabase ──────────────────────────────────────────────────────────────
+    // Clear old Firebase cache keys that cause stale data on startup
+    try {
+      Object.keys(localStorage).forEach(k => {
+        if (k.startsWith('gb_') || k.startsWith('firebase') || k.startsWith('firestore')) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch(e) {}
+
     const _supabase = window.supabase.createClient('https://kzchxmulktygoqhiwpff.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg');
 
     const _serverTs = () => new Date().toISOString();
@@ -1732,46 +1741,28 @@
 
     async function loadAllData(force) {
       if (!state.user) return;
+      console.log('[loadAllData] starting, uid:', state.user.uid, 'force:', force);
 
-      // 1. Try fast localStorage cache first — zero Firestore reads
-      if (!force) {
-        var sc = _startupCacheLoad();
-        if (sc && sc.mg && sc.bills && sc.companies) {
-          state.masterGames = sc.mg;
-          state.bills       = sc.bills;
-          state.companies   = sc.companies;
-          rebuildBillIndex();
-          render();
-          return; // served fully from cache, no reads
-        }
-        // Legacy cache fallback
-        var cached = _gbCache.get('data');
-        if (cached && cached.mg && cached.bills && cached.companies) {
-          state.masterGames = cached.mg || [];
-          state.bills       = cached.bills || [];
-          state.companies   = cached.companies || {};
-          rebuildBillIndex();
-          render();
-          return;
-        }
-      }
-
-      // 2. Cache miss — fetch from Firestore (happens once per 10 min)
+      // Always fetch fresh from Supabase — cache was causing stale data issues
       try {
+        console.log('[loadAllData] fetching companies...');
         const compSnap = await db.collection(userPath()+'/companies').get();
+        console.log('[loadAllData] companies raw count:', compSnap.docs.length);
+
         const compBasic = {};
         compSnap.docs.forEach(doc => {
           compBasic[doc.id] = { _id: doc.id, ...doc.data(), assignedGames:[], usernames:[] };
         });
         state.companies = compBasic;
 
-        // Bills: load last 200 only (reduces startup reads dramatically)
+        console.log('[loadAllData] fetching masterGames + bills...');
         const [mgSnap, billSnap] = await Promise.all([
           db.collection(userPath()+'/masterGames').get(),
           db.collection(userPath()+'/bills').orderBy('date','desc').limit(200).get(),
         ]);
         state.masterGames = mgSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
         state.bills       = billSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        console.log('[loadAllData] masterGames:', state.masterGames.length, '| bills:', state.bills.length);
 
         // Subcollections in parallel
         await Promise.all(compSnap.docs.map(async doc => {
@@ -1784,11 +1775,12 @@
         }));
 
         rebuildBillIndex();
-        _startupCacheSave();
-        _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
-        console.log('[loadAllData]', state.masterGames.length, 'games |', Object.keys(state.companies).length, 'companies |', state.bills.length, 'bills');
+        console.log('[loadAllData] DONE —', state.masterGames.length, 'games |', Object.keys(state.companies).length, 'companies |', state.bills.length, 'bills');
         render();
-      } catch(e) { console.error('[loadAllData] error:', e); }
+      } catch(e) {
+        console.error('[loadAllData] ERROR:', e.message, e.stack);
+        render(); // render anyway to show empty state
+      }
     }
 
     // Setup realtime listeners after initial load
