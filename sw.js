@@ -1,6 +1,6 @@
 // GameBill SW v3 — stale-while-revalidate, no reload on minimize
 const CACHE = 'gamebill-v3';
-const SHELL = ['./'];
+const SHELL = ['./index.html', './'];
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -32,10 +32,10 @@ self.addEventListener('fetch', e => {
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
       const cache = await caches.open(CACHE);
-      const cached = await cache.match('./');
+      const cached = await cache.match('./index.html');
       // Update cache in background without blocking
       fetch(req).then(res => {
-        if (res && res.ok) cache.put('./', res.clone());
+        if (res && res.ok) cache.put('./index.html', res.clone());
       }).catch(()=>{});
       // Return cached immediately — zero reload, zero flash
       return cached || fetch(req);

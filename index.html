@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json" />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-  <script>if(typeof Chart==='undefined'){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js';document.head.appendChild(s);}</script>
+  <script>if(typeof Chart==='undefined'){var _cs=document.createElement('script');_cs.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js';document.head.appendChild(_cs);}</script>
 
   <!-- Firebase SDKs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1243,70 +1243,50 @@
     // ============================================================
     // FIREBASE INIT
     // ============================================================
-    // ── Supabase init ──────────────────────────────────────────────────────────
-    const _supabase = window.supabase.createClient(
-      'https://kzchxmulktygoqhiwpff.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg'
-    );
+    // ── Supabase ──────────────────────────────────────────────────────────────
+    const _supabase = window.supabase.createClient('https://kzchxmulktygoqhiwpff.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg');
 
-    // ── Shim: firebase.firestore.FieldValue / Timestamp ────────────────────
     const _serverTs = () => new Date().toISOString();
-    window.firebase = { firestore: {
-      FieldValue: { serverTimestamp: _serverTs, arrayUnion: (...a)=>a, arrayRemove: (...a)=>a },
-      Timestamp: {
-        fromMillis: ms => ({ toMillis:()=>ms, toDate:()=>new Date(ms), seconds:Math.floor(ms/1000), _isTs:true }),
-        fromDate:   d  => ({ toMillis:()=>d.getTime(), toDate:()=>d, seconds:Math.floor(d.getTime()/1000), _isTs:true }),
-        now:        ()  => { const n=Date.now(); return { toMillis:()=>n, toDate:()=>new Date(n), seconds:Math.floor(n/1000), _isTs:true }; },
-      },
-    }, auth: { Auth: { Persistence: { LOCAL:'local' } } } };
+    window._TS = {
+      fromMillis: ms => ({ toMillis:()=>ms, toDate:()=>new Date(ms), seconds:Math.floor(ms/1000), _isTs:true }),
+      fromDate:   d  => ({ toMillis:()=>d.getTime(), toDate:()=>d, seconds:Math.floor(d.getTime()/1000), _isTs:true }),
+    };
+    window.firebase = { firestore:{ FieldValue:{ serverTimestamp:_serverTs }, Timestamp:window._TS }, auth:{ Auth:{ Persistence:{ LOCAL:'local' } } } };
     window.firebase.auth.GoogleAuthProvider = function(){};
 
-    // ── camelCase ↔ snake_case maps ────────────────────────────────────────
+    // ── Field name maps camelCase ↔ snake_case ────────────────────────────────
     const _F2S = {
-      // user fields
       displayName:'display_name', photoURL:'photo_url', gbUsername:'gb_username',
       expiryDate:'expiry_date', isDisabled:'is_disabled', isUnlimited:'is_unlimited',
       lastLogin:'last_login', createdAt:'created_at', updatedAt:'updated_at',
       subPeriodStart:'sub_period_start', subPeriodEnd:'sub_period_end',
       subscriptionCost:'subscription_cost', invoiceSettings:'invoice_settings',
-      generalPayments:'general_payments',
-      // company fields
-      ownerUid:'owner_uid', ownerEmail:'owner_email', ownerName:'owner_name',
-      companyCode:'company_code', creditBalance:'credit_balance',
-      extraFeeEnabled:'extra_fee_enabled', extraFeePercent:'extra_fee_percent',
-      extraFeeCostRate:'extra_fee_cost_rate', invoiceEnabled:'invoice_enabled',
-      invoiceCode:'invoice_code',
-      // master_games fields
-      totalPoints:'total_points', remainingPoints:'remaining_points',
-      orderedPoints:'ordered_points', costRate:'cost_rate',
-      assignedUsername:'assigned_username', assignedLevel:'assigned_level',
-      highestLevel:'highest_level', billingHistory:'billing_history',
-      stockHistory:'stock_history', orderHistory:'order_history',
-      // bill fields
-      companyId:'company_id', companyName:'company_name',
+      generalPayments:'general_payments', ownerUid:'owner_uid', ownerEmail:'owner_email',
+      ownerName:'owner_name', employeeId:'employee_id', ownerHasAccess:'owner_has_access',
+      ownerAccessExpiry:'owner_access_expiry', accessGrantedAt:'access_granted_at',
+      targetUid:'target_uid', targetAll:'target_all', dismissedAt:'dismissed_at',
+      sentBy:'sent_by', gameName:'game_name', totalPoints:'total_points',
+      remainingPoints:'remaining_points', orderedPoints:'ordered_points',
+      costRate:'cost_rate', assignedUsername:'assigned_username',
+      assignedLevel:'assigned_level', highestLevel:'highest_level',
+      billingHistory:'billing_history', stockHistory:'stock_history',
+      orderHistory:'order_history', companyCode:'company_code',
       referenceNumber:'reference_number', convMode:'conv_mode',
+      creditBalance:'credit_balance', extraFeeEnabled:'extra_fee_enabled',
+      extraFeePercent:'extra_fee_percent', extraFeeCostRate:'extra_fee_cost_rate',
+      invoiceEnabled:'invoice_enabled', invoiceCode:'invoice_code',
       totalDollars:'total_dollars', creditApplied:'credit_applied',
       partialAmount:'partial_amount', balanceDue:'balance_due',
       extraFeeAmount:'extra_fee_amount', extraFeeProfit:'extra_fee_profit',
       paymentStatus:'payment_status', paymentMethodId:'payment_method_id',
-      extraPayments:'extra_payments',
-      // assigned_games / usernames
-      gameName:'game_name',
-      // employee / shift / salary
-      employeeId:'employee_id', orgId:'org_id', ownerHasAccess:'owner_has_access',
-      ownerAccessExpiry:'owner_access_expiry', accessGrantedAt:'access_granted_at',
+      extraPayments:'extra_payments', companyId:'company_id',
+      companyName:'company_name', billId:'bill_id',
+      startTime:'start_time', endTime:'end_time', orgId:'org_id',
       salaryType:'salary_type', salaryRate:'salary_rate',
-      startTime:'start_time', endTime:'end_time',
       periodStart:'period_start', periodEnd:'period_end', paidAt:'paid_at',
       receivedByEmployee:'received_by_employee', receivedAt:'received_at',
-      // popup
-      targetUid:'target_uid', targetAll:'target_all', dismissedAt:'dismissed_at', sentBy:'sent_by',
-      // cf
-      billId:'bill_id',
-    }
+    };
     const _S2F = Object.fromEntries(Object.entries(_F2S).map(([k,v])=>[v,k]));
-    const _UID_PK = new Set(['user_access','employee_uids']);
-    const _pk = t => _UID_PK.has(t) ? 'uid' : 'id';
 
     function _toSB(obj) {
       if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
@@ -1323,14 +1303,23 @@
       if (!row) return null;
       const out = {};
       for (const [k,v] of Object.entries(row)) out[_S2F[k]||k] = v;
-      if (row.id)  { out.id = row.id;   out._id = row.id; }
-      if (row.uid) { out.uid = row.uid; }
+      if (row.id)  { out.id = row.id; out._id = row.id; }
+      if (row.uid) { out.uid = row.uid; out._id = row.uid; }
       return out;
     }
+    function _safeDate(d) {
+      if (!d) return new Date();
+      if (d instanceof Date) return d;
+      if (d && d.seconds) return new Date(d.seconds * 1000);
+      if (d && d.toDate) return d.toDate();
+      const p = new Date(d); return isNaN(p) ? new Date() : p;
+    }
 
+    // Table map: Firestore collection name → Supabase table name
     const _PATH_MAP = {
-      userAccess:'user_access', gbUsernames:'gb_usernames', popupMessages:'popup_messages',
-      employeeLinks:'employee_links', employeeUids:'employee_uids', organizations:'organizations',
+      userAccess:'user_access', gbUsernames:'gb_usernames',
+      popupMessages:'popup_messages', employeeLinks:'employee_links',
+      employeeUids:'employee_uids', organizations:'organizations',
       companies:'companies', masterGames:'master_games', bills:'bills',
       assignedGames:'assigned_games', usernames:'company_usernames',
       employees:'employees', shifts:'shifts', salaryPayments:'salary_payments',
@@ -1339,146 +1328,207 @@
       cf_dividendPayments:'cf_dividend_payments',
     };
 
+    // Tables where owner_uid scopes data to the logged-in user
+    const _OWNER_TABLES = new Set([
+      'companies','master_games','bills','assigned_games','company_usernames',
+      'cf_transactions','cf_payment_methods','cf_shareholders',
+      'cf_op_expenses','cf_dividend_payments',
+    ]);
+
+    // Tables where PK is text (Firebase-style IDs) not uuid
+    const _TEXT_PK = new Set([
+      'companies','master_games','bills','assigned_games','company_usernames',
+      'employee_links',  // PK is email key string
+    ]);
+
+    // Tables where PK is uid (not id)
+    const _UID_PK = new Set(['user_access','employee_uids']);
+
+    function _pk(t) {
+      if (_UID_PK.has(t)) return 'uid';
+      return 'id';
+    }
+
     class _SBRef {
-      constructor(t,id){this._t=t;this._id=id||null;this._w=[];this._ord=null;this._asc=true;this._lim=null;}
-      _clone(){const c=new _SBRef(this._t,this._id);c._w=[...this._w];c._ord=this._ord;c._asc=this._asc;c._lim=this._lim;return c;}
-      where(f,op,v){const c=this._clone();const m={'==':'eq','!=':'neq','>':'gt','>=':'gte','<':'lt','<=':'lte'};c._w.push({f:_F2S[f]||f,op:m[op]||'eq',v});return c;}
-      orderBy(f,dir){const c=this._clone();c._ord=_F2S[f]||f;c._asc=dir!=='desc';return c;}
-      limit(n){const c=this._clone();c._lim=n;return c;}
-      doc(id){const c=this._clone();c._id=id;return c;}
-      collection(sub){return new _SBRef(_PATH_MAP[sub]||sub,null);}
-      _q(sel){let q=_supabase.from(this._t).select(sel||'*');for(const w of this._w)q=q[w.op](w.f,w.v);if(this._ord)q=q.order(this._ord,{ascending:this._asc});if(this._lim)q=q.limit(this._lim);return q;}
-      async get(){
-        if(this._id){
-          const{data,error}=await _supabase.from(this._t).select('*').eq(_pk(this._t),this._id).single();
-          if(error&&error.code!=='PGRST116')console.warn('[db.get]',this._t,error.message);
-          return{exists:!!data,data:()=>_fromSB(data),id:this._id};
-        }
-        const{data,error}=await this._q('*');
-        if(error)console.warn('[db.col]',this._t,error.message);
-        const docs=(data||[]).map(r=>{return{id:r.id||r.uid,exists:true,data:()=>_fromSB(r)}});
-        return{docs,empty:!docs.length,docChanges:()=>docs.map(d=>{return{type:'added',doc:d}})};
+      constructor(t, id) { this._t=t; this._id=id||null; this._w=[]; this._ord=null; this._asc=true; this._lim=null; }
+      _clone() { const c=new _SBRef(this._t,this._id); c._w=[...this._w]; c._ord=this._ord; c._asc=this._asc; c._lim=this._lim; return c; }
+      where(f,op,v) { const c=this._clone(); const m={'==':'eq','!=':'neq','>':'gt','>=':'gte','<':'lt','<=':'lte'}; c._w.push({f:_F2S[f]||f, op:m[op]||'eq', v}); return c; }
+      orderBy(f,dir) { const c=this._clone(); c._ord=_F2S[f]||f; c._asc=dir!=='desc'; return c; }
+      limit(n) { const c=this._clone(); c._lim=n; return c; }
+      doc(id) { const c=this._clone(); c._id=id; return c; }
+      collection(sub) { return new _SBRef(_PATH_MAP[sub]||sub, null); }
+      _q(sel) {
+        if (!this._t) throw new Error('Invalid relation name: relation must be a non-empty string.');
+        let q=_supabase.from(this._t).select(sel||'*');
+        for (const w of this._w) q=q[w.op](w.f, w.v);
+        if (this._ord) q=q.order(this._ord, {ascending:this._asc});
+        if (this._lim) q=q.limit(this._lim);
+        return q;
       }
-      async set(payload){
-        const d=_toSB(payload),pk=_pk(this._t);
-        if(this._id){const{error}=await _supabase.from(this._t).upsert({[pk]:this._id,...d});if(error){console.error('[db.set]',this._t,error.message);throw error;}}
-        else{
-          const _TEXT_PK_TABLES=new Set(['master_games','companies','assigned_games','company_usernames','bills']);
-          if(_TEXT_PK_TABLES.has(this._t)&&!d.id) d.id=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
-          const{data:row,error}=await _supabase.from(this._t).insert(d).select().single();
-          if(error){console.error('[db.set]',this._t,error.message);throw error;}
-          this._id=row.id;
+      async get() {
+        if (this._id) {
+          const pk=_pk(this._t);
+          const {data,error}=await _supabase.from(this._t).select('*').eq(pk, this._id).single();
+          if (error && error.code!=='PGRST116') console.warn('[db.get]', this._t, error.message);
+          return { exists:!!data, data:()=>_fromSB(data), id:this._id };
+        }
+        const {data,error}=await this._q('*');
+        if (error) console.warn('[db.col]', this._t, error.message);
+        const docs=(data||[]).map(r=>{ return { id:r.id||r.uid, exists:true, data:()=>_fromSB(r) }; });
+        return { docs, empty:!docs.length, docChanges:()=>docs.map(d=>{return{type:'added',doc:d};}) };
+      }
+      async set(payload) {
+        const d=_toSB(payload), pk=_pk(this._t);
+        if (this._id) {
+          const {error}=await _supabase.from(this._t).upsert({[pk]:this._id,...d});
+          if (error) { console.error('[db.set]',this._t,error.message); throw error; }
+        } else {
+          if (_TEXT_PK.has(this._t) && !d.id) d.id=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+          const {data:row,error}=await _supabase.from(this._t).insert(d).select().single();
+          if (error) { console.error('[db.set insert]',this._t,error.message); throw error; }
+          this._id=row.id||row.uid;
         }
         return this;
       }
-      async update(payload){
+      async update(payload) {
         const clean=Object.fromEntries(Object.entries(_toSB(payload)).filter(([,v])=>v!==undefined));
-        const{error}=await _supabase.from(this._t).update(clean).eq(_pk(this._t),this._id);
-        if(error){console.error('[db.update]',this._t,error.message);throw error;}
+        const pk=_pk(this._t);
+        const {error}=await _supabase.from(this._t).update(clean).eq(pk, this._id);
+        if (error) { console.error('[db.update]',this._t,error.message); throw error; }
       }
-      async delete(){
-        if(this._id){const{error}=await _supabase.from(this._t).delete().eq(_pk(this._t),this._id);if(error)throw error;}
-        else{let q=_supabase.from(this._t).delete();for(const w of this._w)q=q[w.op](w.f,w.v);const{error}=await q;if(error)throw error;}
-      }
-      async add(payload){
-        const d = _toSB(payload);
-        // Tables with text PKs (Firebase-style IDs) need an explicit ID on insert
-        const _TEXT_PK_TABLES = new Set(['master_games','companies','assigned_games','company_usernames','bills']);
-        if(_TEXT_PK_TABLES.has(this._t) && !d.id){
-          d.id = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      async delete() {
+        if (this._id) {
+          const {error}=await _supabase.from(this._t).delete().eq(_pk(this._t), this._id);
+          if (error) throw error;
+        } else {
+          let q=_supabase.from(this._t).delete();
+          for (const w of this._w) q=q[w.op](w.f, w.v);
+          const {error}=await q; if (error) throw error;
         }
-        const{data:row,error}=await _supabase.from(this._t).insert(d).select().single();
-        if(error){console.error('[db.add]',this._t,error.message);throw error;}
-        return{id:row.id};
       }
-      onSnapshot(cb,errCb){
+      async add(payload) {
+        const d=_toSB(payload);
+        if (_TEXT_PK.has(this._t) && !d.id) d.id=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+        const {data:row,error}=await _supabase.from(this._t).insert(d).select().single();
+        if (error) { console.error('[db.add]',this._t,error.message); throw error; }
+        return { id:row.id||row.uid };
+      }
+      onSnapshot(cb, errCb) {
         const self=this;
         this.get().then(cb).catch(e=>errCb&&errCb(e));
         let _deb=null;
         const ch=_supabase.channel(this._t+'_'+Date.now())
           .on('postgres_changes',{event:'*',schema:'public',table:this._t},()=>{
             clearTimeout(_deb);
-            _deb=setTimeout(()=>self.get().then(cb).catch(e=>errCb&&errCb(e)),400);
+            _deb=setTimeout(()=>self.get().then(cb).catch(e=>errCb&&errCb(e)), 400);
           }).subscribe();
-        return()=>{clearTimeout(_deb);_supabase.removeChannel(ch);};
+        return ()=>{ clearTimeout(_deb); _supabase.removeChannel(ch); };
       }
     }
 
-    function _toRef(path){
-      const parts=path.split('/').filter(Boolean);
-      let _ownerUid = null;
+    // Convert a Firestore-style path to a _SBRef with correct table + filters
+    function _toRef(path) {
+      if (!path) return new _SBRef('', null);
+      const parts = path.split('/').filter(Boolean);
+      let ownerUid = null;
 
-      // Extract owner uid from users/{uid}/... paths
-      if(parts[0]==='users'){
-        _ownerUid = parts[1];
-        parts.splice(0,2);
+      // Strip users/{uid} prefix — capture uid for owner filtering
+      if (parts[0] === 'users') {
+        ownerUid = parts[1];
+        parts.splice(0, 2);
       }
 
-      if(parts[0]==='organizations'){
-        if(parts.length===2) return new _SBRef(_PATH_MAP.organizations||'organizations',parts[1]);
-        parts.splice(0,2);
-      }
-
-      // parts: [collection, docId?, subCollection?, subDocId?]
-      const col=parts[0], docId=parts[1]||null, subCol=parts[2]||null, subId=parts[3]||null;
-
-      // Owner-scoped tables — add owner_uid filter automatically
-      const _OWNER_TABLES = new Set(['companies','master_games','bills','assigned_games','company_usernames',
-        'cf_transactions','cf_payment_methods','cf_shareholders','cf_op_expenses','cf_dividend_payments']);
-
-      if(subCol){
-        // Sub-collection e.g. companies/{id}/assignedGames
-        const ref = new _SBRef(_PATH_MAP[subCol]||subCol, subId);
-        if(docId) ref._w.push({f:'company_id', op:'eq', v:docId});
-        if(_ownerUid && _OWNER_TABLES.has(_PATH_MAP[subCol]||subCol)){
-          ref._w.push({f:'owner_uid', op:'eq', v:_ownerUid});
+      // Handle organizations/{orgId}/... paths
+      if (parts[0] === 'organizations') {
+        const orgId = parts[1] || null;
+        const subCol = parts[2] || null;
+        const subId  = parts[3] || null;
+        if (!subCol) {
+          // organizations/{orgId} — look up by owner_uid since orgId = user uuid
+          const ref = new _SBRef('organizations', null);
+          if (orgId) ref._w.push({f:'owner_uid', op:'eq', v:orgId});
+          return ref;
         }
+        // organizations/{orgId}/employees etc
+        const ref = new _SBRef(_PATH_MAP[subCol]||subCol, subId);
+        if (orgId) ref._w.push({f:'org_id', op:'eq', v:orgId});
         return ref;
       }
 
-      const table = _PATH_MAP[col]||col;
+      if (parts.length === 0) {
+        // Path was just users/{uid} — refers to user_access row
+        const ref = new _SBRef('user_access', ownerUid);
+        return ref;
+      }
+
+      const col   = parts[0];
+      const docId = parts[1] || null;
+      const subCol= parts[2] || null;
+      const subId = parts[3] || null;
+      const table = _PATH_MAP[col] || col;
+
+      if (subCol) {
+        const subTable = _PATH_MAP[subCol] || subCol;
+        const ref = new _SBRef(subTable, subId);
+        // Filter sub-collection by parent company_id
+        if (docId) ref._w.push({f:'company_id', op:'eq', v:docId});
+        // Add owner filter
+        if (ownerUid && _OWNER_TABLES.has(subTable)) ref._w.push({f:'owner_uid', op:'eq', v:ownerUid});
+        return ref;
+      }
+
       const ref = new _SBRef(table, docId);
-      // Add owner_uid filter for owner-scoped collections
-      if(_ownerUid && !docId && _OWNER_TABLES.has(table)){
-        ref._w.push({f:'owner_uid', op:'eq', v:_ownerUid});
+      // Add owner filter for collections (not single doc lookups by ID)
+      if (ownerUid && !docId && _OWNER_TABLES.has(table)) {
+        ref._w.push({f:'owner_uid', op:'eq', v:ownerUid});
       }
       return ref;
     }
-    const db={collection:_toRef,doc:_toRef};
 
-    // ── Auth shim ──────────────────────────────────────────────────────────
-    function _toFbUser(u){
-      if(!u)return null;
-      return{uid:u.id,id:u.id,email:u.email,
-        displayName:u.user_metadata?.full_name||u.user_metadata?.name||u.email?.split('@')[0]||'',
-        photoURL:u.user_metadata?.avatar_url||u.user_metadata?.picture||''};
+    const db = {
+      collection: path => _toRef(path),
+      doc: path => _toRef(path),
+    };
+
+    // ── Auth ─────────────────────────────────────────────────────────────────
+    function _toFbUser(u) {
+      if (!u) return null;
+      return {
+        uid: u.id, id: u.id, email: u.email,
+        displayName: u.user_metadata?.full_name || u.user_metadata?.name || u.email?.split('@')[0] || '',
+        photoURL: u.user_metadata?.avatar_url || u.user_metadata?.picture || '',
+      };
     }
-    const auth={
-      signInWithPopup:async()=>{
-        const{error}=await _supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
-        if(error)throw error;
-      },
-      signInWithRedirect:async()=>{
-        const{error}=await _supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
-        if(error)throw error;
-      },
-      getRedirectResult:async()=>null,
-      setPersistence:async()=>{},
-      signOut:async()=>_supabase.auth.signOut(),
-      onAuthStateChanged(cb){
-        // Fire immediately so app never hangs on loading screen
-        _supabase.auth.getSession().then(({data:{session}})=>{
-          console.log('[Auth] initial:',session?.user?.email||'none');
-          cb(_toFbUser(session?.user??null));
+    const auth = {
+      signInWithPopup: async () => {
+        const {error} = await _supabase.auth.signInWithOAuth({
+          provider: 'google', options: { redirectTo: window.location.origin }
         });
-        const{data:{subscription}}=_supabase.auth.onAuthStateChange((event,session)=>{
-          if(event==='INITIAL_SESSION')return;
-          console.log('[Auth]',event,session?.user?.email||'none');
-          cb(_toFbUser(session?.user??null));
+        if (error) throw error;
+      },
+      signInWithRedirect: async () => {
+        const {error} = await _supabase.auth.signInWithOAuth({
+          provider: 'google', options: { redirectTo: window.location.origin }
         });
-        return()=>subscription.unsubscribe();
+        if (error) throw error;
+      },
+      getRedirectResult: async () => null,
+      setPersistence: async () => {},
+      signOut: async () => _supabase.auth.signOut(),
+      onAuthStateChanged(cb) {
+        _supabase.auth.getSession().then(({data:{session}}) => {
+          console.log('[Auth] initial:', session?.user?.email || 'none');
+          cb(_toFbUser(session?.user ?? null));
+        });
+        const {data:{subscription}} = _supabase.auth.onAuthStateChange((event, session) => {
+          if (event === 'INITIAL_SESSION') return;
+          console.log('[Auth]', event, session?.user?.email || 'none');
+          cb(_toFbUser(session?.user ?? null));
+        });
+        return () => subscription.unsubscribe();
       },
     };
+    // Supabase handles persistence automatically
 
     // ============================================================
     // STATE
@@ -1736,8 +1786,8 @@
         rebuildBillIndex();
         _startupCacheSave();
         _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
-        console.log('[loadAllData] Loaded:', state.masterGames.length, 'games,', Object.keys(state.companies).length, 'companies,', state.bills.length, 'bills');
-        render(); // ← re-render with fresh data from Supabase
+        console.log('[loadAllData]', state.masterGames.length, 'games |', Object.keys(state.companies).length, 'companies |', state.bills.length, 'bills');
+        render();
       } catch(e) { console.error('[loadAllData] error:', e); }
     }
 
@@ -2194,7 +2244,7 @@
       }
       const daysLeft = state.accessDaysLeft;
       const expiry = state.accessExpiry;
-      const expiryStr = expiry ? new Date(expiry instanceof Object && expiry.seconds ? expiry.seconds*1000 : expiry).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) : '';
+      const expiryStr = expiry ? new Date(expiry.seconds * 1000).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) : '';
 
       let statusBlock = '';
       let noticeBlock = '';
@@ -5434,17 +5484,9 @@
     }
 
     // Convert a saved bill date (Firestore Timestamp | ISO string) to a JS Date
-    // Safe date parser — handles Firebase Timestamps, ISO strings, plain strings
-    function _safeDate(d) {
-      if (!d) return new Date();
-      if (d instanceof Date) return d;
-      if (d && typeof d === 'object' && d.seconds) return new Date(d.seconds * 1000);
-      if (d && typeof d === 'object' && d.toDate) return d.toDate();
-      const parsed = new Date(d);
-      return isNaN(parsed.getTime()) ? new Date() : parsed;
-    }
     function billToDate(d) { return _safeDate(d); }
-    function toLocalDate(dateValue) { return _safeDate(dateValue); }
+
+    function toLocalDate(d) { return _safeDate(d); }
 
     // Local date string "YYYY-MM-DD" from any bill date value
     function billToLocalDateKey(d) {
@@ -8457,7 +8499,7 @@
               date:_payDateFinal,
               billId:'', note:'Bonus ('+_bonusPct+'% via '+_pmBonusName+') – '+(c.name||'')
             };
-            db.collection(cfPath('transactions')).add(_bonusTx).then(function(ref2){  // shim returns Promise
+            db.collection(cfPath('transactions')).add(_bonusTx).then(function(ref2){
               cfTransactions.push(Object.assign({id:ref2.id},_bonusTx)); cfPersist();
             }).catch(function(){});
           }
@@ -9872,7 +9914,6 @@
     const ADMIN_EMAIL = 'service@sweepadmin.com';
 
     async function checkUserAccess(user) {
-      console.log('[checkUserAccess] checking uid:', user.uid);
       // Admin always has access
       if (user.email === ADMIN_EMAIL) return { hasAccess: true, daysLeft: 999, expiry: null, gbUsername: 'admin' };
 
@@ -9913,7 +9954,6 @@
         }
 
         const data = doc.data();
-        console.log('[checkUserAccess] raw data:', JSON.stringify(data));
         // Update last login (preserve existing gbUsername)
         db.collection('userAccess').doc(user.uid).update({
           lastLogin: _serverTs(),
@@ -9929,7 +9969,7 @@
         if (!data.expiryDate) return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: data.gbUsername || '', isUnlimited: false };
 
         const now = new Date();
-        const expiry = data.expiryDate instanceof Date ? data.expiryDate : new Date(data.expiryDate);
+        const expiry = data.expiryDate.toDate();
         const diffMs = expiry - now;
         const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
@@ -10117,8 +10157,7 @@
     auth.onAuthStateChanged(async (user) => {
       if (user) {
         state.user = {
-          uid: user.uid||user.id,
-          id: user.id||user.uid,
+          uid: user.uid||user.id, id: user.id||user.uid,
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
@@ -11360,7 +11399,7 @@
           modal.querySelectorAll('.mgr-shift-out-btn').forEach(btn => {
             btn.onclick = async () => {
               btn.disabled = true; btn.textContent = 'Ending…';
-              const startTs = window.firebase.firestore.Timestamp.fromMillis(parseInt(btn.dataset.startts));
+              const startTs = window._TS.fromMillis(parseInt(btn.dataset.startts));
               try {
                 await shiftOut(btn.dataset.shiftid, startTs);
                 clearInterval(timerInterval);
@@ -11737,7 +11776,7 @@
           e.stopPropagation();
           if (!confirm('End this cashier\'s shift now?')) return;
           btn.disabled = true; btn.textContent = 'Ending…';
-          const startTs = window.firebase.firestore.Timestamp.fromMillis(parseInt(btn.dataset.startts));
+          const startTs = window._TS.fromMillis(parseInt(btn.dataset.startts));
           try {
             await shiftOut(btn.dataset.shiftid, startTs);
             await Promise.all([refreshEmployeeList(), refreshOwnerDashboard()]);
@@ -12167,8 +12206,8 @@
               employeeName:       emp.name || '',
               employeeEmail:      emp.email || '',
               periodKey:          periodKey,
-              periodStart:        window.firebase.firestore.Timestamp.fromDate(pStart),
-              periodEnd:          window.firebase.firestore.Timestamp.fromDate(pEnd),
+              periodStart:        window._TS.fromDate(pStart),
+              periodEnd:          window._TS.fromDate(pEnd),
               salaryType:         emp.salaryType,
               totalDurationMs:    pMs,
               amount:             amount,
@@ -13636,13 +13675,8 @@
     // ============================================================
     // PWA Service Worker
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js', {updateViaCache: 'none'})
-        .then(reg => {
-          console.log('[SW] registered:', reg.scope);
-          // Check for updates immediately and every 60s
-          reg.update();
-          setInterval(() => reg.update(), 60000);
-        })
+      navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'})
+        .then(reg => { console.log('[SW] registered:', reg.scope); reg.update(); })
         .catch(e => console.log('[SW] failed:', e.message));
     }
     // Initial render
