@@ -1413,7 +1413,12 @@
       }
       // parts: [collection, docId?, subCollection?, subDocId?]
       const col=parts[0], docId=parts[1]||null, subCol=parts[2]||null, subId=parts[3]||null;
-      if(subCol){ return new _SBRef(_PATH_MAP[subCol]||subCol, subId); }
+      if(subCol){
+        const ref = new _SBRef(_PATH_MAP[subCol]||subCol, subId);
+        // Filter sub-collection by parent ID (e.g. assignedGames by company_id)
+        if(docId) ref._w.push({f:'company_id', op:'eq', v:docId});
+        return ref;
+      }
       return new _SBRef(_PATH_MAP[col]||col, docId);
     }
     const db={collection:_toRef,doc:_toRef};
@@ -2164,7 +2169,7 @@
       }
       const daysLeft = state.accessDaysLeft;
       const expiry = state.accessExpiry;
-      const expiryStr = expiry ? new Date(expiry.seconds * 1000).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) : '';
+      const expiryStr = expiry ? new Date(expiry instanceof Object && expiry.seconds ? expiry.seconds*1000 : expiry).toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) : '';
 
       let statusBlock = '';
       let noticeBlock = '';
@@ -5404,20 +5409,17 @@
     }
 
     // Convert a saved bill date (Firestore Timestamp | ISO string) to a JS Date
-    function billToDate(d) {
+    // Safe date parser — handles Firebase Timestamps, ISO strings, plain strings
+    function _safeDate(d) {
       if (!d) return new Date();
-      if (d && d.seconds) return new Date(d.seconds * 1000);
-      if (d && d.toDate) return d.toDate();
-      return new Date(d);
+      if (d instanceof Date) return d;
+      if (d && typeof d === 'object' && d.seconds) return new Date(d.seconds * 1000);
+      if (d && typeof d === 'object' && d.toDate) return d.toDate();
+      const parsed = new Date(d);
+      return isNaN(parsed.getTime()) ? new Date() : parsed;
     }
-
-    // Reusable helper: accepts any date value (Firestore Timestamp or ISO string)
-    // and returns a valid JS Date object in local time.
-    function toLocalDate(dateValue) {
-      if (!dateValue) return new Date();
-      if (dateValue && dateValue.seconds) return new Date(dateValue.seconds * 1000);
-      return new Date(dateValue);
-    }
+    function billToDate(d) { return _safeDate(d); }
+    function toLocalDate(dateValue) { return _safeDate(dateValue); }
 
     // Local date string "YYYY-MM-DD" from any bill date value
     function billToLocalDateKey(d) {
