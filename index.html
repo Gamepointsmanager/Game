@@ -2186,7 +2186,7 @@
                 </div>
 
                 <!-- Sign out (original style) -->
-                <button id="adSignOut" style="margin-top:18px;width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;transition:all 0.2s;box-shadow:0 4px 16px rgba(239,68,68,0.35)" onmouseover="this.style.boxShadow='0 6px 24px rgba(239,68,68,0.5)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 4px 16px rgba(239,68,68,0.35)';this.style.transform=''">Sign Out</button>
+                <button id="adSignOut" style="margin-top:18px;width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,rgba(239,68,68,0.55),rgba(185,28,28,0.45));color:#fca5a5;font-size:13px;font-weight:700;cursor:pointer;font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;transition:all 0.2s;border:1px solid rgba(239,68,68,0.3);box-shadow:0 2px 10px rgba(239,68,68,0.18)" onmouseover="this.style.boxShadow='0 4px 16px rgba(239,68,68,0.28)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 2px 10px rgba(239,68,68,0.18)';this.style.transform=''">Sign Out</button>
                 <p style="margin-top:14px;font-size:11px;color:#9ca3af;letter-spacing:0.3px;text-align:center">Signed in as <strong style="color:#e0d8ff;font-weight:600">${state.user ? state.user.email : ''}</strong></p>
 
               </div><!-- /LEFT -->
@@ -2439,12 +2439,12 @@
         const p = PAL[i % PAL.length];
         const activeStyle = i === 0
           ? `background:linear-gradient(135deg,${p.f},${p.t});border-color:${p.b};box-shadow:0 6px 24px ${p.glow},0 0 0 1px ${p.b};color:${p.tx};`
-          : `background:rgba(255,255,255,0.02);border-color:rgba(255,255,255,0.08);color:#6b7280;`;
+          : `background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.14);color:#c4b5fd;`;
         return `
           <button onclick="switchPayTab(${i})" id="payTab_${i}"
             data-pal='${JSON.stringify(p)}'
             style="flex:1;min-width:90px;padding:16px 10px 13px;border-radius:14px;border:2px solid;cursor:pointer;transition:all 0.22s cubic-bezier(.4,0,.2,1);font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:0.8px;text-transform:uppercase;display:flex;flex-direction:column;align-items:center;gap:8px;${activeStyle}">
-            <div style="width:38px;height:38px;border-radius:11px;background:${i===0?p.ib:'rgba(255,255,255,0.04)'};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;font-family:'Orbitron',monospace;transition:background 0.22s;color:${i===0?p.tx:'#4b5563'}">$</div>
+            <div style="width:38px;height:38px;border-radius:11px;background:${i===0?p.ib:'rgba(255,255,255,0.04)'};display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;font-family:'Orbitron',monospace;transition:background 0.22s;color:${i===0?p.tx:'#a78bfa'}">$</div>
             <span style="line-height:1.2;text-align:center">${escHtml(a.label)}</span>
           </button>`;
       }).join('');
@@ -2548,7 +2548,7 @@
           t.style.boxShadow    = 'none';
           t.style.color        = '#6b7280';
           t.style.transform    = '';
-          if (icon) { icon.style.background = 'rgba(255,255,255,0.04)'; icon.style.color = '#4b5563'; }
+          if (icon) { icon.style.background = 'rgba(255,255,255,0.07)'; icon.style.color = '#a78bfa'; }
         }
       });
       panels.forEach((p, i) => { p.style.display = i === idx ? 'block' : 'none'; });
