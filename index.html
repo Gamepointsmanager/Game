@@ -2056,7 +2056,7 @@
               flex:1;min-width:90px;padding:14px 10px 12px;
               border-radius:14px;border:2px solid transparent;
               cursor:pointer;transition:all 0.22s cubic-bezier(.4,0,.2,1);
-              font-family:'Rajdhani',sans-serif;font-weight:800;font-size:14px;
+              font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px;
               letter-spacing:0.8px;text-transform:uppercase;
               display:flex;flex-direction:column;align-items:center;gap:7px;
               position:relative;overflow:hidden;
@@ -2445,7 +2445,7 @@
             data-pal='${JSON.stringify(p)}'
             style="flex:1;min-width:90px;padding:16px 10px 13px;border-radius:14px;border:2px solid;cursor:pointer;transition:all 0.22s cubic-bezier(.4,0,.2,1);font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:0.8px;text-transform:uppercase;display:flex;flex-direction:column;align-items:center;gap:8px;${activeStyle}">
             <div style="width:30px;height:30px;border-radius:9px;background:${i===0?p.ib:'rgba(255,255,255,0.08)'};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;font-family:'Orbitron',monospace;transition:background 0.22s;color:${i===0?p.tx:'#ffffff'}">$</div>
-            <span style="line-height:1.2;text-align:center">${escHtml(a.label)}</span>
+            <span style="line-height:1.2;text-align:center;color:inherit">${escHtml(a.label)}</span>
           </button>`;
       }).join('');
 
