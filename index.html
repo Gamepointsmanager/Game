@@ -2074,9 +2074,9 @@
             /* ── ADDRESS BOX ────────────────────────────── */
             .pm-addr-box{
               padding:14px 16px;border-radius:12px;
-              background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.08);
+              background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.1);
               font-family:'JetBrains Mono',monospace;font-size:12px;
-              color:#c4b5fd;word-break:break-all;letter-spacing:0.3px;line-height:1.55;
+              color:#ede9fe;word-break:break-all;letter-spacing:0.3px;line-height:1.55;
               margin-bottom:12px;
             }
             /* ── ACTION BUTTONS ─────────────────────────── */
@@ -2179,15 +2179,15 @@
 
                 <!-- Disclaimer (original style) -->
                 <div style="margin-top:16px;padding:14px 20px;border-radius:14px;background:rgba(18,16,32,0.82);border:1px solid rgba(245,158,11,0.18);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)">
-                  <p style="font-size:11px;color:var(--orange);line-height:1.6;text-align:center;margin:0">
+                  <p style="font-size:11px;color:#fbbf24;line-height:1.6;text-align:center;margin:0">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-2px;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                     Accounts without an active subscription may be disabled or removed without prior notice.
                   </p>
                 </div>
 
                 <!-- Sign out (original style) -->
-                <button id="adSignOut" style="margin-top:18px;width:100%;padding:12px;border-radius:10px;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.06);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;font-family:'Rajdhani',sans-serif;transition:all 0.2s">Sign Out</button>
-                <p style="margin-top:14px;font-size:11px;color:var(--textMuted);letter-spacing:0.3px;text-align:center">Signed in as ${state.user ? state.user.email : ''}</p>
+                <button id="adSignOut" style="margin-top:18px;width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;transition:all 0.2s;box-shadow:0 4px 16px rgba(239,68,68,0.35)" onmouseover="this.style.boxShadow='0 6px 24px rgba(239,68,68,0.5)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 4px 16px rgba(239,68,68,0.35)';this.style.transform=''">Sign Out</button>
+                <p style="margin-top:14px;font-size:11px;color:#9ca3af;letter-spacing:0.3px;text-align:center">Signed in as <strong style="color:#e0d8ff;font-weight:600">${state.user ? state.user.email : ''}</strong></p>
 
               </div><!-- /LEFT -->
 
@@ -2198,7 +2198,7 @@
                   <!-- WE ACCEPT header -->
                   <div style="padding:20px 20px 0">
                     <div style="font-family:'Orbitron',monospace;font-size:22px;font-weight:900;letter-spacing:3px;color:#fff;margin-bottom:4px">WE ACCEPT</div>
-                    <div style="font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px">Choose your preferred payment method</div>
+                    <div style="font-size:11px;color:#c4b5fd;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:18px">Choose your preferred payment method</div>
                   </div>
 
                   <div style="padding:0 20px 20px">
@@ -2477,9 +2477,9 @@
         <div class="pm-memo">
           <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span style="font-size:11px;font-weight:800;color:#fbbf24;letter-spacing:0.8px;text-transform:uppercase">Include in Memo / Remarks</span>
+            <span style="font-size:11px;font-weight:800;color:#fde68a;letter-spacing:0.8px;text-transform:uppercase">Include in Memo / Remarks</span>
           </div>
-          <p style="font-size:12px;color:#9ca3af;line-height:1.65;margin:0 0 10px">
+          <p style="font-size:12px;color:#e5e7eb;line-height:1.65;margin:0 0 10px">
             Add your email <strong style="color:#fde68a;font-family:'JetBrains Mono',monospace;font-size:11px">${escHtml(userEmail)}</strong> so we can identify your payment.
           </p>
           <button onclick="copyPayAddress('${escHtml(userEmail).replace(/'/g,"\\'")}',this)"
@@ -2513,7 +2513,7 @@
               </div>
               <div style="flex:1;min-width:0">
                 <div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">${escHtml(c.label)}</div>
-                <div style="font-size:13px;color:#e0d0ff;word-break:break-all;font-weight:600">${escHtml(c.value)}</div>
+                <div style="font-size:13px;color:#ffffff;word-break:break-all;font-weight:600">${escHtml(c.value)}</div>
               </div>
               <button onclick="copyPayAddress('${escHtml(c.value).replace(/'/g,"\\'")}',this)"
                 style="flex-shrink:0;padding:7px 12px;border-radius:8px;border:1px solid rgba(16,185,129,0.25);background:rgba(16,185,129,0.07);color:#34d399;font-size:11px;font-weight:700;cursor:pointer;font-family:'Rajdhani',sans-serif;transition:all 0.2s">Copy</button>
