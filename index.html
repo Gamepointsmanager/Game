@@ -2027,183 +2027,6 @@
         _pendingActivationExtra = true;
       }
 
-      // ── REDESIGNED PENDING ACTIVATION PAGE ──────────────────────────────────
-      const _isPendingNew = _pendingActivationExtra;
-      const _isExpired = !!expiry && daysLeft <= 0 && !state.accessUnlimited;
-      const _isLow = !state.accessUnlimited && daysLeft > 0 && daysLeft <= 3;
-
-      if (_isPendingNew || _isExpired || _isLow) {
-        // ── grab logo src from existing login-box if rendered, else empty
-        const _logoEl = document.querySelector('.login-logo');
-        const _logoSrc = _logoEl ? _logoEl.src : '';
-        return `<div class="login-page" style="align-items:flex-start;justify-content:flex-start;padding:0;overflow-y:auto;background:var(--bg)">
-          <style>
-            .pap-wrap{width:100%;min-height:100vh;background:var(--bg);padding:28px 16px 60px}
-            .pap-grid{display:grid;grid-template-columns:1fr;gap:16px;max-width:1060px;margin:0 auto}
-            @media(min-width:860px){.pap-grid{grid-template-columns:300px 1fr;align-items:start}}
-            .pap-card{border-radius:16px;border:1px solid rgba(120,100,200,0.2);background:rgba(18,16,32,0.85);backdrop-filter:blur(12px);overflow:hidden}
-            .pap-full{border-radius:16px;border:1px solid rgba(120,100,200,0.2);background:rgba(18,16,32,0.85);backdrop-filter:blur(12px);overflow:hidden;max-width:1060px;margin:0 auto}
-            .pap-full-wrap{max-width:1060px;margin:16px auto 0}
-            .pap-plans{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-            @media(max-width:600px){.pap-plans{grid-template-columns:1fr}}
-            .pap-plan{border-radius:14px;border:1px solid rgba(120,100,200,0.18);background:rgba(255,255,255,0.02);padding:20px 16px;text-align:center;position:relative;overflow:hidden}
-            .pap-badge{position:absolute;top:10px;right:10px;font-size:9px;font-weight:800;letter-spacing:0.8px;text-transform:uppercase;padding:3px 8px;border-radius:20px}
-            .pap-pm-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 12px;border-radius:12px;border:2px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);cursor:pointer;transition:all 0.2s;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:#9ca3af;min-width:76px;flex:1}
-            .pap-pm-btn:hover{transform:translateY(-2px);border-color:rgba(124,58,237,0.4);color:#c4b5fd}
-            .pap-pm-btn.pap-active{color:#fff}
-            .pap-step{display:flex;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
-            .pap-step:last-child{border-bottom:none;padding-bottom:0}
-            .pap-num{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:'Orbitron',monospace;background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;box-shadow:0 0 10px rgba(124,58,237,0.35)}
-            .pap-num-done{background:linear-gradient(135deg,#10b981,#059669) !important;box-shadow:0 0 10px rgba(16,185,129,0.35) !important}
-          </style>
-          <div class="pap-wrap">
-
-            <div class="pap-grid">
-
-              <!-- LEFT COLUMN -->
-              <div style="display:flex;flex-direction:column;gap:14px">
-
-                <!-- LOGO & BRAND -->
-                <div style="text-align:center;padding:24px 16px 16px">
-                  <img class="login-logo" src="${_logoSrc}" alt="SweepAdmin" style="width:106px;height:106px;margin:0 auto 14px;display:block" />
-                  <h1 class="login-title" style="font-size:24px;margin-bottom:4px;letter-spacing:2px">SWEEPADMIN</h1>
-                  <p style="font-size:11px;color:var(--textMuted);font-weight:600;letter-spacing:0.5px">Game Points Billing &amp; Management</p>
-                </div>
-
-                <!-- ACCOUNT STATUS -->
-                <div class="pap-card" style="border-color:${_isExpired ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'}">
-                  <div style="padding:10px 14px;background:${_isExpired ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)'};border-bottom:1px solid ${_isExpired ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)'}">
-                    <div style="display:flex;align-items:center;gap:8px">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${_isExpired ? '#f87171' : '#fbbf24'}" stroke-width="2.2">${_isPendingNew ? '<circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>' : _isExpired ? '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' : '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'}</svg>
-                      <span style="font-family:'Orbitron',monospace;font-size:10px;font-weight:700;letter-spacing:1.5px;color:${_isExpired ? '#f87171' : '#fbbf24'}">${_isPendingNew ? 'PENDING ACTIVATION' : _isExpired ? 'SUBSCRIPTION EXPIRED' : 'EXPIRING SOON'}</span>
-                    </div>
-                  </div>
-                  <div style="padding:12px 14px">
-                    <p style="font-size:12px;color:#9ca3af;line-height:1.65;margin:0">${_isPendingNew ? 'Your account is awaiting activation. Complete the subscription payment to unlock full access.' : _isExpired ? `Your access expired on <strong style="color:#f87171">${expiryStr}</strong>. Renew your subscription to restore access.` : `Your subscription expires in <strong style="color:#fbbf24">${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong>. Renew now to avoid interruption.`}</p>
-                  </div>
-                </div>
-
-                <!-- WELCOME -->
-                <div class="pap-card">
-                  <div style="padding:14px 14px 6px">
-                    <div style="font-size:10px;font-weight:800;color:#a78bfa;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:8px">Welcome to SweepAdmin</div>
-                    <p style="font-size:12px;color:#9ca3af;line-height:1.7;margin:0 0 12px">Your all-in-one platform for game points billing, cashier management, employee tracking, and analytics.</p>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">
-                      ${[['Billing & Invoicing','#7c3aed'],['Employee Tracking','#06b6d4'],['Analytics','#10b981'],['Admin Controls','#f59e0b']].map(([l,c]) => `<div style="padding:7px 9px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);font-size:11px;font-weight:700;color:#d1d5db;display:flex;align-items:center;gap:6px"><div style="width:6px;height:6px;border-radius:50%;background:${c};flex-shrink:0"></div>${l}</div>`).join('')}
-                    </div>
-                  </div>
-                </div>
-
-                <!-- DISCLAIMER -->
-                <div style="padding:11px 13px;border-radius:11px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);display:flex;gap:8px;align-items:flex-start">
-                  <svg width="12" height="12" style="flex-shrink:0;margin-top:1px" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                  <p style="font-size:11px;color:#f59e0b;line-height:1.6;margin:0">Accounts without an active subscription may be disabled or removed without prior notice.</p>
-                </div>
-
-                <!-- SIGN OUT -->
-                <div>
-                  <button id="adSignOut" style="width:100%;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.06);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;font-family:'Rajdhani',sans-serif;transition:all 0.2s">Sign Out</button>
-                  <p style="margin:9px 0 0;font-size:11px;color:var(--textMuted);text-align:center">Signed in as <span style="color:#9ca3af">${state.user ? state.user.email : ''}</span></p>
-                </div>
-
-              </div><!-- /LEFT -->
-
-              <!-- RIGHT COLUMN -->
-              <div>
-                <!-- PAYMENT METHOD -->
-                <div class="pap-card" style="border-color:rgba(6,182,212,0.22)">
-                  <div style="padding:13px 16px 10px;background:linear-gradient(90deg,rgba(6,182,212,0.07),rgba(124,58,237,0.04));border-bottom:1px solid rgba(6,182,212,0.14)">
-                    <div style="font-size:11px;font-weight:800;color:#22d3ee;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:1px">Payment Method</div>
-                    <div style="font-size:9px;font-weight:700;color:#6b7280;letter-spacing:1.8px;text-transform:uppercase">WE ACCEPT</div>
-                  </div>
-                  <div style="padding:16px 16px">
-                    <div id="payInfoPanel"></div>
-                  </div>
-                </div>
-              </div><!-- /RIGHT -->
-
-            </div><!-- /GRID -->
-
-            <!-- FULL WIDTH BELOW -->
-            <div class="pap-full-wrap">
-
-              <!-- SUBSCRIPTION PLANS -->
-              <div class="pap-full">
-                <div style="padding:14px 18px;border-bottom:1px solid rgba(120,100,200,0.14);background:rgba(124,58,237,0.05)">
-                  <div style="font-size:10px;font-weight:800;color:#a78bfa;letter-spacing:1.2px;text-transform:uppercase">Subscription Plans</div>
-                </div>
-                <div style="padding:20px 18px">
-                  <div class="pap-plans">
-                    <div class="pap-plan">
-                      <div style="font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Monthly</div>
-                      <div style="font-family:'Orbitron',monospace;font-size:34px;font-weight:900;color:#fff;line-height:1"><span style="font-size:16px;font-weight:600;color:#9ca3af;font-family:'Rajdhani',sans-serif">$</span>20</div>
-                      <div style="font-size:12px;color:#6b7280;font-weight:600;margin-top:6px">per month</div>
-                    </div>
-                    <div class="pap-plan" style="border-color:rgba(124,58,237,0.4);background:linear-gradient(145deg,rgba(124,58,237,0.1),rgba(6,182,212,0.04));box-shadow:0 0 24px rgba(124,58,237,0.1)">
-                      <div class="pap-badge" style="background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff">Most Popular</div>
-                      <div style="font-size:10px;font-weight:700;color:#a78bfa;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Quarterly</div>
-                      <div style="font-family:'Orbitron',monospace;font-size:34px;font-weight:900;color:#fff;line-height:1"><span style="font-size:16px;font-weight:600;color:#a78bfa;font-family:'Rajdhani',sans-serif">$</span>60</div>
-                      <div style="font-size:12px;color:#a78bfa;font-weight:700;margin-top:6px">per 3 months</div>
-                    </div>
-                    <div class="pap-plan" style="border-color:rgba(16,185,129,0.35);background:linear-gradient(145deg,rgba(16,185,129,0.08),rgba(6,182,212,0.03));box-shadow:0 0 24px rgba(16,185,129,0.08)">
-                      <div class="pap-badge" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff">Best Value</div>
-                      <div style="font-size:10px;font-weight:700;color:#34d399;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Annual</div>
-                      <div style="font-family:'Orbitron',monospace;font-size:34px;font-weight:900;color:#fff;line-height:1"><span style="font-size:16px;font-weight:600;color:#34d399;font-family:'Rajdhani',sans-serif">$</span>230</div>
-                      <div style="font-size:12px;color:#34d399;font-weight:700;margin-top:6px">per year</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- CUSTOM PLAN -->
-              <div class="pap-full" style="margin-top:12px;border-color:rgba(6,182,212,0.18)">
-                <div style="padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-                  <div style="width:38px;height:38px;border-radius:10px;background:rgba(6,182,212,0.09);border:1px solid rgba(6,182,212,0.22);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-                  </div>
-                  <div style="flex:1;min-width:180px">
-                    <div style="font-size:13px;font-weight:800;color:#22d3ee;letter-spacing:0.5px;margin-bottom:3px">Custom Plan — 12+ Months</div>
-                    <div style="font-size:12px;color:#6b7280;line-height:1.55">Need a longer commitment or multi-account arrangement? Contact Customer Support for custom pricing tailored to your needs.</div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- CUSTOMER SUPPORT (populated by renderPaymentInfoPanel) -->
-              <div class="pap-full" id="payContactPanel" style="margin-top:12px;display:none;border-color:rgba(16,185,129,0.16)">
-                <div style="padding:12px 18px;border-bottom:1px solid rgba(16,185,129,0.12);background:rgba(16,185,129,0.04)">
-                  <div style="font-size:10px;font-weight:800;color:#10b981;letter-spacing:1.2px;text-transform:uppercase">Customer Support &amp; Sales</div>
-                </div>
-                <div style="padding:14px 18px" id="payContactBody"></div>
-              </div>
-
-              <!-- HOW TO PAY -->
-              <div class="pap-full" style="margin-top:12px">
-                <div style="padding:12px 18px;border-bottom:1px solid rgba(16,185,129,0.1);background:rgba(16,185,129,0.03)">
-                  <div style="font-size:10px;font-weight:800;color:#10b981;letter-spacing:1.2px;text-transform:uppercase">How to Pay</div>
-                </div>
-                <div style="padding:18px 20px">
-                  <div class="pap-step"><div class="pap-num">1</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Choose a Subscription Plan</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Review the plans above and choose the one that best fits your needs — Monthly, Quarterly, Annual, or contact us for a Custom arrangement.</div></div></div>
-                  <div class="pap-step"><div class="pap-num">2</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Select a Payment Method</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Choose your preferred payment channel from the options shown above. Each method provides a unique payment address — tap the button to reveal it.</div></div></div>
-                  <div class="pap-step"><div class="pap-num">3</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Complete the Payment via Your Preferred Wallet</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Send the correct amount to the provided address. Copy the address or scan the QR code directly from your wallet app.</div></div></div>
-                  <div class="pap-step"><div class="pap-num">4</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Include Your Email in the Memo / Remarks</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Always include your SweepAdmin account email in the payment memo or remarks field so our team can match your payment. Alternatively, contact Support directly to confirm.</div></div></div>
-                  <div class="pap-step"><div class="pap-num">5</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Payment Complete</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Once your payment is received and your email memo is included, your account will typically be activated within a few hours.</div></div></div>
-                  <div class="pap-step"><div class="pap-num">6</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Faster Activation — Send Proof to Support</div><div style="font-size:12px;color:#6b7280;line-height:1.6">For faster activation, message Customer Support a screenshot of your payment receipt along with your SweepAdmin account email. Our team will verify and activate your account promptly.</div></div></div>
-                  <div class="pap-step"><div class="pap-num pap-num-done">✓</div><div><div style="font-size:13px;font-weight:700;color:#34d399;margin-bottom:3px">Congratulations — Your Account is Active!</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Sign in and enjoy full access to SweepAdmin's billing, management, and analytics tools.</div></div></div>
-                </div>
-              </div>
-
-              <!-- DATA RETENTION NOTICE -->
-              <div style="margin-top:14px;padding:13px 16px;border-radius:12px;background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.14);display:flex;gap:10px;align-items:flex-start">
-                <svg width="13" height="13" style="flex-shrink:0;margin-top:1px" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <p style="font-size:11px;color:#6b7280;line-height:1.7;margin:0"><strong style="color:#22d3ee">Data Retention Policy:</strong> When a subscription expires, your account will be disabled but your data will be retained securely for <strong style="color:#e0d0ff">30 days</strong> from the expiry date. No data will be deleted during this grace period — renew within 30 days to restore full access and pick up exactly where you left off.</p>
-              </div>
-
-            </div><!-- /pap-full-wrap -->
-          </div><!-- /pap-wrap -->
-        </div>`;
-      }
-
-      // ── FALLBACK: original layout for unlimited/in-range access ──────────────
       return `<div class="login-page">
         <div class="login-box fade-in" style="max-width:440px;width:100%">
           <div style="margin-bottom:32px;text-align:center">
@@ -2297,97 +2120,77 @@
     }
 
     function renderPaymentInfoPanel(container, addresses, contacts, userEmail) {
-
-      // ── TAB ICONS for well-known payment methods ──────────────────────────
-      function getPayIcon(label) {
-        const l = label.toLowerCase();
-        if (l.includes('gcash')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>`;
-        if (l.includes('maya') || l.includes('paymaya')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>`;
-        if (l.includes('paypal')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 11C5.3 11 4 9.7 4 8s1.3-3 3-3h7c1.9 0 3.5 1.1 4 2.7"/><path d="M11 15H7l1-8h5c2.5 0 4 1.5 3.5 4-.4 1.8-2 3-3.5 3z"/></svg>`;
-        if (l.includes('bank') || l.includes('transfer')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="22" x2="21" y2="22"/><path d="M2 8l10-6 10 6"/><rect x="4" y="8" width="4" height="10"/><rect x="10" y="8" width="4" height="10"/><rect x="16" y="8" width="4" height="10"/></svg>`;
-        if (l.includes('crypto') || l.includes('btc') || l.includes('usdt') || l.includes('eth')) return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 0v20M2 12h20"/></svg>`;
-        return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`;
-      }
-
       const addrTabs = addresses.map((a, i) => `
-        <button onclick="switchPayTab(${i})" id="payTab_${i}" class="pm-tab ${i===0?'active':''}">
-          ${getPayIcon(a.label)}
-          ${escHtml(a.label)}
-        </button>
+        <button onclick="switchPayTab(${i})" id="payTab_${i}" style="padding:6px 12px;border-radius:7px;border:1px solid ${i===0?'rgba(124,58,237,0.5)':'rgba(255,255,255,0.08)'};background:${i===0?'rgba(124,58,237,0.15)':'transparent'};color:${i===0?'#c4b5fd':'var(--textMuted)'};font-size:11px;font-weight:600;cursor:pointer;font-family:'Rajdhani',sans-serif;transition:all 0.2s;white-space:nowrap">${escHtml(a.label)}</button>
       `).join('');
 
       const addrPanels = addresses.map((a, i) => `
         <div id="payPanel_${i}" style="display:${i===0?'block':'none'}">
-          <div class="pm-addr-box">${escHtml(a.address)}</div>
-          <div class="pm-action-row">
-            <button onclick="copyPayAddress('${escHtml(a.address).replace(/'/g,"\\'")}',this)" class="btn-copy">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-              Copy Address
-            </button>
-            <button onclick="toggleQR('qr_${i}','${escHtml(a.address).replace(/'/g,"\\'")}',this)" class="btn-qr">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3m0 4v-4m4 4V14h-4"/></svg>
-              QR Code
-            </button>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <div style="flex:1;min-width:0;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px 12px;font-size:11px;color:#e0d0ff;word-break:break-all;font-family:monospace;letter-spacing:0.3px">${escHtml(a.address)}</div>
+            <button onclick="copyPayAddress('${escHtml(a.address).replace(/'/g,"\\'")}',this)" style="flex-shrink:0;padding:7px 10px;border-radius:7px;border:1px solid rgba(124,58,237,0.3);background:rgba(124,58,237,0.1);color:#a78bfa;font-size:11px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:600">Copy</button>
           </div>
-          <div id="qr_${i}" style="display:none;margin-top:12px;text-align:center;padding:14px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
+          <button onclick="toggleQR('qr_${i}','${escHtml(a.address).replace(/'/g,"\\'")}',this)" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba(6,182,212,0.2);background:rgba(6,182,212,0.06);color:#22d3ee;font-size:12px;font-weight:600;cursor:pointer;font-family:'Rajdhani',sans-serif;transition:all 0.2s">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3m0 4v-4m4 4V14h-4"/></svg>
+            Show QR Code
+          </button>
+          <div id="qr_${i}" style="display:none;margin-top:10px;text-align:center">
             <div id="qrCanvas_${i}" style="display:inline-block;padding:10px;background:#fff;border-radius:8px"></div>
-            <p style="font-size:10px;color:var(--textMuted);margin-top:8px;word-break:break-all">${escHtml(a.address)}</p>
+            <p style="font-size:10px;color:var(--textMuted);margin-top:6px;word-break:break-all">${escHtml(a.address)}</p>
           </div>
         </div>
       `).join('');
 
-      const memoNote = userEmail ? `
-        <div class="memo-box">
-          <div style="font-size:11px;font-weight:800;color:#fbbf24;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:6px">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Include in Memo / Remarks
+      const contactHtml = contacts.map(c => `
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)">
+          <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);display:flex;align-items:center;justify-content:center">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.81 19.79 19.79 0 01.1 2.18 2 2 0 012.08 0h3a2 2 0 012 1.72c.13 1.01.37 2 .72 2.96a2 2 0 01-.45 2.11L6.01 8.09a16 16 0 006.24 6.24l1.3-1.3a2 2 0 012.11-.45c.96.34 1.95.58 2.96.72A2 2 0 0122 16.92z"/></svg>
           </div>
-          <div style="font-size:12px;color:#9ca3af;line-height:1.6;margin-bottom:8px">
-            Add your email <strong style="color:#fde68a;font-family:monospace">${escHtml(userEmail)}</strong> so we can identify your payment.
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;color:var(--textMuted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:1px">${escHtml(c.label)}</div>
+            <div style="font-size:12px;color:#e0d0ff;word-break:break-all">${escHtml(c.value)}</div>
           </div>
-          <button onclick="copyPayAddress('${escHtml(userEmail).replace(/'/g,"\\'")}',this)" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.08);color:#fbbf24;font-size:11px;font-weight:700;cursor:pointer;font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;transition:all 0.2s">
-            Copy Email
-          </button>
-        </div>` : '';
+          <button onclick="copyPayAddress('${escHtml(c.value).replace(/'/g,"\\'")}',this)" style="flex-shrink:0;padding:5px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:var(--textMuted);font-size:10px;cursor:pointer;font-family:'Rajdhani',sans-serif">Copy</button>
+        </div>
+      `).join('');
 
-      // ── Fill the payment panel ──────────────────────────────────────────────
+      const memoNote = userEmail ? `<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15)">
+        <p style="font-size:11px;color:#fbbf24;margin:0;line-height:1.6">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:3px"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <strong>Important:</strong> When sending payment, include your email <strong style="color:#fde68a">${escHtml(userEmail)}</strong> in the memo/remarks field so we can identify your payment.
+        </p>
+        <button onclick="copyPayAddress('${escHtml(userEmail).replace(/'/g,"\\'")}',this)" style="margin-top:6px;padding:4px 10px;border-radius:6px;border:1px solid rgba(245,158,11,0.25);background:rgba(245,158,11,0.08);color:#fbbf24;font-size:10px;font-weight:600;cursor:pointer;font-family:'Rajdhani',sans-serif">Copy Email</button>
+      </div>` : '';
+
       container.innerHTML = `
-        ${addresses.length > 0 ? `
-          <div class="pm-tabs">${addrTabs}</div>
-          ${addrPanels}
-          ${memoNote}
-        ` : '<div style="font-size:12px;color:#6b7280;text-align:center;padding:12px">No payment addresses configured yet.</div>'}
-      `;
-
-      // ── Fill contact support card if contacts exist ─────────────────────────
-      if (contacts.length) {
-        const panel = document.getElementById('payContactPanel');
-        const body = document.getElementById('payContactBody');
-        if (panel && body) {
-          panel.style.display = '';
-          body.innerHTML = contacts.map(c => `
-            <div class="support-item">
-              <div class="support-icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.81 19.79 19.79 0 01.1 2.18 2 2 0 012.08 0h3a2 2 0 012 1.72c.13 1.01.37 2 .72 2.96a2 2 0 01-.45 2.11L6.01 8.09a16 16 0 006.24 6.24l1.3-1.3a2 2 0 012.11-.45c.96.34 1.95.58 2.96.72A2 2 0 0122 16.92z"/></svg>
-              </div>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:10px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">${escHtml(c.label)}</div>
-                <div style="font-size:13px;color:#e0d0ff;word-break:break-all;font-weight:600">${escHtml(c.value)}</div>
-              </div>
-              <button onclick="copyPayAddress('${escHtml(c.value).replace(/'/g,"\\'")}',this)" style="flex-shrink:0;padding:6px 10px;border-radius:7px;border:1px solid rgba(16,185,129,0.2);background:rgba(16,185,129,0.06);color:#34d399;font-size:10px;font-weight:700;cursor:pointer;font-family:'Rajdhani',sans-serif">Copy</button>
+        <div style="border-radius:12px;overflow:hidden;border:1px solid rgba(124,58,237,0.15);background:rgba(124,58,237,0.03)">
+          <div style="padding:12px 14px 0;background:rgba(124,58,237,0.06);border-bottom:1px solid rgba(124,58,237,0.1)">
+            <div style="font-size:11px;color:#a78bfa;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:4px"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+              Payment Instructions
             </div>
-          `).join('');
-        }
-      }
+            ${addresses.length > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;padding-bottom:10px">${addrTabs}</div>` : ''}
+          </div>
+          <div style="padding:12px 14px">
+            ${addrPanels}
+            ${memoNote}
+            ${contacts.length ? `
+            <div style="margin-top:12px">
+              <div style="font-size:10px;color:var(--textMuted);font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:8px">Contact Support</div>
+              <div style="display:flex;flex-direction:column;gap:6px">${contactHtml}</div>
+            </div>` : ''}
+          </div>
+        </div>`;
     }
 
-    // ── keep legacy function signature for old callers ─────────────────────────
     window.switchPayTab = function(idx) {
       const tabs = document.querySelectorAll('[id^="payTab_"]');
       const panels = document.querySelectorAll('[id^="payPanel_"]');
       tabs.forEach((t,i) => {
         const active = i === idx;
-        t.classList.toggle('active', active);
+        t.style.background = active ? 'rgba(124,58,237,0.15)' : 'transparent';
+        t.style.borderColor = active ? 'rgba(124,58,237,0.5)' : 'rgba(255,255,255,0.08)';
+        t.style.color = active ? '#c4b5fd' : 'var(--textMuted)';
       });
       panels.forEach((p,i) => { p.style.display = i === idx ? 'block' : 'none'; });
     };
