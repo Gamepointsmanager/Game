@@ -2033,422 +2033,173 @@
       const _isLow = !state.accessUnlimited && daysLeft > 0 && daysLeft <= 3;
 
       if (_isPendingNew || _isExpired || _isLow) {
-        return `<div class="login-page" style="align-items:flex-start;overflow-y:auto;min-height:100vh;padding:0">
+        // ── grab logo src from existing login-box if rendered, else empty
+        const _logoEl = document.querySelector('.login-logo');
+        const _logoSrc = _logoEl ? _logoEl.src : '';
+        return `<div class="login-page" style="align-items:flex-start;justify-content:flex-start;padding:0;overflow-y:auto;background:var(--bg)">
           <style>
-            :root {
-              --pa-bg:#07060f;
-              --pa-card:#0f0d1c;
-              --pa-border:rgba(255,255,255,0.07);
-              --pa-purple:#7c3aed;
-              --pa-purple-light:#a78bfa;
-              --pa-cyan:#06b6d4;
-              --pa-green:#10b981;
-              --pa-orange:#f59e0b;
-              --pa-red:#ef4444;
-              --pa-gold:#f59e0b;
-            }
-            .pa-page { width:100%;background:var(--pa-bg);min-height:100vh;font-family:'Rajdhani',sans-serif; }
-            /* ── HEADER STRIP ─── */
-            .pa-header {
-              display:flex;align-items:center;justify-content:space-between;
-              padding:14px 24px;
-              background:rgba(255,255,255,0.02);
-              border-bottom:1px solid var(--pa-border);
-            }
-            .pa-brand { display:flex;align-items:center;gap:10px; }
-            .pa-brand-icon {
-              width:34px;height:34px;border-radius:9px;
-              background:linear-gradient(135deg,#7c3aed,#06b6d4);
-              display:flex;align-items:center;justify-content:center;
-              box-shadow:0 0 16px rgba(124,58,237,0.45);
-            }
-            .pa-brand-name { font-family:'Orbitron',monospace;font-size:15px;font-weight:700;color:#e0d8ff;letter-spacing:2px; }
-            .pa-signout-btn {
-              padding:7px 16px;border-radius:8px;
-              border:1px solid rgba(239,68,68,0.25);
-              background:rgba(239,68,68,0.07);
-              color:#f87171;font-size:12px;font-weight:700;cursor:pointer;
-              font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;
-              transition:all 0.2s;
-            }
-            .pa-signout-btn:hover { background:rgba(239,68,68,0.14);border-color:rgba(239,68,68,0.4); }
-            /* ── STATUS BANNER ── */
-            .pa-status-banner {
-              padding:10px 24px;
-              display:flex;align-items:center;gap:10px;
-              font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
-            }
-            .pa-status-pending { background:linear-gradient(90deg,rgba(245,158,11,0.18),rgba(245,158,11,0.05)); color:#fbbf24; border-bottom:1px solid rgba(245,158,11,0.2); }
-            .pa-status-expired { background:linear-gradient(90deg,rgba(239,68,68,0.18),rgba(239,68,68,0.05)); color:#f87171; border-bottom:1px solid rgba(239,68,68,0.2); }
-            .pa-status-low { background:linear-gradient(90deg,rgba(245,158,11,0.14),rgba(245,158,11,0.04)); color:#fbbf24; border-bottom:1px solid rgba(245,158,11,0.15); }
-            /* ── LAYOUT ── */
-            .pa-body {
-              display:grid;
-              grid-template-columns:1fr;
-              gap:16px;
-              padding:20px 16px 40px;
-              max-width:1200px;
-              margin:0 auto;
-            }
-            @media(min-width:900px){
-              .pa-body {
-                grid-template-columns:1fr 1.55fr;
-                gap:20px;
-                padding:28px 28px 48px;
-                align-items:start;
-              }
-            }
-            /* ── CARDS ── */
-            .pa-card {
-              border-radius:16px;
-              border:1px solid var(--pa-border);
-              background:var(--pa-card);
-              overflow:hidden;
-              position:relative;
-            }
-            .pa-card-head {
-              padding:16px 20px;
-              border-bottom:1px solid var(--pa-border);
-              display:flex;align-items:center;gap:10px;
-            }
-            .pa-card-head-icon {
-              width:32px;height:32px;border-radius:8px;
-              display:flex;align-items:center;justify-content:center;
-              flex-shrink:0;
-            }
-            .pa-card-title { font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase; }
-            .pa-card-body { padding:18px 20px; }
-            /* ── ACCOUNT STATUS CARD ── */
-            .pa-status-card { border-color:rgba(245,158,11,0.2); }
-            .pa-status-card.expired { border-color:rgba(239,68,68,0.2); }
-            /* ── PLAN CARDS ── */
-            .plan-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
-            @media(min-width:500px){ .plan-grid { grid-template-columns:repeat(3,1fr); } }
-            .plan-card {
-              border-radius:12px;border:1px solid rgba(255,255,255,0.07);
-              background:rgba(255,255,255,0.02);
-              padding:14px 12px;text-align:center;cursor:pointer;
-              transition:all 0.22s;position:relative;overflow:hidden;
-            }
-            .plan-card:hover { border-color:rgba(124,58,237,0.45);background:rgba(124,58,237,0.07); }
-            .plan-card.featured {
-              border-color:rgba(124,58,237,0.5);
-              background:linear-gradient(145deg,rgba(124,58,237,0.12),rgba(6,182,212,0.05));
-              box-shadow:0 0 24px rgba(124,58,237,0.18);
-            }
-            .plan-badge {
-              position:absolute;top:0;right:0;
-              background:linear-gradient(135deg,#7c3aed,#06b6d4);
-              font-size:9px;font-weight:800;color:#fff;letter-spacing:0.8px;
-              padding:3px 8px;border-bottom-left-radius:8px;text-transform:uppercase;
-            }
-            .plan-label { font-size:10px;color:#9ca3af;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px; }
-            .plan-price { font-family:'Orbitron',monospace;font-size:22px;font-weight:700;color:#fff;line-height:1; }
-            .plan-price span { font-size:12px;color:#9ca3af;font-family:'Rajdhani',sans-serif;font-weight:600; }
-            .plan-price-big { font-size:26px; }
-            .plan-sub { font-size:10px;color:#6b7280;margin-top:5px; }
-            .plan-custom {
-              border-radius:12px;border:1px solid rgba(6,182,212,0.2);
-              background:rgba(6,182,212,0.04);
-              padding:13px 16px;margin-top:10px;
-              display:flex;align-items:center;gap:12px;
-            }
-            /* ── PAYMENT METHOD CARD ── */
-            .pm-tabs { display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px; }
-            .pm-tab {
-              padding:8px 14px;border-radius:9px;
-              border:1px solid rgba(255,255,255,0.08);
-              background:rgba(255,255,255,0.03);
-              color:#9ca3af;font-size:12px;font-weight:700;cursor:pointer;
-              transition:all 0.2s;font-family:'Rajdhani',sans-serif;letter-spacing:0.3px;
-              display:flex;align-items:center;gap:7px;
-            }
-            .pm-tab.active {
-              border-color:rgba(124,58,237,0.55);
-              background:rgba(124,58,237,0.13);
-              color:#c4b5fd;
-              box-shadow:0 0 12px rgba(124,58,237,0.18);
-            }
-            .pm-tab:hover:not(.active) { border-color:rgba(255,255,255,0.14);color:#e0d0ff; }
-            .pm-addr-box {
-              background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.07);
-              border-radius:10px;padding:11px 14px;
-              font-family:monospace;font-size:12px;color:#c4b5fd;
-              word-break:break-all;letter-spacing:0.3px;line-height:1.5;
-            }
-            .pm-action-row { display:flex;gap:8px;margin-top:10px; }
-            .btn-copy {
-              flex:1;padding:10px;border-radius:9px;
-              border:1px solid rgba(124,58,237,0.3);
-              background:rgba(124,58,237,0.1);color:#a78bfa;
-              font-size:12px;font-weight:700;cursor:pointer;
-              font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;
-              transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;
-            }
-            .btn-copy:hover { background:rgba(124,58,237,0.2);border-color:rgba(124,58,237,0.5); }
-            .btn-qr {
-              flex:1;padding:10px;border-radius:9px;
-              border:1px solid rgba(6,182,212,0.25);
-              background:rgba(6,182,212,0.06);color:#22d3ee;
-              font-size:12px;font-weight:700;cursor:pointer;
-              font-family:'Rajdhani',sans-serif;letter-spacing:0.5px;
-              transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;
-            }
-            .btn-qr:hover { background:rgba(6,182,212,0.12);border-color:rgba(6,182,212,0.4); }
-            /* ── INSTRUCTION CARD ── */
-            .instr-step {
-              display:flex;gap:14px;align-items:flex-start;
-              padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.04);
-            }
-            .instr-step:last-child { border-bottom:none;padding-bottom:0; }
-            .instr-num {
-              width:26px;height:26px;border-radius:50%;flex-shrink:0;
-              background:linear-gradient(135deg,#7c3aed,#5b21b6);
-              display:flex;align-items:center;justify-content:center;
-              font-size:11px;font-weight:800;color:#fff;font-family:'Orbitron',monospace;
-              box-shadow:0 0 10px rgba(124,58,237,0.35);
-            }
-            /* ── MEMO NOTICE ── */
-            .memo-box {
-              margin-top:14px;padding:13px 14px;border-radius:10px;
-              background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);
-            }
-            /* ── SUPPORT CARD ── */
-            .support-item {
-              display:flex;align-items:center;gap:12px;
-              padding:11px 14px;border-radius:10px;
-              background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);
-              margin-bottom:8px;
-            }
-            .support-item:last-child { margin-bottom:0; }
-            .support-icon {
-              width:34px;height:34px;border-radius:9px;flex-shrink:0;
-              background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);
-              display:flex;align-items:center;justify-content:center;
-            }
-            /* ── WELCOME CARD ── */
-            .welcome-card {
-              border-color:rgba(124,58,237,0.2);
-              background:linear-gradient(145deg,rgba(15,13,28,1),rgba(30,12,70,0.5));
-            }
-            /* ── WARNING BAR ── */
-            .pa-warn {
-              margin:0 0 16px;padding:11px 16px;border-radius:11px;
-              background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.18);
-              font-size:12px;color:#fbbf24;line-height:1.6;
-              display:flex;gap:9px;align-items:flex-start;
-            }
-            /* ── HERO LABEL ── */
-            .pa-hero-label {
-              display:flex;align-items:center;gap:6px;
-              font-size:11px;color:#6b7280;font-weight:700;letter-spacing:1.5px;
-              text-transform:uppercase;margin-bottom:10px;
-            }
-            /* ── GLOW ACCENTS ── */
-            .glow-purple { box-shadow:0 0 30px rgba(124,58,237,0.15); }
-            .glow-cyan { box-shadow:0 0 30px rgba(6,182,212,0.1); }
+            .pap-wrap{width:100%;min-height:100vh;background:var(--bg);padding:28px 16px 60px}
+            .pap-grid{display:grid;grid-template-columns:1fr;gap:16px;max-width:1060px;margin:0 auto}
+            @media(min-width:860px){.pap-grid{grid-template-columns:300px 1fr;align-items:start}}
+            .pap-card{border-radius:16px;border:1px solid rgba(120,100,200,0.2);background:rgba(18,16,32,0.85);backdrop-filter:blur(12px);overflow:hidden}
+            .pap-full{border-radius:16px;border:1px solid rgba(120,100,200,0.2);background:rgba(18,16,32,0.85);backdrop-filter:blur(12px);overflow:hidden;max-width:1060px;margin:0 auto}
+            .pap-full-wrap{max-width:1060px;margin:16px auto 0}
+            .pap-plans{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+            @media(max-width:600px){.pap-plans{grid-template-columns:1fr}}
+            .pap-plan{border-radius:14px;border:1px solid rgba(120,100,200,0.18);background:rgba(255,255,255,0.02);padding:20px 16px;text-align:center;position:relative;overflow:hidden}
+            .pap-badge{position:absolute;top:10px;right:10px;font-size:9px;font-weight:800;letter-spacing:0.8px;text-transform:uppercase;padding:3px 8px;border-radius:20px}
+            .pap-pm-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:14px 12px;border-radius:12px;border:2px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);cursor:pointer;transition:all 0.2s;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.5px;text-transform:uppercase;color:#9ca3af;min-width:76px;flex:1}
+            .pap-pm-btn:hover{transform:translateY(-2px);border-color:rgba(124,58,237,0.4);color:#c4b5fd}
+            .pap-pm-btn.pap-active{color:#fff}
+            .pap-step{display:flex;gap:14px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+            .pap-step:last-child{border-bottom:none;padding-bottom:0}
+            .pap-num{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:'Orbitron',monospace;background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;box-shadow:0 0 10px rgba(124,58,237,0.35)}
+            .pap-num-done{background:linear-gradient(135deg,#10b981,#059669) !important;box-shadow:0 0 10px rgba(16,185,129,0.35) !important}
           </style>
+          <div class="pap-wrap">
 
-          <div class="pa-page">
-
-            <!-- HEADER -->
-            <div class="pa-header">
-              <div class="pa-brand">
-                <div class="pa-brand-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                </div>
-                <span class="pa-brand-name">SWEEPADMIN</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px">
-                <span style="font-size:11px;color:#6b7280;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${state.user ? state.user.email : ''}</span>
-                <button id="adSignOut" class="pa-signout-btn">Sign Out</button>
-              </div>
-            </div>
-
-            <!-- STATUS BANNER -->
-            <div class="pa-status-banner ${_isPendingNew ? 'pa-status-pending' : _isExpired ? 'pa-status-expired' : 'pa-status-low'}">
-              ${_isPendingNew ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg> Account Pending Activation` : _isExpired ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Subscription Expired — ${expiryStr}` : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg> Subscription expiring soon — ${daysLeft} day${daysLeft!==1?'s':''} left`}
-            </div>
-
-            <!-- BODY GRID -->
-            <div class="pa-body">
+            <div class="pap-grid">
 
               <!-- LEFT COLUMN -->
-              <div style="display:flex;flex-direction:column;gap:16px">
+              <div style="display:flex;flex-direction:column;gap:14px">
 
-                <!-- ACCOUNT STATUS CARD -->
-                <div class="pa-card pa-status-card${_isExpired?' expired':''}">
-                  <div class="pa-card-head" style="background:rgba(245,158,11,0.05);border-color:rgba(245,158,11,0.15)">
-                    <div class="pa-card-head-icon" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.25)">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2">
-                        ${_isPendingNew ? '<circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>' : _isExpired ? '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' : '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>'}
-                      </svg>
+                <!-- LOGO & BRAND -->
+                <div style="text-align:center;padding:24px 16px 16px">
+                  <img class="login-logo" src="${_logoSrc}" alt="SweepAdmin" style="width:106px;height:106px;margin:0 auto 14px;display:block" />
+                  <h1 class="login-title" style="font-size:24px;margin-bottom:4px;letter-spacing:2px">SWEEPADMIN</h1>
+                  <p style="font-size:11px;color:var(--textMuted);font-weight:600;letter-spacing:0.5px">Game Points Billing &amp; Management</p>
+                </div>
+
+                <!-- ACCOUNT STATUS -->
+                <div class="pap-card" style="border-color:${_isExpired ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'}">
+                  <div style="padding:10px 14px;background:${_isExpired ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)'};border-bottom:1px solid ${_isExpired ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)'}">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${_isExpired ? '#f87171' : '#fbbf24'}" stroke-width="2.2">${_isPendingNew ? '<circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>' : _isExpired ? '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' : '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'}</svg>
+                      <span style="font-family:'Orbitron',monospace;font-size:10px;font-weight:700;letter-spacing:1.5px;color:${_isExpired ? '#f87171' : '#fbbf24'}">${_isPendingNew ? 'PENDING ACTIVATION' : _isExpired ? 'SUBSCRIPTION EXPIRED' : 'EXPIRING SOON'}</span>
                     </div>
-                    <span class="pa-card-title" style="color:#f59e0b">Account Status</span>
                   </div>
-                  <div class="pa-card-body">
-                    <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;letter-spacing:1.5px;color:${_isExpired?'#f87171':'#fbbf24'};margin-bottom:6px">
-                      ${_isPendingNew ? 'PENDING ACTIVATION' : _isExpired ? 'SUBSCRIPTION EXPIRED' : 'EXPIRING SOON'}
-                    </div>
-                    <p style="font-size:13px;color:#9ca3af;line-height:1.65;margin:0">
-                      ${_isPendingNew ? 'Your account is awaiting activation. Complete the subscription payment below to unlock full access.' : _isExpired ? `Your access expired on <strong style="color:#f87171">${expiryStr}</strong>. Renew your subscription to restore access immediately.` : `Your subscription expires in <strong style="color:#fbbf24">${daysLeft} day${daysLeft!==1?'s':''}</strong>. Renew now to avoid service interruption.`}
-                    </p>
-                    <div style="margin-top:12px;padding:10px 12px;border-radius:9px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.12);font-size:11px;color:#f59e0b;line-height:1.6;display:flex;gap:8px;align-items:flex-start">
-                      <svg width="12" height="12" style="flex-shrink:0;margin-top:1px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                      Accounts without an active subscription may be disabled or removed without prior notice.
+                  <div style="padding:12px 14px">
+                    <p style="font-size:12px;color:#9ca3af;line-height:1.65;margin:0">${_isPendingNew ? 'Your account is awaiting activation. Complete the subscription payment to unlock full access.' : _isExpired ? `Your access expired on <strong style="color:#f87171">${expiryStr}</strong>. Renew your subscription to restore access.` : `Your subscription expires in <strong style="color:#fbbf24">${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong>. Renew now to avoid interruption.`}</p>
+                  </div>
+                </div>
+
+                <!-- WELCOME -->
+                <div class="pap-card">
+                  <div style="padding:14px 14px 6px">
+                    <div style="font-size:10px;font-weight:800;color:#a78bfa;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:8px">Welcome to SweepAdmin</div>
+                    <p style="font-size:12px;color:#9ca3af;line-height:1.7;margin:0 0 12px">Your all-in-one platform for game points billing, cashier management, employee tracking, and analytics.</p>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">
+                      ${[['Billing & Invoicing','#7c3aed'],['Employee Tracking','#06b6d4'],['Analytics','#10b981'],['Admin Controls','#f59e0b']].map(([l,c]) => `<div style="padding:7px 9px;border-radius:8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);font-size:11px;font-weight:700;color:#d1d5db;display:flex;align-items:center;gap:6px"><div style="width:6px;height:6px;border-radius:50%;background:${c};flex-shrink:0"></div>${l}</div>`).join('')}
                     </div>
                   </div>
                 </div>
 
-                <!-- WELCOME CARD -->
-                <div class="pa-card welcome-card glow-purple">
-                  <div class="pa-card-head" style="background:rgba(124,58,237,0.06);border-color:rgba(124,58,237,0.15)">
-                    <div class="pa-card-head-icon" style="background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25)">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                    </div>
-                    <span class="pa-card-title" style="color:#a78bfa">Welcome to SweepAdmin</span>
-                  </div>
-                  <div class="pa-card-body">
-                    <p style="font-size:13px;color:#9ca3af;line-height:1.7;margin:0 0 14px">
-                      SweepAdmin is your all-in-one platform for game points billing, cashier management, and analytics. Subscribe to unlock the full suite of tools.
-                    </p>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                      ${[['Billing & Invoicing','#7c3aed','M9 14H5l-1-4h12l-1 4H9zm0 0v3m6-3v3m-6-7V4m6 3V4'],['Employee Tracking','#06b6d4','M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75'],['Analytics Dashboard','#10b981','M18 20V10M12 20V4M6 20v-6'],['Admin Controls','#f59e0b','M12 1l3 6 6 1-4.5 4.5 1 6.5-5.5-3-5.5 3 1-6.5L3 8l6-1 3-6z']].map(([label,color,path])=>`
-                      <div style="padding:10px;border-radius:9px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;gap:8px">
-                        <div style="width:26px;height:26px;border-radius:7px;background:${color}22;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><path d="${path}"/></svg>
-                        </div>
-                        <span style="font-size:11px;font-weight:700;color:#d1d5db;letter-spacing:0.3px">${label}</span>
-                      </div>`).join('')}
-                    </div>
-                  </div>
+                <!-- DISCLAIMER -->
+                <div style="padding:11px 13px;border-radius:11px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);display:flex;gap:8px;align-items:flex-start">
+                  <svg width="12" height="12" style="flex-shrink:0;margin-top:1px" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <p style="font-size:11px;color:#f59e0b;line-height:1.6;margin:0">Accounts without an active subscription may be disabled or removed without prior notice.</p>
                 </div>
 
-                <!-- SUBSCRIPTION PLANS CARD -->
-                <div class="pa-card glow-purple">
-                  <div class="pa-card-head" style="background:rgba(124,58,237,0.06);border-color:rgba(124,58,237,0.15)">
-                    <div class="pa-card-head-icon" style="background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25)">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-                    </div>
-                    <span class="pa-card-title" style="color:#a78bfa">Subscription Plans</span>
-                  </div>
-                  <div class="pa-card-body">
-                    <div class="pa-hero-label">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>
-                      Choose your plan
-                    </div>
-                    <div class="plan-grid">
-                      <div class="plan-card" onclick="this.classList.toggle('featured')">
-                        <div class="plan-label">Monthly</div>
-                        <div class="plan-price plan-price-big"><strong>$20</strong><span>/mo</span></div>
-                        <div class="plan-sub">Billed monthly</div>
-                      </div>
-                      <div class="plan-card featured" onclick="this.classList.toggle('featured')">
-                        <div class="plan-badge">Best Value</div>
-                        <div class="plan-label">Quarterly</div>
-                        <div class="plan-price plan-price-big"><strong>$60</strong><span>/3mo</span></div>
-                        <div class="plan-sub">$20/mo · Save 0%</div>
-                      </div>
-                      <div class="plan-card" style="grid-column:1/-1" onclick="this.classList.toggle('featured')">
-                        <div class="plan-badge" style="background:linear-gradient(135deg,#10b981,#06b6d4)">Most Popular</div>
-                        <div class="plan-label">Annual</div>
-                        <div class="plan-price"><strong style="font-size:28px;font-family:Orbitron,monospace">$230</strong><span>/year</span></div>
-                        <div class="plan-sub" style="color:#10b981;font-weight:700">Save ~$10 vs monthly</div>
-                      </div>
-                    </div>
-                    <div class="plan-custom">
-                      <div style="width:36px;height:36px;border-radius:9px;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-                      </div>
-                      <div style="flex:1;min-width:0">
-                        <div style="font-size:12px;font-weight:800;color:#22d3ee;letter-spacing:0.5px;margin-bottom:2px">Custom Plan (12+ Months)</div>
-                        <div style="font-size:11px;color:#6b7280;line-height:1.5">Need a longer commitment or multi-account deal? Contact Customer Support for custom pricing.</div>
-                      </div>
-                    </div>
-                  </div>
+                <!-- SIGN OUT -->
+                <div>
+                  <button id="adSignOut" style="width:100%;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.06);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;font-family:'Rajdhani',sans-serif;transition:all 0.2s">Sign Out</button>
+                  <p style="margin:9px 0 0;font-size:11px;color:var(--textMuted);text-align:center">Signed in as <span style="color:#9ca3af">${state.user ? state.user.email : ''}</span></p>
                 </div>
 
-              </div><!-- /LEFT COLUMN -->
+              </div><!-- /LEFT -->
 
               <!-- RIGHT COLUMN -->
-              <div style="display:flex;flex-direction:column;gap:16px">
-
-                <!-- PAYMENT METHOD HERO CARD -->
-                <div class="pa-card glow-cyan" style="border-color:rgba(6,182,212,0.2)">
-                  <div class="pa-card-head" style="background:linear-gradient(90deg,rgba(6,182,212,0.1),rgba(124,58,237,0.06));border-color:rgba(6,182,212,0.2)">
-                    <div class="pa-card-head-icon" style="background:linear-gradient(135deg,rgba(6,182,212,0.2),rgba(124,58,237,0.15));border:1px solid rgba(6,182,212,0.3)">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2.2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-                    </div>
-                    <div>
-                      <div class="pa-card-title" style="color:#22d3ee">Payment Method</div>
-                      <div style="font-size:10px;color:#6b7280;margin-top:1px;font-weight:600;letter-spacing:0.5px">WE ACCEPT</div>
-                    </div>
+              <div>
+                <!-- PAYMENT METHOD -->
+                <div class="pap-card" style="border-color:rgba(6,182,212,0.22)">
+                  <div style="padding:13px 16px 10px;background:linear-gradient(90deg,rgba(6,182,212,0.07),rgba(124,58,237,0.04));border-bottom:1px solid rgba(6,182,212,0.14)">
+                    <div style="font-size:11px;font-weight:800;color:#22d3ee;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:1px">Payment Method</div>
+                    <div style="font-size:9px;font-weight:700;color:#6b7280;letter-spacing:1.8px;text-transform:uppercase">WE ACCEPT</div>
                   </div>
-                  <div class="pa-card-body">
+                  <div style="padding:16px 16px">
                     <div id="payInfoPanel"></div>
-                    <div style="margin-top:6px;padding:8px 12px;border-radius:9px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.15);font-size:11px;color:#6b7280;display:flex;align-items:center;gap:8px">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg>
-                      After sending payment, notify your upline manager to activate your account.
+                  </div>
+                </div>
+              </div><!-- /RIGHT -->
+
+            </div><!-- /GRID -->
+
+            <!-- FULL WIDTH BELOW -->
+            <div class="pap-full-wrap">
+
+              <!-- SUBSCRIPTION PLANS -->
+              <div class="pap-full">
+                <div style="padding:14px 18px;border-bottom:1px solid rgba(120,100,200,0.14);background:rgba(124,58,237,0.05)">
+                  <div style="font-size:10px;font-weight:800;color:#a78bfa;letter-spacing:1.2px;text-transform:uppercase">Subscription Plans</div>
+                </div>
+                <div style="padding:20px 18px">
+                  <div class="pap-plans">
+                    <div class="pap-plan">
+                      <div style="font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Monthly</div>
+                      <div style="font-family:'Orbitron',monospace;font-size:34px;font-weight:900;color:#fff;line-height:1"><span style="font-size:16px;font-weight:600;color:#9ca3af;font-family:'Rajdhani',sans-serif">$</span>20</div>
+                      <div style="font-size:12px;color:#6b7280;font-weight:600;margin-top:6px">per month</div>
+                    </div>
+                    <div class="pap-plan" style="border-color:rgba(124,58,237,0.4);background:linear-gradient(145deg,rgba(124,58,237,0.1),rgba(6,182,212,0.04));box-shadow:0 0 24px rgba(124,58,237,0.1)">
+                      <div class="pap-badge" style="background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff">Most Popular</div>
+                      <div style="font-size:10px;font-weight:700;color:#a78bfa;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Quarterly</div>
+                      <div style="font-family:'Orbitron',monospace;font-size:34px;font-weight:900;color:#fff;line-height:1"><span style="font-size:16px;font-weight:600;color:#a78bfa;font-family:'Rajdhani',sans-serif">$</span>60</div>
+                      <div style="font-size:12px;color:#a78bfa;font-weight:700;margin-top:6px">per 3 months</div>
+                    </div>
+                    <div class="pap-plan" style="border-color:rgba(16,185,129,0.35);background:linear-gradient(145deg,rgba(16,185,129,0.08),rgba(6,182,212,0.03));box-shadow:0 0 24px rgba(16,185,129,0.08)">
+                      <div class="pap-badge" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff">Best Value</div>
+                      <div style="font-size:10px;font-weight:700;color:#34d399;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Annual</div>
+                      <div style="font-family:'Orbitron',monospace;font-size:34px;font-weight:900;color:#fff;line-height:1"><span style="font-size:16px;font-weight:600;color:#34d399;font-family:'Rajdhani',sans-serif">$</span>230</div>
+                      <div style="font-size:12px;color:#34d399;font-weight:700;margin-top:6px">per year</div>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <!-- PAYMENT INSTRUCTIONS CARD -->
-                <div class="pa-card">
-                  <div class="pa-card-head" style="background:rgba(16,185,129,0.04);border-color:rgba(16,185,129,0.12)">
-                    <div class="pa-card-head-icon" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2)">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                    </div>
-                    <span class="pa-card-title" style="color:#10b981">How to Pay</span>
+              <!-- CUSTOM PLAN -->
+              <div class="pap-full" style="margin-top:12px;border-color:rgba(6,182,212,0.18)">
+                <div style="padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                  <div style="width:38px;height:38px;border-radius:10px;background:rgba(6,182,212,0.09);border:1px solid rgba(6,182,212,0.22);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
                   </div>
-                  <div class="pa-card-body">
-                    <div class="instr-step">
-                      <div class="instr-num">1</div>
-                      <div>
-                        <div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Choose a Subscription Plan</div>
-                        <div style="font-size:12px;color:#6b7280;line-height:1.55">Select the plan that fits your needs from the plans card on the left.</div>
-                      </div>
-                    </div>
-                    <div class="instr-step">
-                      <div class="instr-num">2</div>
-                      <div>
-                        <div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Select a Payment Method</div>
-                        <div style="font-size:12px;color:#6b7280;line-height:1.55">Pick any of the accepted payment channels shown above and copy the address.</div>
-                      </div>
-                    </div>
-                    <div class="instr-step">
-                      <div class="instr-num">3</div>
-                      <div>
-                        <div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Include Your Email in Memo</div>
-                        <div style="font-size:12px;color:#6b7280;line-height:1.55">Always add your account email in the memo/remarks field so we can identify your payment.</div>
-                      </div>
-                    </div>
-                    <div class="instr-step">
-                      <div class="instr-num">4</div>
-                      <div>
-                        <div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Send Payment &amp; Notify</div>
-                        <div style="font-size:12px;color:#6b7280;line-height:1.55">Complete the transfer then notify your upline manager with your payment receipt to get activated.</div>
-                      </div>
-                    </div>
+                  <div style="flex:1;min-width:180px">
+                    <div style="font-size:13px;font-weight:800;color:#22d3ee;letter-spacing:0.5px;margin-bottom:3px">Custom Plan — 12+ Months</div>
+                    <div style="font-size:12px;color:#6b7280;line-height:1.55">Need a longer commitment or multi-account arrangement? Contact Customer Support for custom pricing tailored to your needs.</div>
                   </div>
                 </div>
+              </div>
 
-                <!-- CUSTOMER SUPPORT CARD -->
-                <div class="pa-card" id="payContactPanel" style="display:none;border-color:rgba(16,185,129,0.12)">
-                  <div class="pa-card-head" style="background:rgba(16,185,129,0.04);border-color:rgba(16,185,129,0.12)">
-                    <div class="pa-card-head-icon" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2)">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 8.81 19.79 19.79 0 01.1 2.18 2 2 0 012.08 0h3a2 2 0 012 1.72c.13 1.01.37 2 .72 2.96a2 2 0 01-.45 2.11L6.01 8.09a16 16 0 006.24 6.24l1.3-1.3a2 2 0 012.11-.45c.96.34 1.95.58 2.96.72A2 2 0 0122 16.92z"/></svg>
-                    </div>
-                    <span class="pa-card-title" style="color:#10b981">Customer Support</span>
-                  </div>
-                  <div class="pa-card-body" id="payContactBody"></div>
+              <!-- CUSTOMER SUPPORT (populated by renderPaymentInfoPanel) -->
+              <div class="pap-full" id="payContactPanel" style="margin-top:12px;display:none;border-color:rgba(16,185,129,0.16)">
+                <div style="padding:12px 18px;border-bottom:1px solid rgba(16,185,129,0.12);background:rgba(16,185,129,0.04)">
+                  <div style="font-size:10px;font-weight:800;color:#10b981;letter-spacing:1.2px;text-transform:uppercase">Customer Support &amp; Sales</div>
                 </div>
+                <div style="padding:14px 18px" id="payContactBody"></div>
+              </div>
 
-              </div><!-- /RIGHT COLUMN -->
+              <!-- HOW TO PAY -->
+              <div class="pap-full" style="margin-top:12px">
+                <div style="padding:12px 18px;border-bottom:1px solid rgba(16,185,129,0.1);background:rgba(16,185,129,0.03)">
+                  <div style="font-size:10px;font-weight:800;color:#10b981;letter-spacing:1.2px;text-transform:uppercase">How to Pay</div>
+                </div>
+                <div style="padding:18px 20px">
+                  <div class="pap-step"><div class="pap-num">1</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Choose a Subscription Plan</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Review the plans above and choose the one that best fits your needs — Monthly, Quarterly, Annual, or contact us for a Custom arrangement.</div></div></div>
+                  <div class="pap-step"><div class="pap-num">2</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Select a Payment Method</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Choose your preferred payment channel from the options shown above. Each method provides a unique payment address — tap the button to reveal it.</div></div></div>
+                  <div class="pap-step"><div class="pap-num">3</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Complete the Payment via Your Preferred Wallet</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Send the correct amount to the provided address. Copy the address or scan the QR code directly from your wallet app.</div></div></div>
+                  <div class="pap-step"><div class="pap-num">4</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Include Your Email in the Memo / Remarks</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Always include your SweepAdmin account email in the payment memo or remarks field so our team can match your payment. Alternatively, contact Support directly to confirm.</div></div></div>
+                  <div class="pap-step"><div class="pap-num">5</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Payment Complete</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Once your payment is received and your email memo is included, your account will typically be activated within a few hours.</div></div></div>
+                  <div class="pap-step"><div class="pap-num">6</div><div><div style="font-size:13px;font-weight:700;color:#e0d0ff;margin-bottom:3px">Faster Activation — Send Proof to Support</div><div style="font-size:12px;color:#6b7280;line-height:1.6">For faster activation, message Customer Support a screenshot of your payment receipt along with your SweepAdmin account email. Our team will verify and activate your account promptly.</div></div></div>
+                  <div class="pap-step"><div class="pap-num pap-num-done">✓</div><div><div style="font-size:13px;font-weight:700;color:#34d399;margin-bottom:3px">Congratulations — Your Account is Active!</div><div style="font-size:12px;color:#6b7280;line-height:1.6">Sign in and enjoy full access to SweepAdmin's billing, management, and analytics tools.</div></div></div>
+                </div>
+              </div>
 
-            </div><!-- /BODY GRID -->
+              <!-- DATA RETENTION NOTICE -->
+              <div style="margin-top:14px;padding:13px 16px;border-radius:12px;background:rgba(6,182,212,0.04);border:1px solid rgba(6,182,212,0.14);display:flex;gap:10px;align-items:flex-start">
+                <svg width="13" height="13" style="flex-shrink:0;margin-top:1px" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <p style="font-size:11px;color:#6b7280;line-height:1.7;margin:0"><strong style="color:#22d3ee">Data Retention Policy:</strong> When a subscription expires, your account will be disabled but your data will be retained securely for <strong style="color:#e0d0ff">30 days</strong> from the expiry date. No data will be deleted during this grace period — renew within 30 days to restore full access and pick up exactly where you left off.</p>
+              </div>
 
-          </div><!-- /pa-page -->
+            </div><!-- /pap-full-wrap -->
+          </div><!-- /pap-wrap -->
         </div>`;
       }
 
