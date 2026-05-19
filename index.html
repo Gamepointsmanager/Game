@@ -1778,7 +1778,7 @@
             // bill ref via supabase
             var updates = {paymentStatus: newStatus};
             {
-              var snap = await ref.get(); var bd = snap.data();
+              var bd = state.bills.find(function(b){return b._id===bid}) || {};
               var _bGT = (bd.totalDollars||0) + (bd.extraFeeAmount||0);
               var _bCr = bd.creditApplied || 0;
               if (newStatus === 'received') {
@@ -1791,7 +1791,7 @@
                 updates.balanceDue = Math.max(0, _bGT - _bCr);
               }
             }
-            await trackedWrite(async function(){ await supabase.from('bills').update(updates)});
+            await trackedWrite(async function(){ await supabase.from('bills').update(updates).eq('id',bid); });
             // Update local bill + refresh just the select styling
             var lb = state.bills.find(function(b){return b._id===bid});
             if(lb){lb.paymentStatus=newStatus;if(updates.partialAmount!==undefined)lb.partialAmount=updates.partialAmount;if(updates.balanceDue!==undefined)lb.balanceDue=updates.balanceDue;}
@@ -2387,8 +2387,8 @@
       try {
         const { data: _sc3 } = await supabase.from('site_config').select('*').eq('doc_id','paymentInfo').maybeSingle();
         const snap = { exists: !!_sc3, data: () => _sc3 ? { paymentAddresses: _sc3.payment_addresses||[], contactInfo: _sc3.contact_info||[] } : {} };
-        if (!snap.exists) { container.innerHTML = ''; return; }
-        const data = snap.data();
+        if (!snap || !snap.exists) { container.innerHTML = ''; return; }
+        const data = snap.data ? snap.data() : snap;
         const addresses = (data.paymentAddresses || []).filter(a => a.address && a.label);
         const contacts = (data.contactInfo || []).filter(c => c.value && c.label);
         const userEmail = state.user ? state.user.email : '';
@@ -4193,7 +4193,7 @@
         const btn = $('#mgConfigSave');
         btn.disabled = true; btn.innerHTML = 'Saving...';
         await trackedWrite(async () => { await supabase.from('master_games').update({
-          name: new_name, cost_rate: newCostRate,
+          name: newName, cost_rate: newCostRate,
           assigned_username: assignedUsername, assigned_level: assignedLevel, highest_level: highestLevel
         }).eq('id', g._id); });
         btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Saved!';
@@ -5069,7 +5069,7 @@
                   const gname=row[CI.game];
                   const nu={username:uname,level:lvl,gameName:gname};
                   const {data:_unr2}=await supabase.from('company_usernames').insert({company_id:comp._id,owner_uid:effectiveOwnerUid(),username:nu.username,game_name:nu.gameName,level:nu.level||''}).select().single(); const ref2={id:_unr2?.id};
-                  comp.usernames=[...(comp.usernames||[]),{_id:ref2.id,...nu}];
+                  if(ref2?.id&&comp) comp.usernames=[...(comp.usernames||[]),{_id:ref2.id,username:nu.username,gameName:nu.gameName,level:nu.level||''}];
                   if(state.companies[comp._id])state.companies[comp._id].usernames=comp.usernames;
                 }
               }
@@ -5219,18 +5219,18 @@
           // Generate unique company code
           const companyCode = await generateCompanyCode();
           const { data: _ncr } = await supabase.from('companies').insert({ owner_uid: effectiveOwnerUid(), name, active: true, company_code: companyCode||null }).select().single();
-          // Realtime channel handles adding to state.companies with the real Supabase ID
-          // Just set up subcollection listeners and re-render
-          setupCompanySubListeners(docRef.id);
-          if (!state.companies[docRef.id]) {
-            state.companies[docRef.id] = { 
-              _id: docRef.id, 
-              name, 
-              active: true, 
-              companyCode: companyCode,
-              assignedGames: [], 
-              usernames: [] 
-            };
+          if (_ncr) {
+            setupCompanySubListeners(_ncr.id);
+            if (!state.companies[_ncr.id]) {
+              state.companies[_ncr.id] = {
+                _id: _ncr.id,
+                name,
+                active: true,
+                companyCode: companyCode,
+                assignedGames: [],
+                usernames: []
+              };
+            }
           }
           // Clear form fields while DOM still exists, BEFORE render()
           const _nameEl = $('#newCompanyName');
@@ -6214,8 +6214,8 @@
             }).select().single();
             const _newBillRef = { id: _nb2?.id };
             if (_nb2) { bill._id = _nb2.id; state.bills.unshift(_mapBillRow(_nb2)); }
-            const _newBillWithId = Object.assign({ _id: _newBillRef.id }, bill);
-            state.bills = state.bills.filter(function(b){ return b._id !== _newBillRef.id; });
+            const _newBillWithId = Object.assign({ _id: bill._id || _newBillRef?.id }, bill);
+            state.bills = state.bills.filter(function(b){ return b._id !== _newBillWithId._id; });
             state.bills.push(_newBillWithId);
             _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
             // If credit was applied, reduce company creditBalance
@@ -7334,7 +7334,7 @@
       for (var i = 0; i < unpaid.length && remaining > 0.001; i++) {
         var ub = unpaid[i];
         // uref → supabase below (use ub._id directly)
-        var usn = await uref.get(); var ud = usn.data();
+        var ud = ub; // use local state
         var uDue = ud.balanceDue || 0;
         if (uDue <= 0.001) continue;
         var applyAmt = parseFloat(Math.min(remaining, uDue).toFixed(2));
@@ -7347,7 +7347,7 @@
           paymentStatus: newDue <= 0.001 ? 'received' : 'partial',
           partialAmount: parseFloat((gt - newDue).toFixed(2))
         };
-        await trackedWrite(function() { return uref.update(uup); });
+        await trackedWrite(async function() { await supabase.from('bills').update(uup).eq('id', ub._id); });
         var lb = state.bills.find(function(b) { return b._id === ub._id; });
         if (lb) Object.assign(lb, uup);
         remaining -= applyAmt;
@@ -8617,14 +8617,12 @@
         if(!confirm('Delete this payment? The credit balance will be adjusted accordingly.'))return;
         var bid=pb.dataset.billid,pidx=parseInt(pb.dataset.payidx);
         try{
-          // ref replaced — use supabase directly by bid
-          var snap=await ref.get();
-          var eps=(snap.data().extraPayments||[]);
+          var eps=((state.bills.find(function(b4){return b4._id===bid;})||{}).extraPayments||[]);
           var delEp=eps[pidx];
           var delAmt=delEp?(delEp.amount||0):0;
           var isAddedToCredit=(delEp&&(delEp.isCredit||delEp.isGeneral))||false;
           eps.splice(pidx,1);
-          await trackedWrite(async function(){ await supabase.from('bills').update({extraPayments:eps})});
+          await trackedWrite(async function(){ await supabase.from('bills').update({extra_payments:eps}).eq('id',bid); });
           var lb=state.bills.find(function(bb){return bb._id===bid});
           if(lb)lb.extraPayments=eps;
           // Always subtract this payment from the credit balance
@@ -8676,14 +8674,14 @@
               for(let ubi=0; ubi<unpaidBills.length && remaining>0.001; ubi++){
                 let ubill = unpaidBills[ubi];
                 // uref supabase — use ubill._id directly
-                let usn = await uref.get(); let udata = usn.data();
+                let udata = ubill; // use local state
                 let uDue = udata.balanceDue||0;
                 if(uDue <= 0.001) continue;
                 let applyAmt = Math.min(remaining, uDue);
                 let newDue = parseFloat((uDue - applyAmt).toFixed(2));
                 let uupdates = { balanceDue: newDue };
                 uupdates.paymentStatus = newDue <= 0.001 ? 'received' : 'partial';
-                let grandTotal = (udata.totalDollars||0)+(udata.extraFeeAmount||0);
+                let grandTotal = (ubill.totalDollars||0)+(ubill.extraFeeAmount||0);
                 uupdates.partialAmount = parseFloat((grandTotal - newDue).toFixed(2));
                 let existingEps = udata.extraPayments || [];
                 var _epEntry2={amount: parseFloat(applyAmt.toFixed(2)), date: payDate, isGeneral: true}; if(_payMethId) _epEntry2.paymentMethodId=_payMethId;
@@ -8702,12 +8700,11 @@
 
               if(newCredit > 0.001){
                 var newestBill = allCompBills[allCompBills.length-1];
-                // nbRef replaced by supabase
-                var nbSnap = await nbRef.get(); var nbData = nbSnap.data();
-                var nbEp = (nbData.extraPayments||[]);
+                var nbData = newestBill; // use local state
+                var nbEp = ([...(nbData.extraPayments||[])]);
                 var _crEpEntry={amount:newCredit, date:payDate, isCredit:true}; if(_payMethId) _crEpEntry.paymentMethodId=_payMethId;
                 nbEp.push(_crEpEntry);
-                await trackedWrite(async function(){ await supabase.from('bills').update({extraPayments:nbEp})});
+                await trackedWrite(async function(){ await supabase.from('bills').update({extra_payments:nbEp}).eq('id',newestBill._id); });
                 var lbN=state.bills.find(function(bb){return bb._id===newestBill._id});
                 if(lbN){lbN.extraPayments=nbEp;}
               }
@@ -8719,9 +8716,8 @@
               if(state.companies[c._id]) state.companies[c._id].creditBalance = totalCredit;
             }
           } else {
-            // ref replaced — use supabase directly by bid
-            var sn=await ref.get(); var bData=sn.data();
-            var ep=(bData.extraPayments||[]);
+            var bData=state.bills.find(function(bb){return bb._id===bid;})||{};
+            var ep=([...(bData.extraPayments||[])]);
             var payDate2=dt||localDateStr();
             var _epEntry3={amount:amt,date:payDate2}; if(_payMethId) _epEntry3.paymentMethodId=_payMethId;
             ep.push(_epEntry3);
@@ -8732,7 +8728,7 @@
             var grandTotal2=(bData.totalDollars||0)+(bData.extraFeeAmount||0);
             updates2.partialAmount = parseFloat((grandTotal2 - newDue2).toFixed(2));
             if(_payMethId) updates2.paymentMethodId = _payMethId;
-            await trackedWrite(async function(){ await supabase.from('bills').update(updates2)});
+            await trackedWrite(async function(){ const _u2={extra_payments:updates2.extraPayments||ep,balance_due:updates2.balanceDue,payment_status:updates2.paymentStatus,partial_amount:updates2.partialAmount}; await supabase.from('bills').update(_u2).eq('id',bid); });
             var lb4=state.bills.find(function(bb){return bb._id===bid});
             if(lb4){Object.assign(lb4,updates2);}
             if(_payMethId) cfRecordExtraPayment(amt, _payMethId, payDate2, c._id, c.name);
@@ -11653,7 +11649,7 @@
         try {
           const { data: _elcheck } = await supabase.from('employee_links').select('link_key').eq('link_key', emailToKey(emp.email)).maybeSingle();
           const doc = { exists: !!_elcheck };
-          return { empId: emp._id, linked: doc.exists && doc.data().active !== false };
+          return { empId: emp._id, linked: doc.exists };
         } catch(e) { return { empId: emp._id, linked: false }; }
       }));
       const linkMap = {};
@@ -11787,7 +11783,8 @@
       _empSelfListener = supabase.channel('self_shifts_' + state.empOrgId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: 'org_id=eq.' + state.empOrgId }, async (payload) => { const snap = { docs: [] }; // handled inline below
           // Only auto-refresh UI if user is not mid-action (timer running is fine)
-          const myShiftActive = snap.docs.some(d => d.data().employeeId === state.empEmployeeDoc?._id);
+          const { data: _activeShifts } = await supabase.from('shifts').select('*').eq('org_id', state.empOrgId).eq('status','active');
+          const myShiftActive = (_activeShifts||[]).some(r => r.employee_id === state.empEmployeeDoc?._id);
           if (!myShiftActive) refreshEmploymentSelf();
         }, () => {});
     }
