@@ -1248,18 +1248,6 @@
   <div id="app"></div>
 
   <script>
-    // ── Global error catcher (remove after debugging) ──
-    window.onerror = function(msg, src, line, col, err) {
-      document.body.innerHTML = '<div style="color:#ff4444;background:#111;padding:20px;font-family:monospace;font-size:14px;white-space:pre-wrap;position:fixed;top:0;left:0;right:0;bottom:0;overflow:auto;z-index:99999">' +
-        '<b>RUNTIME ERROR</b>\n\n' +
-        'Message: ' + msg + '\n' +
-        'Source:  ' + src + '\n' +
-        'Line:    ' + line + '\n' +
-        'Col:     ' + col + '\n\n' +
-        (err ? err.stack : '') +
-        '</div>';
-      return true;
-    };
     // ============================================================
     // SUPABASE INIT
     // ============================================================
@@ -2624,7 +2612,10 @@
         btn.innerHTML = '<span style="animation:pulse 1s infinite">Signing in...</span>';
         btn.disabled = true;
         try {
-          const { error: _si4 } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+          const _redirectUrl = (window.location.protocol === 'file:' || !window.location.origin || window.location.origin === 'null')
+            ? 'https://kzchxmulktygoqhiwpff.supabase.co/auth/v1/callback'
+            : window.location.origin;
+          const { error: _si4 } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: _redirectUrl } });
           if (_si4) throw _si4;
         } catch (e) {
           const err = $('#loginError');
@@ -13322,12 +13313,8 @@
     }
 
     // ============================================================
-    // PWA Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/Game/sw.js', { scope: '/Game/' })
-        .then(reg => console.log('SW registered:', reg.scope))
-        .catch(e => console.log('SW:', e.message));
-    }
+    // PWA Service Worker — disabled (sw.js not available in this deployment)
+    // navigator.serviceWorker.register('/Game/sw.js') intentionally removed
     // Initial render
     render();
   </script>
