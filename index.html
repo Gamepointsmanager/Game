@@ -1248,6 +1248,18 @@
   <div id="app"></div>
 
   <script>
+    // ── Global error catcher (remove after debugging) ──
+    window.onerror = function(msg, src, line, col, err) {
+      document.body.innerHTML = '<div style="color:#ff4444;background:#111;padding:20px;font-family:monospace;font-size:14px;white-space:pre-wrap;position:fixed;top:0;left:0;right:0;bottom:0;overflow:auto;z-index:99999">' +
+        '<b>RUNTIME ERROR</b>\n\n' +
+        'Message: ' + msg + '\n' +
+        'Source:  ' + src + '\n' +
+        'Line:    ' + line + '\n' +
+        'Col:     ' + col + '\n\n' +
+        (err ? err.stack : '') +
+        '</div>';
+      return true;
+    };
     // ============================================================
     // SUPABASE INIT
     // ============================================================
