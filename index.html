@@ -2360,7 +2360,7 @@
           { const {data:{user:_cu3}}=await supabase.auth.getUser();
           if (_cu3) {
             try {
-              await resolveEmployeeRole(_cu3); }
+              await resolveEmployeeRole(_cu3);
               console.log('[Retry] empRole:', state.empRole, '| empOrgId:', state.empOrgId);
               if (state.empRole === 'employee') {
                 const ownerAccess = await checkUserAccessByUid(state.empOrgId);
@@ -2371,7 +2371,7 @@
                 }
               }
             } catch(e) { console.error('[Retry]', e); }
-          }
+          } }
           retryBtn.textContent = 'Retry Login Check';
           retryBtn.disabled = false;
           render(); // re-render to show updated diagnostic info
@@ -4193,9 +4193,9 @@
         const btn = $('#mgConfigSave');
         btn.disabled = true; btn.innerHTML = 'Saving...';
         await trackedWrite(async () => { await supabase.from('master_games').update({
-          name: newName, costRate: newCostRate,
-          assignedUsername, assignedLevel, highestLevel
-        }));
+          name: new_name, cost_rate: newCostRate,
+          assigned_username: assignedUsername, assigned_level: assignedLevel, highest_level: highestLevel
+        }).eq('id', g._id); });
         btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Saved!';
         setTimeout(() => { if($('#mgConfigSave')) $('#mgConfigSave').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Save Config'; }, 1500);
         renderMasterGamesList();
@@ -4229,10 +4229,10 @@
         const btn = $('#mgStockApply');
         btn.disabled = true; btn.innerHTML = 'Applying...';
         await trackedWrite(async () => { await supabase.from('master_games').update({
-          remainingPoints: newAvail,
-          totalPoints: action === 'Set' ? amt : (g.totalPoints || prev),
-          stockHistory: newHistory
-        }));
+          remaining_points: newAvail,
+          total_points: action === 'Set' ? amt : (g.totalPoints || prev),
+          stock_history: newHistory
+        }).eq('id', g._id); });
         g.remainingPoints = newAvail;
         g.stockHistory = newHistory;
         if (action === 'Set') g.totalPoints = amt;
