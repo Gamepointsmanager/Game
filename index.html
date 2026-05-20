@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+<      payment_bonuses:'paymentBonuses', contact_info:'contact',
+!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -1271,6 +1272,7 @@
       subPeriodStart:'sub_period_start', subPeriodEnd:'sub_period_end',
       subscriptionCost:'subscription_cost', invoiceSettings:'invoice_settings',
       generalPayments:'general_payments', ownerUid:'owner_uid', ownerEmail:'owner_email',
+      paymentBonuses:'payment_bonuses', contact:'contact_info',
       ownerName:'owner_name', employeeId:'employee_id', ownerHasAccess:'owner_has_access',
       ownerAccessExpiry:'owner_access_expiry', accessGrantedAt:'access_granted_at',
       targetUid:'target_uid', targetAll:'target_all', dismissedAt:'dismissed_at',
@@ -1392,12 +1394,14 @@
           const {error}=await _supabase.from(this._t).upsert({[pk]:this._id,...d});
           if (error) { console.error('[db.set]',this._t,error.message); throw error; }
         } else {
-          // Auto-inject owner_uid for tables that require it (RLS)
+          // Auto-inject required FK fields for RLS
+          const _ou2 = (state.empRole==='employee'&&state.empOrgId) ? state.empOrgId : state.user?.uid;
           const _OWN_TBLS2=new Set(['companies','master_games','bills','assigned_games','company_usernames','cf_transactions','cf_payment_methods','cf_shareholders','cf_op_expenses','cf_dividend_payments']);
-          if (_OWN_TBLS2.has(this._t) && !d.owner_uid) {
-            const _ou = (state.empRole==='employee'&&state.empOrgId) ? state.empOrgId : state.user?.uid;
-            if (_ou) d.owner_uid = _ou;
-          }
+          if (_OWN_TBLS2.has(this._t) && !d.owner_uid && _ou2) d.owner_uid = _ou2;
+          const _ORG_TBLS2=new Set(['org_employees','shifts','salary_payments']);
+          if (_ORG_TBLS2.has(this._t) && !d.org_id && _ou2) d.org_id = _ou2;
+          if (!d.company_id) { const _cw2=this._w.find(w=>w.f==='company_id'); if(_cw2) d.company_id=_cw2.v; }
+          if (!d.org_id) { const _ow2=this._w.find(w=>w.f==='org_id'); if(_ow2) d.org_id=_ow2.v; }
           const {data:row,error}=await _supabase.from(this._t).insert(d).select().single();
           if (error) { console.error('[db.set insert]',this._t,error.message); throw error; }
           this._id=row.id||row.uid;
@@ -1422,11 +1426,22 @@
       }
       async add(payload) {
         const d=_toSB(payload);
-        // Auto-inject owner_uid for tables that require it (RLS)
+        // Auto-inject required FK fields for RLS
+        const _ou = (state.empRole==='employee'&&state.empOrgId) ? state.empOrgId : state.user?.uid;
         const _OWN_TBLS=new Set(['companies','master_games','bills','assigned_games','company_usernames','cf_transactions','cf_payment_methods','cf_shareholders','cf_op_expenses','cf_dividend_payments']);
-        if (_OWN_TBLS.has(this._t) && !d.owner_uid) {
-          const _ou = (state.empRole==='employee'&&state.empOrgId) ? state.empOrgId : state.user?.uid;
-          if (_ou) d.owner_uid = _ou;
+        if (_OWN_TBLS.has(this._t) && !d.owner_uid && _ou) d.owner_uid = _ou;
+        // Inject org_id for employee/shift/salary tables
+        const _ORG_TBLS=new Set(['org_employees','shifts','salary_payments']);
+        if (_ORG_TBLS.has(this._t) && !d.org_id && _ou) d.org_id = _ou;
+        // Inject company_id from where filters for sub-collection inserts
+        if (!d.company_id) {
+          const _cw = this._w.find(w => w.f === 'company_id');
+          if (_cw) d.company_id = _cw.v;
+        }
+        // Inject org_id from where filters for org sub-collection inserts
+        if (!d.org_id) {
+          const _ow = this._w.find(w => w.f === 'org_id');
+          if (_ow) d.org_id = _ow.v;
         }
         const {data:row,error}=await _supabase.from(this._t).insert(d).select().single();
         if (error) { console.error('[db.add]',this._t,error.message); throw error; }
@@ -4907,14 +4922,16 @@
             const ag=(comp.assignedGames||[]).find(g=>g.gameName===gameName);
             if(ag){
               ag.rate=newRate;
-              await db.doc(userPath()+'/companies/'+comp._id).update({assignedGames:comp.assignedGames});
+              await _supabase.from('assigned_games').update({rate:newRate}).eq('id',ag._id);
               if(state.companies[comp._id])state.companies[comp._id].assignedGames=comp.assignedGames;
             } else {
               // Game not yet assigned — assign it with this rate
               const mg=state.masterGames.find(g=>g.name===gameName);
               const newAg={gameName,gameId:mg?._id||'',rate:newRate,usernames:[]};
               const updatedGames=[...(comp.assignedGames||[]),newAg];
-              await db.doc(userPath()+'/companies/'+comp._id).update({assignedGames:updatedGames});
+              const _agou=(state.empRole==='employee'&&state.empOrgId)?state.empOrgId:state.user?.uid;
+              const {data:_agn}=await _supabase.from('assigned_games').insert({company_id:comp._id,owner_uid:_agou,game_name:gameName,rate:newRate}).select().single();
+              if(_agn){newAg._id=_agn.id;updatedGames[updatedGames.length-1]._id=_agn.id;}
               comp.assignedGames=updatedGames;
               if(state.companies[comp._id])state.companies[comp._id].assignedGames=updatedGames;
             }
@@ -10105,7 +10122,7 @@
       var csEft = document.getElementById('csExtraFeeToggle');
       if (csEft) csEft.onclick = async function() {
         var on = !(c.extraFeeEnabled);
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({extraFeeEnabled:on}); });
+        await trackedWrite(async function() { await _supabase.from('companies').update({extra_fee_enabled:on}).eq('id',c._id); });
         c.extraFeeEnabled = on;
         overlay.remove(); showCompanySettingsModal();
       };
@@ -10113,7 +10130,7 @@
       if (csEfs) csEfs.onclick = async function() {
         var val = parseFloat(document.getElementById('csExtraFeePercent').value) || 0;
         var costVal = parseFloat(document.getElementById('csExtraFeeCost').value) || 0;
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({extraFeePercent:val, extraFeeCostRate:costVal}); });
+        await trackedWrite(async function() { await _supabase.from('companies').update({extra_fee_percent:val, extra_fee_cost_rate:costVal}).eq('id',c._id); });
         c.extraFeePercent = val; c.extraFeeCostRate = costVal;
         overlay.remove(); showCompanySettingsModal();
       };
@@ -10138,7 +10155,7 @@
             var val = parseFloat(inp.value) || 0;
             if(val > 0) bonusMap[pmId] = val;
           });
-          await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({paymentBonuses: bonusMap}); });
+          await trackedWrite(async function() { await _supabase.from('companies').update({payment_bonuses: bonusMap}); });
           c.paymentBonuses = bonusMap;
           if(state.companies[c._id]) state.companies[c._id].paymentBonuses = bonusMap;
           _csSaveBonus.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20,6 9,17 4,12"/></svg> Saved!';
@@ -10308,14 +10325,14 @@
       var eft = document.getElementById('extraFeeToggle');
       if (eft) eft.onclick = async function() {
         var on = !(c.extraFeeEnabled);
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({extraFeeEnabled:on}); });
+        await trackedWrite(async function() { await _supabase.from('companies').update({extra_fee_enabled:on}).eq('id',c._id); });
         c.extraFeeEnabled = on;
         showCompanySettingsModal();
       };
       var efs = document.getElementById('saveExtraFee');
       if (efs) efs.onclick = async function() {
         var val = parseFloat(document.getElementById('extraFeePercent').value) || 0;
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({extraFeePercent:val}); });
+        await trackedWrite(async function() { await _supabase.from('companies').update({extra_fee_percent:val}).eq('id',c._id); });
         c.extraFeePercent = val;
         alert('Extra fee saved: ' + val + '%');
       };
@@ -12720,15 +12737,21 @@
         if (!name || !email) { alert('Name and email are required.'); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Invalid email address.'); return; }
         await ensureOrgDoc();
-        const data = { name, email, role, contact, salaryType, salaryRate, active: true };
+        const _orgId = state.empOrgId || state.user?.uid;
         let empId;
         if (isEdit) {
-          await db.collection(empPath()).doc(existing._id).update(data);
+          const {error:_ue} = await _supabase.from('org_employees').update({
+            name, email, role, salary: salaryRate, salary_type: salaryType, active: true
+          }).eq('id', existing._id);
+          if (_ue) { alert('Save failed: ' + _ue.message); return; }
           empId = existing._id;
         } else {
-          data.createdAt = _serverTs();
-          const ref = await db.collection(empPath()).add(data);
-          empId = ref.id;
+          const {data:_en, error:_ee} = await _supabase.from('org_employees').insert({
+            org_id: _orgId, name, email, role,
+            salary: salaryRate, salary_type: salaryType, active: true
+          }).select().single();
+          if (_ee) { alert('Add failed: ' + _ee.message); return; }
+          empId = _en.id;
         }
         // Write/update employeeLinks so the cashier can log in without collectionGroup query
         await writeEmployeeLink({ email, active: true }, empId);
@@ -12740,13 +12763,11 @@
         document.getElementById('toggleEmpActive').onclick = async () => {
           const newActive = existing.active === false;
           if (!confirm(newActive ? 'Re-activate this employee?' : 'Deactivate this employee?')) return;
-          await db.collection(empPath()).doc(existing._id).update({ active: newActive });
+          await _supabase.from('org_employees').update({ active: newActive }).eq('id', existing._id);
           await writeEmployeeLink({ email: existing.email, active: newActive }, existing._id);
           // Also update employeeUids active flag (best-effort)
           try {
-            const euSnap = await db.collection('employeeUids')
-              .where('employeeId','==',existing._id).limit(1).get();
-            if (!euSnap.empty) await euSnap.docs[0].ref.update({ active: newActive });
+            await _supabase.from('employee_uids').update({ active: newActive }).eq('employee_id', existing._id);
           } catch(e) {}
           modal.remove();
           await refreshEmployeeList();
@@ -12755,10 +12776,10 @@
           if (!confirm(`Permanently delete ${existing.name}? This cannot be undone. All their shifts and salary records will remain but the cashier account will be removed.`)) return;
           try {
             // Delete the cashier doc
-            await db.collection(empPath()).doc(existing._id).delete();
+            await _supabase.from('org_employees').delete().eq('id', existing._id);
             // Delete the employeeLinks doc so they can't log in
             const linkKey = emailToKey(existing.email);
-            try { await db.collection('employeeLinks').doc(linkKey).delete(); } catch(e) {}
+            try { await _supabase.from('employee_links').delete().eq('link_key', linkKey); } catch(e) {}
             modal.remove();
             await refreshEmployeeList();
           } catch(e) {
