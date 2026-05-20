@@ -1,5 +1,4 @@
-<      payment_bonuses:'paymentBonuses', contact_info:'contact',
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -1451,10 +1450,15 @@
         const self=this;
         this.get().then(cb).catch(e=>errCb&&errCb(e));
         let _deb=null;
+        // Build filter string for realtime channel (e.g. owner_uid=eq.xxx)
+        const _rtFilter = this._w.length===1 && this._w[0].op==='eq'
+          ? `${this._w[0].f}=eq.${this._w[0].v}` : undefined;
+        const _chCfg = {event:'*',schema:'public',table:this._t};
+        if (_rtFilter) _chCfg.filter = _rtFilter;
         const ch=_supabase.channel(this._t+'_'+Date.now())
-          .on('postgres_changes',{event:'*',schema:'public',table:this._t},()=>{
+          .on('postgres_changes', _chCfg, ()=>{
             clearTimeout(_deb);
-            _deb=setTimeout(()=>self.get().then(cb).catch(e=>errCb&&errCb(e)), 400);
+            _deb=setTimeout(()=>self.get().then(cb).catch(e=>errCb&&errCb(e)), 100);
           }).subscribe();
         return ()=>{ clearTimeout(_deb); _supabase.removeChannel(ch); };
       }
@@ -1763,47 +1767,68 @@
       try { localStorage.removeItem('gb_startup_'+dataOwnerUid()); } catch(e) {}
     }
 
-    async function loadAllData(force) {
+    // ── Direct parallel Supabase fetch (bypasses shim for performance) ──
+    async function _loadAllDataFresh(uid) {
+      if (!uid) return;
+      const [compRes, mgRes, billRes] = await Promise.all([
+        _supabase.from('companies').select('*, assigned_games(*), company_usernames(*)').eq('owner_uid', uid),
+        _supabase.from('master_games').select('*').eq('owner_uid', uid),
+        _supabase.from('bills').select('*').eq('owner_uid', uid).order('date', {ascending:false}).limit(200),
+      ]);
+      const compBasic = {};
+      for (const r of (compRes.data||[])) {
+        compBasic[r.id] = {
+          _id:r.id, name:r.name, companyCode:r.company_code, active:r.active,
+          creditBalance:r.credit_balance, extraFeeEnabled:r.extra_fee_enabled||false,
+          extraFeePercent:r.extra_fee_percent||0, extraFeeCostRate:r.extra_fee_cost_rate||0,
+          paymentBonuses:r.payment_bonuses||{},
+          assignedGames:(r.assigned_games||[]).map(ag=>({_id:ag.id,gameName:ag.game_name,rate:ag.rate})),
+          usernames:(r.company_usernames||[]).map(un=>({_id:un.id,username:un.username,gameName:un.game_name,level:un.level}))
+        };
+      }
+      state.companies   = compBasic;
+      state.masterGames = (mgRes.data||[]).map(r=>({
+        _id:r.id, name:r.name, totalPoints:r.total_points, remainingPoints:r.remaining_points,
+        costRate:r.cost_rate, orderedPoints:r.ordered_points||0,
+        assignedUsername:r.assigned_username||'', assignedLevel:r.assigned_level||'',
+        highestLevel:r.highest_level||'', billingHistory:r.billing_history||[],
+        stockHistory:r.stock_history||[]
+      }));
+      state.bills = (billRes.data||[]).map(r=>({
+        _id:r.id, companyId:r.company_id, companyName:r.company_name, companyCode:r.company_code,
+        referenceNumber:r.reference_number, date:r.date, convMode:r.conv_mode,
+        totalPoints:r.total_points, totalDollars:r.total_dollars, creditApplied:r.credit_applied||0,
+        partialAmount:r.partial_amount||0, balanceDue:r.balance_due||0,
+        extraFeePercent:r.extra_fee_percent||0, extraFeeAmount:r.extra_fee_amount||0,
+        extraFeeProfit:r.extra_fee_profit||0, extraFeeCostRate:r.extra_fee_cost_rate||0,
+        paymentStatus:r.payment_status, items:r.items||[], extraPayments:r.extra_payments||[],
+        paymentMethodId:r.payment_method_id
+      }));
+      rebuildBillIndex();
+      _startupCacheSave();
+      render();
+    }
+
+        async function loadAllData(force) {
       if (!state.user) return;
-      console.log('[loadAllData] starting, uid:', state.user.uid, 'force:', force);
-
-      // Always fetch fresh from Supabase — cache was causing stale data issues
+      const _uid = dataOwnerUid();
+      if (!force) {
+        const cached = _startupCacheLoad();
+        if (cached) {
+          state.masterGames = cached.mg || [];
+          state.bills       = cached.bills || [];
+          state.companies   = cached.companies || {};
+          rebuildBillIndex();
+          render();
+          _loadAllDataFresh(_uid).catch(e => console.warn('[bg refresh]', e.message));
+          return;
+        }
+      }
       try {
-        console.log('[loadAllData] fetching companies...');
-        const compSnap = await db.collection(userPath()+'/companies').get();
-        console.log('[loadAllData] companies raw count:', compSnap.docs.length);
-
-        const compBasic = {};
-        compSnap.docs.forEach(doc => {
-          compBasic[doc.id] = { _id: doc.id, ...doc.data(), assignedGames:[], usernames:[] };
-        });
-        state.companies = compBasic;
-
-        console.log('[loadAllData] fetching masterGames + bills...');
-        const [mgSnap, billSnap] = await Promise.all([
-          db.collection(userPath()+'/masterGames').get(),
-          db.collection(userPath()+'/bills').orderBy('date','desc').limit(200).get(),
-        ]);
-        state.masterGames = mgSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        state.bills       = billSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        console.log('[loadAllData] masterGames:', state.masterGames.length, '| bills:', state.bills.length);
-
-        // Subcollections in parallel
-        await Promise.all(compSnap.docs.map(async doc => {
-          const [agSnap, unSnap] = await Promise.all([
-            db.collection(userPath()+'/companies/'+doc.id+'/assignedGames').get(),
-            db.collection(userPath()+'/companies/'+doc.id+'/usernames').get(),
-          ]);
-          state.companies[doc.id].assignedGames = agSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-          state.companies[doc.id].usernames     = unSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        }));
-
-        rebuildBillIndex();
-        console.log('[loadAllData] DONE —', state.masterGames.length, 'games |', Object.keys(state.companies).length, 'companies |', state.bills.length, 'bills');
-        render();
+        await _loadAllDataFresh(_uid);
       } catch(e) {
-        console.error('[loadAllData] ERROR:', e.message, e.stack);
-        render(); // render anyway to show empty state
+        console.error('[loadAllData] error:', e);
+        render();
       }
     }
 
@@ -2777,7 +2802,7 @@
 
     function bindAccessDenied() {
       const btn = document.getElementById('adSignOut');
-      if (btn) btn.onclick = () => supabase.auth.signOut();
+      if (btn) btn.onclick = () => auth.signOut();
 
       const retryBtn = document.getElementById('btnEmpRetry');
       if (retryBtn) {
@@ -3210,7 +3235,7 @@
           alert('All data has been deleted.');
         } catch(e) { alert('Delete failed: '+e.message); }
       };
-      $('#menuSignOut').onclick = () => { supabase.auth.signOut(); };
+      $('#menuSignOut').onclick = () => { auth.signOut(); };
 
       // Scroll listener: swap company name into utility bar when company heading scrolls out
       setupScrollWatcher();
@@ -4423,10 +4448,23 @@
         const highestLevel = $('#mgDetailHighestLevel').value;
         const btn = $('#mgConfigSave');
         btn.disabled = true; btn.innerHTML = 'Saving...';
-        await trackedWrite(() => db.doc(`${userPath()}/masterGames/${g._id}`).update({
-          name: newName, costRate: newCostRate,
-          assignedUsername, assignedLevel, highestLevel
-        }));
+        await trackedWrite(async () => {
+          const { error: _mge } = await _supabase.from('master_games').update({
+            name: newName,
+            cost_rate: newCostRate,
+            assigned_username: assignedUsername,
+            assigned_level: assignedLevel,
+            highest_level: highestLevel,
+          }).eq('id', g._id);
+          if (_mge) throw new Error(_mge.message);
+          // Update local state immediately (no wait for onSnapshot)
+          if (g) {
+            g.name = newName; g.costRate = newCostRate;
+            g.assignedUsername = assignedUsername;
+            g.assignedLevel = assignedLevel;
+            g.highestLevel = highestLevel;
+          }
+        });
         btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Saved!';
         setTimeout(() => { if($('#mgConfigSave')) $('#mgConfigSave').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Save Config'; }, 1500);
         renderMasterGamesList();
@@ -10122,7 +10160,7 @@
       var csEft = document.getElementById('csExtraFeeToggle');
       if (csEft) csEft.onclick = async function() {
         var on = !(c.extraFeeEnabled);
-        await trackedWrite(async function() { await _supabase.from('companies').update({extra_fee_enabled:on}).eq('id',c._id); });
+        await trackedWrite(async function() { await _supabase.from('companies').update({extra_fee_enabled:on}).eq('id',c._id); _startupCacheInvalidate(); });
         c.extraFeeEnabled = on;
         overlay.remove(); showCompanySettingsModal();
       };
@@ -10325,7 +10363,7 @@
       var eft = document.getElementById('extraFeeToggle');
       if (eft) eft.onclick = async function() {
         var on = !(c.extraFeeEnabled);
-        await trackedWrite(async function() { await _supabase.from('companies').update({extra_fee_enabled:on}).eq('id',c._id); });
+        await trackedWrite(async function() { await _supabase.from('companies').update({extra_fee_enabled:on}).eq('id',c._id); _startupCacheInvalidate(); });
         c.extraFeeEnabled = on;
         showCompanySettingsModal();
       };
@@ -11947,16 +11985,20 @@
         ownerHasAccess = true;
       }
 
-      await db.collection('employeeLinks').doc(linkKey).set({
-        email:             email,
-        ownerUid:          state.user.uid,  // always use current logged-in user's UID
-        employeeId:        empId,
+      const _expISO = ownerAccessExpiry
+        ? (ownerAccessExpiry.toDate ? ownerAccessExpiry.toDate().toISOString() : new Date(ownerAccessExpiry).toISOString())
+        : null;
+      const { error: _welErr } = await _supabase.from('employee_links').upsert({
+        link_key:          linkKey,
+        owner_uid:         state.user.uid,
+        employee_id:       empId,
+        employee_email:    email,
         active:            emp.active !== false,
-        ownerHasAccess:    ownerHasAccess,
-        ownerAccessExpiry: ownerAccessExpiry,
-        accessGrantedAt:   _serverTs(),
-        updatedAt:         _serverTs(),
-      });
+        owner_has_access:  ownerHasAccess,
+        owner_expiry:      _expISO,
+        owner_unlimited:   false,
+      }, { onConflict: 'link_key' });
+      if (_welErr) console.warn('[writeEmployeeLink] error:', _welErr.message);
       console.log('[writeEmployeeLink] ✓ Wrote link for', email,
         '→ key:', linkKey, '| ownerUid:', state.user.uid, '| empId:', empId,
         '| ownerHasAccess:', ownerHasAccess);
@@ -14238,7 +14280,12 @@
       }
     }
 
-    // ServiceWorker disabled — sw.js not deployed
+    // Register Service Worker for offline cache + fast reload
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'})
+        .then(reg => { console.log('[SW] registered'); reg.update(); })
+        .catch(e => console.log('[SW] not available:', e.message));
+    }
     // Initial render
     render();
   </script>
