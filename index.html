@@ -1392,7 +1392,12 @@
           const {error}=await _supabase.from(this._t).upsert({[pk]:this._id,...d});
           if (error) { console.error('[db.set]',this._t,error.message); throw error; }
         } else {
-          // Let Supabase auto-generate UUID - removed custom ID generation
+          // Auto-inject owner_uid for tables that require it (RLS)
+          const _OWN_TBLS2=new Set(['companies','master_games','bills','assigned_games','company_usernames','cf_transactions','cf_payment_methods','cf_shareholders','cf_op_expenses','cf_dividend_payments']);
+          if (_OWN_TBLS2.has(this._t) && !d.owner_uid) {
+            const _ou = (state.empRole==='employee'&&state.empOrgId) ? state.empOrgId : state.user?.uid;
+            if (_ou) d.owner_uid = _ou;
+          }
           const {data:row,error}=await _supabase.from(this._t).insert(d).select().single();
           if (error) { console.error('[db.set insert]',this._t,error.message); throw error; }
           this._id=row.id||row.uid;
@@ -1417,7 +1422,12 @@
       }
       async add(payload) {
         const d=_toSB(payload);
-        // Let Supabase auto-generate UUID
+        // Auto-inject owner_uid for tables that require it (RLS)
+        const _OWN_TBLS=new Set(['companies','master_games','bills','assigned_games','company_usernames','cf_transactions','cf_payment_methods','cf_shareholders','cf_op_expenses','cf_dividend_payments']);
+        if (_OWN_TBLS.has(this._t) && !d.owner_uid) {
+          const _ou = (state.empRole==='employee'&&state.empOrgId) ? state.empOrgId : state.user?.uid;
+          if (_ou) d.owner_uid = _ou;
+        }
         const {data:row,error}=await _supabase.from(this._t).insert(d).select().single();
         if (error) { console.error('[db.add]',this._t,error.message); throw error; }
         return { id:row.id||row.uid };
@@ -2753,7 +2763,7 @@
 
     function bindAccessDenied() {
       const btn = document.getElementById('adSignOut');
-      if (btn) btn.onclick = () => auth.signOut();
+      if (btn) btn.onclick = () => supabase.auth.signOut();
 
       const retryBtn = document.getElementById('btnEmpRetry');
       if (retryBtn) {
@@ -2987,8 +2997,8 @@
             <div id="shiftCardBottomSep" style="height:1px;background:linear-gradient(to right,transparent,rgba(6,182,212,0.25),transparent);margin:4px 0 8px;display:none"></div>
             <div class="account-panel-item" id="menuInvoiceSettings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Invoice Settings</div>
             <div class="account-panel-divider"></div>
+            ${state.user?.email === ADMIN_EMAIL ? `<div class="account-panel-item" id="menuPaymentSettings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg> Payment Settings</div><div class="account-panel-divider"></div>` : ''}
             <div class="account-panel-item" id="menuExport"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Export Data</div>
-        if ($('#menuPaymentSettings')) $('#menuPaymentSettings').onclick = () => { closePanel(); showPaymentSettingsModal(); };
             <div class="account-panel-item" id="menuImport"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Import Data</div>
             <div class="account-panel-item" id="menuClearBillRange" style="color:#fbbf24;display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Clear Bills by Date Range</div>
             <div class="account-panel-item" id="menuDeleteAll" style="color:var(--red);display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Delete All Data</div>
@@ -3129,6 +3139,9 @@
 
       $('#menuGenReport').onclick = () => { closePanel(); showReportDatePicker('all'); };
       $('#menuInvoiceSettings').onclick = () => { closePanel(); showInvoiceSettingsModal(); };
+        if (state.user?.email === ADMIN_EMAIL && $('#menuPaymentSettings')) {
+          $('#menuPaymentSettings').onclick = () => { closePanel(); showPaymentSettingsModal(); };
+        }
       $('#menuGlobalAnalytics').onclick = () => { closePanel(); state.view = 'globalAnalytics'; render(); };
       // Cash Flow Management navigation
       if ($('#menuCashFlow')) {
@@ -3186,7 +3199,7 @@
           alert('All data has been deleted.');
         } catch(e) { alert('Delete failed: '+e.message); }
       };
-      $('#menuSignOut').onclick = () => { auth.signOut(); };
+      $('#menuSignOut').onclick = () => { supabase.auth.signOut(); };
 
       // Scroll listener: swap company name into utility bar when company heading scrolls out
       setupScrollWatcher();
