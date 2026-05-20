@@ -1392,7 +1392,7 @@
           const {error}=await _supabase.from(this._t).upsert({[pk]:this._id,...d});
           if (error) { console.error('[db.set]',this._t,error.message); throw error; }
         } else {
-          if (_TEXT_PK.has(this._t) && !d.id) d.id=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+          // Let Supabase auto-generate UUID - removed custom ID generation
           const {data:row,error}=await _supabase.from(this._t).insert(d).select().single();
           if (error) { console.error('[db.set insert]',this._t,error.message); throw error; }
           this._id=row.id||row.uid;
@@ -1417,7 +1417,7 @@
       }
       async add(payload) {
         const d=_toSB(payload);
-        if (_TEXT_PK.has(this._t) && !d.id) d.id=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+        // Let Supabase auto-generate UUID
         const {data:row,error}=await _supabase.from(this._t).insert(d).select().single();
         if (error) { console.error('[db.add]',this._t,error.message); throw error; }
         return { id:row.id||row.uid };
