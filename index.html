@@ -16,10 +16,8 @@
   <script>if(typeof Chart==='undefined'){document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"><\/script>')}</script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <!-- Supabase JS v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <!-- Google Identity Services – for Drive upload token -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
@@ -1253,34 +1251,55 @@
   <div id="app"></div>
 
   <script>
-    // ============================================================
-    // FIREBASE INIT
-    // ============================================================
-    const firebaseConfig = {
-      apiKey: "AIzaSyDjrOg8Q0sIXI6Jo5f4DT2x-kv9rkbaMx0",
-      authDomain: "auth.sweepadmin.com",
-      projectId: "sweepadministrator",
-      storageBucket: "sweepadministrator.firebasestorage.app",
-      messagingSenderId: "909535669253",
-      appId: "1:909535669253:web:8389b6274f269178c3806c",
-      measurementId: "G-0LMKKJRY4X"
+    // ── Global error catcher (remove after debugging) ──
+    window.onerror = function(msg, src, line, col, err) {
+      document.body.innerHTML = '<div style="color:#ff4444;background:#111;padding:20px;font-family:monospace;font-size:14px;white-space:pre-wrap;position:fixed;top:0;left:0;right:0;bottom:0;overflow:auto;z-index:99999">' +
+        '<b>RUNTIME ERROR</b>\n\n' +
+        'Message: ' + msg + '\n' +
+        'Source:  ' + src + '\n' +
+        'Line:    ' + line + '\n' +
+        'Col:     ' + col + '\n\n' +
+        (err ? err.stack : '') +
+        '</div>';
+      return true;
     };
+    // ============================================================
+    // SUPABASE INIT
+    // ============================================================
+    const SUPABASE_URL  = 'https://kzchxmulktygoqhiwpff.supabase.co';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6Y2h4bXVsa3R5Z29xaGl3cGZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MjIxMjUsImV4cCI6MjA5NDM5ODEyNX0.besz9_RUFQ9ZCC7OVxS6ApkFdm1N06d1hS2uGuj-ZSg';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-    // Handle redirect result for iOS Safari / PWA
-    auth.getRedirectResult().then(result => {
-      if (result && result.user) {
-        // Redirect sign-in succeeded - onAuthStateChanged will handle the rest
-        console.log('Redirect sign-in success');
-      }
-    }).catch(err => {
-      console.log('Redirect result:', err.code || err.message);
-    });
-    // Set LOCAL persistence for PWA / Safari contexts
-    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+    // Bridge: wrap ISO string so legacy code that calls .toDate() or .seconds still works
+    function tsWrap(iso) {
+      if (!iso) return null;
+      const d = new Date(iso);
+      return { toDate: () => d, seconds: Math.floor(d.getTime()/1000) };
+    }
+    // Map Supabase bill row (snake_case) → app shape (camelCase)
+    function _mapBillRow(r) {
+      return {
+        _id: r.id, companyId: r.company_id, companyName: r.company_name,
+        companyCode: r.company_code, referenceNumber: r.reference_number,
+        date: r.date, convMode: r.conv_mode,
+        totalPoints: r.total_points, totalDollars: r.total_dollars,
+        creditApplied: r.credit_applied, partialAmount: r.partial_amount,
+        balanceDue: r.balance_due, extraFeePercent: r.extra_fee_percent,
+        extraFeeAmount: r.extra_fee_amount, extraFeeProfit: r.extra_fee_profit,
+        extraFeeCostRate: r.extra_fee_cost_rate, paymentStatus: r.payment_status,
+        items: r.items || [], extraPayments: r.extra_payments || [],
+        paymentMethodId: r.payment_method_id
+      };
+    }
+    function _mapMgRow(r) {
+      return {
+        _id: r.id, name: r.name, totalPoints: r.total_points,
+        remainingPoints: r.remaining_points, costRate: r.cost_rate,
+        orderedPoints: r.ordered_points, assignedUsername: r.assigned_username,
+        assignedLevel: r.assigned_level, highestLevel: r.highest_level,
+        billingHistory: r.billing_history||[], stockHistory: r.stock_history||[]
+      };
+    }
 
     // ============================================================
     // STATE
@@ -1327,16 +1346,14 @@
     }
 
     // ============================================================
-    // FIREBASE DATA HELPERS
+    // SUPABASE DATA HELPERS
     // ============================================================
-    function userPath() {
-      // Cashiers share the owner's data path so all data is in sync
-      if (state.empRole === 'employee' && state.empOrgId) {
-        return 'users/' + state.empOrgId;
-      }
-      if (state.user) return 'users/' + state.user.uid;
-      return 'users/undefined';
+    function effectiveOwnerUid() {
+      if (state.empRole === 'employee' && state.empOrgId) return state.empOrgId;
+      return state.user ? state.user.uid : null;
     }
+    // Kept as shim — no longer returns a Firestore path, just uid
+    function userPath() { return effectiveOwnerUid(); }
 
     // The data owner UID — used for localStorage cache keying
     function dataOwnerUid() {
@@ -1389,9 +1406,17 @@
       try { const r = await promiseFn(); endWrite(); return r; }
       catch(e) { endWrite(); throw e; }
     }
+    // bgWrite kept the same — just drives the sync indicator
+    function _sbWrite(promise) { bgWrite(promise); }
 
-    let _unsubs = []; // Firestore listener unsubscribers
-    function stopListeners() { _unsubs.forEach(fn => fn()); _unsubs = []; }
+    let _unsubs = []; // Supabase channel unsubscribers
+    const _compChans = {}; // per-company channels
+    function stopListeners() {
+      _unsubs.forEach(ch => { try { supabase.removeChannel(ch); } catch(e){} });
+      _unsubs = [];
+      Object.values(_compChans).forEach(ch => { try { supabase.removeChannel(ch); } catch(e){} });
+      Object.keys(_compChans).forEach(k => delete _compChans[k]);
+    }
 
     // One-time initial load (fast from cache)
     // === PERFORMANCE: Cache helpers ===
@@ -1422,158 +1447,135 @@
 
     async function loadAllData(force) {
       if (!state.user) return;
+      const uid = effectiveOwnerUid();
+      if (!uid) return;
       // Cache-first: load cached data instantly, then fetch fresh in background
-      if(!force) {
+      if (!force) {
         var cached = _gbCache.get('data');
-        if(cached) {
+        if (cached) {
           state.masterGames = cached.mg || [];
           state.bills = cached.bills || [];
           state.companies = cached.companies || {};
-          return; // Use cache, fresh data comes via listeners
+          return;
         }
       }
       try {
-        // Fetch companies first for fastest render
-        const compSnap = await db.collection(userPath()+'/companies').get();
-        const compBasic = {};
-        compSnap.docs.forEach(doc => { compBasic[doc.id] = { _id: doc.id, ...doc.data(), assignedGames:[], usernames:[] }; });
-        state.companies = compBasic;
-        // Fetch bills + games + subcollections in parallel (non-blocking)
-        const [mgSnap, billSnap] = await Promise.all([
-          db.collection(userPath()+'/masterGames').get(),
-          db.collection(userPath()+'/bills').orderBy('date','desc').limit(100).get(),
+        // Parallel fetch — companies + subcollections + bills + games
+        const [compRes, mgRes, billRes] = await Promise.all([
+          supabase.from('companies').select('*, assigned_games(*), company_usernames(*)').eq('owner_uid', uid),
+          supabase.from('master_games').select('*').eq('owner_uid', uid),
+          supabase.from('bills').select('*').eq('owner_uid', uid).order('date', { ascending: false }).limit(200)
         ]);
-        state.masterGames = mgSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        state.bills = billSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        // Load subcollections after main data is ready
-        const compPromises = compSnap.docs.map(async doc => {
-          const [agSnap, unSnap] = await Promise.all([
-            db.collection(userPath()+'/companies/'+doc.id+'/assignedGames').get(),
-            db.collection(userPath()+'/companies/'+doc.id+'/usernames').get(),
-          ]);
-          state.companies[doc.id].assignedGames = agSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-          state.companies[doc.id].usernames = unSnap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        });
-        await Promise.all(compPromises);
-        // Cache for next load
+
+        const compBasic = {};
+        for (const r of (compRes.data || [])) {
+          compBasic[r.id] = {
+            _id: r.id, name: r.name, companyCode: r.company_code,
+            active: r.active, creditBalance: r.credit_balance,
+            extraFeeEnabled: r.extra_fee_enabled || false,
+            extraFeePercent: r.extra_fee_percent || 0,
+            extraFeeCostRate: r.extra_fee_cost_rate || 0,
+            assignedGames: (r.assigned_games||[]).map(ag => ({ _id: ag.id, gameName: ag.game_name, rate: ag.rate })),
+            usernames:     (r.company_usernames||[]).map(un => ({ _id: un.id, username: un.username, gameName: un.game_name, level: un.level }))
+          };
+        }
+        state.companies   = compBasic;
+        state.masterGames = (mgRes.data||[]).map(_mapMgRow);
+        state.bills       = (billRes.data||[]).map(_mapBillRow);
         _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
-      } catch (e) {
-        console.error('Load error:', e);
-      }
+      } catch(e) { console.error('Load error:', e); }
     }
 
-    // Setup realtime listeners after initial load
+    // Setup Supabase Realtime listeners after initial load
     function setupListeners() {
       stopListeners();
-      if (!state.user) return;
-      const bp = userPath();
-      // Listen to master games
-      _unsubs.push(db.collection(bp+'/masterGames').onSnapshot(snap => {
-        state.masterGames = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-      }));
-      // Listen to bills (latest 100)
-      _unsubs.push(db.collection(bp+'/bills').onSnapshot(snap => {
-        state.bills = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        
-        // Migrate old bills without reference numbers
-        state.bills.forEach(async (bill) => {
-          if (!bill.referenceNumber && bill.companyId) {
-            const company = state.companies[bill.companyId];
-            if (company && company.companyCode) {
-              try {
-                const refNum = await generateReferenceNumber(company.companyCode, bill.date);
-                await db.doc(bp+'/bills/'+bill._id).update({ 
-                  referenceNumber: refNum,
-                  companyCode: company.companyCode 
-                });
-              } catch(e) {
-                console.error('Error migrating reference number for bill', bill._id, e);
-              }
-            }
-          }
-        });
-        
-        _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
-        invalidateAnalyticsCache();
-        // Sync any newly loaded bills into CF transactions if CF is already loaded
-        if (_cfLoaded && state.empRole !== 'employee') cfSyncBillsToTransactions();
-        // Soft-refresh bill history without rebuilding entire page
-        if(state.view === 'company' && state.companyTab === 'billing') {
-          refreshBillHistory();
-        }
-      }));
-      // Listen to companies
-      let _companiesMigrationDone = false;
-      _unsubs.push(db.collection(bp+'/companies').onSnapshot(async snap => {
-        // First pass: update state with all current data
-        snap.docChanges().forEach(change => {
-          const id = change.doc.id;
-          const data = { _id: id, ...change.doc.data() };
-          if (change.type === 'removed') {
-            delete state.companies[id];
-          } else {
-            const existing = state.companies[id];
-            data.assignedGames = existing?.assignedGames || [];
-            data.usernames = existing?.usernames || [];
-            state.companies[id] = data;
-            setupCompanySubListeners(id);
-          }
-        });
-        // Re-render company list immediately when data arrives from Firestore
-        if (state.view === 'companies') render();
-        
-        // Second pass: migrate company codes sequentially (only once on first snapshot)
-        if (!_companiesMigrationDone) {
-          _companiesMigrationDone = true;
-          const companiesNeedingCodes = Object.entries(state.companies)
-            .filter(([id, c]) => !c.companyCode)
-            .map(([id, c]) => id);
-          
-          if (companiesNeedingCodes.length > 0) {
-            // Fetch ALL companies from Firestore to get a complete set of existing codes
-            // This prevents duplicate codes when state is partially loaded
-            try {
-              const allCompSnap = await db.collection(bp+'/companies').get();
-              const firestoreCodes = new Set(
-                allCompSnap.docs.map(d => d.data().companyCode).filter(Boolean)
-              );
-              // Also include codes already assigned in state
-              Object.values(state.companies).forEach(c => { if (c.companyCode) firestoreCodes.add(c.companyCode); });
+      const uid = effectiveOwnerUid();
+      if (!uid) return;
 
-              for (const id of companiesNeedingCodes) {
-                try {
-                  const newCode = await generateCompanyCodeFromSet(firestoreCodes);
-                  firestoreCodes.add(newCode); // reserve immediately for next iteration
-                  state.companies[id].companyCode = newCode;
-                  await db.doc(bp+'/companies/'+id).update({ companyCode: newCode });
-                } catch(e) {
-                  console.error('Error generating company code for', id, e);
-                }
-              }
-            } catch(e) {
-              console.error('Error fetching companies for code migration', e);
-            }
+      // Master games
+      const mgCh = supabase.channel('mg_' + uid)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'master_games', filter: 'owner_uid=eq.' + uid }, payload => {
+          if (payload.eventType === 'INSERT') {
+            state.masterGames.push(_mapMgRow(payload.new));
+          } else if (payload.eventType === 'UPDATE') {
+            const i = state.masterGames.findIndex(m => m._id === payload.new.id);
+            if (i >= 0) state.masterGames[i] = _mapMgRow(payload.new); else state.masterGames.push(_mapMgRow(payload.new));
+          } else if (payload.eventType === 'DELETE') {
+            state.masterGames = state.masterGames.filter(m => m._id !== payload.old.id);
           }
-        }
-      }));
+          _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
+        }).subscribe();
+      _unsubs.push(mgCh);
+
+      // Bills
+      const billCh = supabase.channel('bi_' + uid)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'bills', filter: 'owner_uid=eq.' + uid }, payload => {
+          if (payload.eventType === 'INSERT') {
+            state.bills.unshift(_mapBillRow(payload.new));
+          } else if (payload.eventType === 'UPDATE') {
+            const i = state.bills.findIndex(b => b._id === payload.new.id);
+            if (i >= 0) state.bills[i] = _mapBillRow(payload.new); else state.bills.unshift(_mapBillRow(payload.new));
+          } else if (payload.eventType === 'DELETE') {
+            state.bills = state.bills.filter(b => b._id !== payload.old.id);
+          }
+          _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
+          invalidateAnalyticsCache();
+          if (_cfLoaded && state.empRole !== 'employee') cfSyncBillsToTransactions();
+          if (state.view === 'company' && state.companyTab === 'billing') refreshBillHistory();
+        }).subscribe();
+      _unsubs.push(billCh);
+
+      // Companies
+      const compCh = supabase.channel('co_' + uid)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'companies', filter: 'owner_uid=eq.' + uid }, payload => {
+          if (payload.eventType === 'DELETE') {
+            delete state.companies[payload.old.id];
+          } else {
+            const r = payload.new;
+            const ex = state.companies[r.id] || {};
+            state.companies[r.id] = {
+              ...ex, _id: r.id, name: r.name, companyCode: r.company_code,
+              active: r.active, creditBalance: r.credit_balance,
+              extraFeeEnabled: r.extra_fee_enabled || false,
+              extraFeePercent: r.extra_fee_percent || 0,
+              extraFeeCostRate: r.extra_fee_cost_rate || 0,
+            };
+            setupCompanySubListeners(r.id);
+          }
+          _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
+          if (state.view === 'companies') render();
+        }).subscribe();
+      _unsubs.push(compCh);
     }
 
-    const _compSubs = {};
     function setupCompanySubListeners(compId) {
-      if (_compSubs[compId]) return; // Already listening
-      const bp = userPath();
-      const unsub1 = db.collection(bp+'/companies/'+compId+'/assignedGames').onSnapshot(snap => {
-        if (state.companies[compId]) {
-          state.companies[compId].assignedGames = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        }
-      });
-      const unsub2 = db.collection(bp+'/companies/'+compId+'/usernames').onSnapshot(snap => {
-        if (state.companies[compId]) {
-          state.companies[compId].usernames = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
-        }
-      });
-      _compSubs[compId] = () => { unsub1(); unsub2(); };
-      _unsubs.push(_compSubs[compId]);
+      if (_compChans[compId]) return;
+      const uid = effectiveOwnerUid();
+      const ch = supabase.channel('comp_sub_' + compId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'assigned_games', filter: 'company_id=eq.' + compId }, payload => {
+          if (!state.companies[compId]) return;
+          if (payload.eventType === 'DELETE') {
+            state.companies[compId].assignedGames = state.companies[compId].assignedGames.filter(ag => ag._id !== payload.old.id);
+          } else {
+            const r = payload.new;
+            const ag = { _id: r.id, gameName: r.game_name, rate: r.rate };
+            const i = state.companies[compId].assignedGames.findIndex(a => a._id === r.id);
+            if (i >= 0) state.companies[compId].assignedGames[i] = ag; else state.companies[compId].assignedGames.push(ag);
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'company_usernames', filter: 'company_id=eq.' + compId }, payload => {
+          if (!state.companies[compId]) return;
+          if (payload.eventType === 'DELETE') {
+            state.companies[compId].usernames = state.companies[compId].usernames.filter(u => u._id !== payload.old.id);
+          } else {
+            const r = payload.new;
+            const un = { _id: r.id, username: r.username, gameName: r.game_name, level: r.level };
+            const i = state.companies[compId].usernames.findIndex(u => u._id === r.id);
+            if (i >= 0) state.companies[compId].usernames[i] = un; else state.companies[compId].usernames.push(un);
+          }
+        })
+        .subscribe();
+      _compChans[compId] = ch;
     }
 
     // ============================================================
@@ -1784,10 +1786,10 @@
           var newStatus = sel.value;
           sel.disabled=true;sel.style.opacity='0.5';
           try {
-            var ref = db.doc(userPath()+'/bills/'+bid);
+            // bill ref via supabase
             var updates = {paymentStatus: newStatus};
             {
-              var snap = await ref.get(); var bd = snap.data();
+              var bd = state.bills.find(function(b){return b._id===bid}) || {};
               var _bGT = (bd.totalDollars||0) + (bd.extraFeeAmount||0);
               var _bCr = bd.creditApplied || 0;
               if (newStatus === 'received') {
@@ -1800,7 +1802,7 @@
                 updates.balanceDue = Math.max(0, _bGT - _bCr);
               }
             }
-            await trackedWrite(function(){return ref.update(updates)});
+            await trackedWrite(async function(){ await supabase.from('bills').update(updates).eq('id',bid); });
             // Update local bill + refresh just the select styling
             var lb = state.bills.find(function(b){return b._id===bid});
             if(lb){lb.paymentStatus=newStatus;if(updates.partialAmount!==undefined)lb.partialAmount=updates.partialAmount;if(updates.balanceDue!==undefined)lb.balanceDue=updates.balanceDue;}
@@ -1813,7 +1815,7 @@
                 if (_exIdx >= 0) {
                   var _exTx = cfTransactions[_exIdx];
                   if (_exTx.id && !_exTx.id.startsWith('_sync_')) {
-                    db.doc(cfPath('transactions') + '/' + _exTx.id).delete().catch(function(){});
+                    supabase.from('cf_transactions').delete().eq('id',_exTx.id).then(()=>{}).catch(()=>{});
                   }
                   cfTransactions.splice(_exIdx, 1);
                 }
@@ -1822,7 +1824,7 @@
                 var _refId2 = lb.referenceNumber || lb._id;
                 cfTransactions = cfTransactions.filter(function(t){
                   if (t.billId !== _refId2) return true;
-                  if (t.id && !t.id.startsWith('_sync_')) db.doc(cfPath('transactions') + '/' + t.id).delete().catch(function(){});
+                  if (t.id && !t.id.startsWith('_sync_')) supabase.from('cf_transactions').delete().eq('id',t.id).then(()=>{}).catch(()=>{});
                   return false;
                 });
               }
@@ -1870,7 +1872,7 @@
         case 'employees': renderEmployeesPage(); break;
         case 'employment':
           // Stop owner listener if navigating away from cashiers page
-          if (_empShiftListener) { _empShiftListener(); _empShiftListener = null; }
+          if (_empShiftListener) { supabase.removeChannel(_empShiftListener); _empShiftListener = null; }
           renderEmploymentPage();
           break;
       }
@@ -2349,7 +2351,7 @@
 
     function bindAccessDenied() {
       const btn = document.getElementById('adSignOut');
-      if (btn) btn.onclick = () => auth.signOut();
+      if (btn) btn.onclick = () => supabase.auth.signOut();
 
       // Load payment info for new users (pending activation)
       const payPanel = document.getElementById('payInfoPanel');
@@ -2366,9 +2368,10 @@
           state.empRole        = null;
           state.empOrgId       = null;
           state.empEmployeeDoc = null;
-          if (auth.currentUser) {
+          { const {data:{user:_cu3}}=await supabase.auth.getUser();
+          if (_cu3) {
             try {
-              await resolveEmployeeRole(auth.currentUser);
+              await resolveEmployeeRole(_cu3);
               console.log('[Retry] empRole:', state.empRole, '| empOrgId:', state.empOrgId);
               if (state.empRole === 'employee') {
                 const ownerAccess = await checkUserAccessByUid(state.empOrgId);
@@ -2379,7 +2382,7 @@
                 }
               }
             } catch(e) { console.error('[Retry]', e); }
-          }
+          } }
           retryBtn.textContent = 'Retry Login Check';
           retryBtn.disabled = false;
           render(); // re-render to show updated diagnostic info
@@ -2393,9 +2396,10 @@
     async function loadPaymentInfo(container) {
       container.innerHTML = `<div style="text-align:center;padding:12px;font-size:12px;color:var(--textMuted)">Loading payment info…</div>`;
       try {
-        const snap = await db.doc('siteConfig/paymentInfo').get();
-        if (!snap.exists) { container.innerHTML = ''; return; }
-        const data = snap.data();
+        const { data: _sc3 } = await supabase.from('site_config').select('*').eq('doc_id','paymentInfo').maybeSingle();
+        const snap = { exists: !!_sc3, data: () => _sc3 ? { paymentAddresses: _sc3.payment_addresses||[], contactInfo: _sc3.contact_info||[] } : {} };
+        if (!snap || !snap.exists) { container.innerHTML = ''; return; }
+        const data = snap.data ? snap.data() : snap;
         const addresses = (data.paymentAddresses || []).filter(a => a.address && a.label);
         const contacts = (data.contactInfo || []).filter(c => c.value && c.label);
         const userEmail = state.user ? state.user.email : '';
@@ -2623,22 +2627,8 @@
         btn.innerHTML = '<span style="animation:pulse 1s infinite">Signing in...</span>';
         btn.disabled = true;
         try {
-          const provider = new firebase.auth.GoogleAuthProvider();
-          try {
-            // Try popup first (works on most browsers)
-            await auth.signInWithPopup(provider);
-          } catch (popupErr) {
-            // If popup fails (iOS Safari, PWA), try redirect
-            if (popupErr.code === 'auth/operation-not-supported-in-this-environment' || 
-                popupErr.code === 'auth/popup-blocked' ||
-                popupErr.code === 'auth/cancelled-popup-request') {
-              // Set persistence to LOCAL before redirect so session survives
-              await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-              await auth.signInWithRedirect(provider);
-            } else {
-              throw popupErr;
-            }
-          }
+          const { error: _si4 } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+          if (_si4) throw _si4;
         } catch (e) {
           const err = $('#loginError');
           err.classList.remove('hidden');
@@ -2916,19 +2906,19 @@
         if (hint) { hint.textContent = 'Checking availability...'; hint.style.color = '#22d3ee'; }
         try {
           // Check uniqueness via gbUsernames collection (publicly readable)
-          const existing = await db.collection('gbUsernames').doc(raw).get();
-          if (existing.exists && existing.data().uid !== state.user.uid) {
+          const { data: existing } = await supabase.from('gb_usernames').select('uid').eq('username', raw).maybeSingle();
+          if (existing && existing.uid !== state.user.uid) {
             if (hint) { hint.textContent = '✗ "' + raw + '" is already taken'; hint.style.color = '#f87171'; }
             saveBtn.disabled = false; saveBtn.textContent = 'Save';
             return;
           }
           // Remove old username reservation if exists
           if (state.gbUsername) {
-            await db.collection('gbUsernames').doc(state.gbUsername).delete().catch(() => {});
+            await supabase.from('gb_usernames').delete().eq('username', state.gbUsername).catch(()=>{});
           }
           // Reserve new username + update userAccess
-          await db.collection('gbUsernames').doc(raw).set({ uid: state.user.uid, email: state.user.email });
-          await db.collection('userAccess').doc(state.user.uid).update({ gbUsername: raw });
+          await supabase.from('gb_usernames').upsert({ username: raw, uid: state.user.uid, email: state.user.email }, { onConflict: 'username' });
+          await supabase.from('user_access').update({ gb_username: raw }).eq('uid', state.user.uid);
           state.gbUsername = raw;
           editRow.classList.add('hidden');
           displayRow.style.display = '';
@@ -2974,7 +2964,7 @@
           var toDelete=state.bills.filter(function(b){var bd=toLocalDate(b.date);return bd>=fd&&bd<=td});
           if(!toDelete.length){alert('No bills in this range');return}
           if(!confirm('Delete '+toDelete.length+' bills across all companies?'))return;
-          for(var i=0;i<toDelete.length;i++){if(toDelete[i]._id)await db.doc(userPath()+'/bills/'+toDelete[i]._id).delete()}
+          for(var i=0;i<toDelete.length;i++){if(toDelete[i]._id) await supabase.from('bills').delete().eq('id',toDelete[i]._id).catch(()=>{});}
           var delIds=toDelete.map(function(b){return b._id});
           // Listener will update state.bills
           invalidateAnalyticsCache();ov.remove();render();
@@ -2991,18 +2981,16 @@
           loadEl.innerHTML = '<div style="text-align:center"><div class="spinner"></div><div style="color:var(--red);font-family:Orbitron,monospace;font-size:13px;margin-top:10px">Deleting all data...</div><div style="color:var(--textMuted);font-size:11px;margin-top:6px;font-family:Rajdhani,sans-serif">This may take a while</div></div>';
           document.body.appendChild(loadEl);
           for (const [cid, cdata] of Object.entries(state.companies)) {
-            for (const ag of (cdata.assignedGames||[])) await db.doc(userPath()+'/companies/'+cid+'/assignedGames/'+ag._id).delete();
-            for (const un of (cdata.usernames||[])) await db.doc(userPath()+'/companies/'+cid+'/usernames/'+un._id).delete();
-            await trackedWrite(() => db.doc(userPath()+'/companies/'+cid).delete());
+            await supabase.from('companies').delete().eq('id',cid); // CASCADE removes subcollections
           }
-          for (const mg of state.masterGames) await db.doc(userPath()+'/masterGames/'+mg._id).delete();
-          for (const bill of state.bills) await db.doc(userPath()+'/bills/'+bill._id).delete();
+          if (state.masterGames.length) await supabase.from('master_games').delete().eq('owner_uid', effectiveOwnerUid());
+          for (const bill of state.bills) await supabase.from('bills').delete().eq('id', bill._id);
           loadEl.remove();
           render();
           alert('All data has been deleted.');
         } catch(e) { alert('Delete failed: '+e.message); }
       };
-      $('#menuSignOut').onclick = () => { auth.signOut(); };
+      $('#menuSignOut').onclick = () => { supabase.auth.signOut(); };
       if ($('#menuPaymentSettings')) {
         $('#menuPaymentSettings').onclick = () => { closePanel(); showPaymentSettingsModal(); };
       }
@@ -3242,11 +3230,11 @@
               const { _id, ...rest } = g;
               const existing = state.masterGames.find(m => m.name === g.name);
               if (existing) {
-                await db.doc(`${userPath()}/masterGames/${existing._id}`).set({ ...rest }, { merge: true });
+                await supabase.from('master_games').update({ name:rest.name, total_points:rest.totalPoints||0, remaining_points:rest.remainingPoints||0, cost_rate:rest.costRate||0, ordered_points:rest.orderedPoints||0, billing_history:rest.billingHistory||[], stock_history:rest.stockHistory||[], assigned_username:rest.assignedUsername||null, assigned_level:rest.assignedLevel||null, highest_level:rest.highestLevel||null }).eq('id',existing._id);
               } else if (_id) {
-                await db.doc(`${userPath()}/masterGames/${_id}`).set(rest);
+                await supabase.from('master_games').upsert({ id:_id, owner_uid:effectiveOwnerUid(), name:rest.name, total_points:rest.totalPoints||0, remaining_points:rest.remainingPoints||0, cost_rate:rest.costRate||0, ordered_points:rest.orderedPoints||0, billing_history:rest.billingHistory||[], stock_history:rest.stockHistory||[], assigned_username:rest.assignedUsername||null, assigned_level:rest.assignedLevel||null, highest_level:rest.highestLevel||null }, {onConflict:'id'});
               } else {
-                await db.collection(`${userPath()}/masterGames`).add(rest);
+                await supabase.from('master_games').insert({ owner_uid:effectiveOwnerUid(), name:rest.name, total_points:rest.totalPoints||0, remaining_points:rest.remainingPoints||0, cost_rate:rest.costRate||0, ordered_points:rest.orderedPoints||0, billing_history:rest.billingHistory||[], stock_history:rest.stockHistory||[], assigned_username:rest.assignedUsername||null, assigned_level:rest.assignedLevel||null, highest_level:rest.highestLevel||null });
               }
             }
           }
@@ -3259,9 +3247,9 @@
               const targetCid = existingComp ? existingComp._id : importCid;
 
               if (existingComp) {
-                await db.doc(`${userPath()}/companies/${targetCid}`).set({ ...compInfo }, { merge: true });
+                await supabase.from('companies').update({ name:compInfo.name, company_code:compInfo.companyCode||null, active:compInfo.active??true, credit_balance:compInfo.creditBalance||0, extra_fee_enabled:compInfo.extraFeeEnabled||false, extra_fee_percent:compInfo.extraFeePercent||0, extra_fee_cost_rate:compInfo.extraFeeCostRate||0 }).eq('id',targetCid);
               } else {
-                await db.doc(`${userPath()}/companies/${targetCid}`).set(compInfo);
+                await supabase.from('companies').upsert({ id:targetCid, owner_uid:effectiveOwnerUid(), name:compInfo.name, company_code:compInfo.companyCode||null, active:compInfo.active??true, credit_balance:compInfo.creditBalance||0 }, {onConflict:'id'});
               }
 
               // Import assigned games - match by gameName within company
@@ -3271,11 +3259,11 @@
                   const { _id: aid, ...agRest } = ag;
                   const matchAG = existingAG.find(e => e.gameName === ag.gameName);
                   if (matchAG) {
-                    await db.doc(`${userPath()}/companies/${targetCid}/assignedGames/${matchAG._id}`).set({ ...agRest }, { merge: true });
+                    await supabase.from('assigned_games').update({ game_name:agRest.gameName, rate:agRest.rate||0 }).eq('id',matchAG._id);
                   } else if (aid) {
-                    await db.doc(`${userPath()}/companies/${targetCid}/assignedGames/${aid}`).set(agRest);
+                    await supabase.from('assigned_games').upsert({ id:aid, company_id:targetCid, owner_uid:effectiveOwnerUid(), game_name:agRest.gameName, rate:agRest.rate||0 }, {onConflict:'id'});
                   } else {
-                    await db.collection(`${userPath()}/companies/${targetCid}/assignedGames`).add(agRest);
+                    await supabase.from('assigned_games').insert({ company_id:targetCid, owner_uid:effectiveOwnerUid(), game_name:agRest.gameName, rate:agRest.rate||0 });
                   }
                 }
               }
@@ -3287,11 +3275,11 @@
                   const { _id: uid2, ...unRest } = un;
                   const matchUN = existingUN.find(e => e.username === un.username && e.gameName === un.gameName);
                   if (matchUN) {
-                    await db.doc(`${userPath()}/companies/${targetCid}/usernames/${matchUN._id}`).set({ ...unRest }, { merge: true });
+                    await supabase.from('company_usernames').update({ username:unRest.username, game_name:unRest.gameName, level:unRest.level||'' }).eq('id',matchUN._id);
                   } else if (uid2) {
-                    await db.doc(`${userPath()}/companies/${targetCid}/usernames/${uid2}`).set(unRest);
+                    await supabase.from('company_usernames').upsert({ id:uid2, company_id:targetCid, owner_uid:effectiveOwnerUid(), username:unRest.username, game_name:unRest.gameName, level:unRest.level||'' }, {onConflict:'id'});
                   } else {
-                    await db.collection(`${userPath()}/companies/${targetCid}/usernames`).add(unRest);
+                    await supabase.from('company_usernames').insert({ company_id:targetCid, owner_uid:effectiveOwnerUid(), username:unRest.username, game_name:unRest.gameName, level:unRest.level||'' });
                   }
                 }
               }
@@ -3305,11 +3293,11 @@
               const existingBill = state.bills.find(b => b.date === bill.date && b.companyId === bill.companyId);
               if (existingBill) {
                 // Replace existing duplicate with imported data
-                await db.doc(`${userPath()}/bills/${existingBill._id}`).set({ ...billRest }, { merge: true });
+                await supabase.from('bills').update({ payment_status:billRest.paymentStatus, extra_payments:billRest.extraPayments||[], credit_applied:billRest.creditApplied||0, partial_amount:billRest.partialAmount||0, balance_due:billRest.balanceDue||0 }).eq('id',existingBill._id);
               } else if (bid) {
-                await db.doc(`${userPath()}/bills/${bid}`).set(billRest);
+                await supabase.from('bills').upsert({ id:bid, owner_uid:effectiveOwnerUid(), company_name:billRest.companyName, company_code:billRest.companyCode, reference_number:billRest.referenceNumber, date:billRest.date, conv_mode:billRest.convMode||'pts2dollar', total_points:billRest.totalPoints||0, total_dollars:billRest.totalDollars||0, credit_applied:billRest.creditApplied||0, partial_amount:billRest.partialAmount||0, balance_due:billRest.balanceDue||0, extra_fee_percent:billRest.extraFeePercent||0, extra_fee_amount:billRest.extraFeeAmount||0, extra_fee_profit:billRest.extraFeeProfit||0, extra_fee_cost_rate:billRest.extraFeeCostRate||0, payment_status:billRest.paymentStatus||'pending', items:billRest.items||[], extra_payments:billRest.extraPayments||[] }, {onConflict:'id'});
               } else {
-                await db.collection(`${userPath()}/bills`).add(billRest);
+                await supabase.from('bills').insert({ owner_uid:effectiveOwnerUid(), company_name:billRest.companyName, company_code:billRest.companyCode, reference_number:billRest.referenceNumber, date:billRest.date, conv_mode:billRest.convMode||'pts2dollar', total_points:billRest.totalPoints||0, total_dollars:billRest.totalDollars||0, credit_applied:billRest.creditApplied||0, partial_amount:billRest.partialAmount||0, balance_due:billRest.balanceDue||0, extra_fee_percent:billRest.extraFeePercent||0, extra_fee_amount:billRest.extraFeeAmount||0, extra_fee_profit:billRest.extraFeeProfit||0, extra_fee_cost_rate:billRest.extraFeeCostRate||0, payment_status:billRest.paymentStatus||'pending', items:billRest.items||[], extra_payments:billRest.extraPayments||[] });
               }
             }
           }
@@ -3334,10 +3322,11 @@
           // Restore gbUsername if not already set
           if (data.gbUsername && !state.gbUsername) {
             try {
-              const taken = await db.collection('gbUsernames').doc(data.gbUsername).get();
+              const { data: _taken2 } = await supabase.from('gb_usernames').select('uid').eq('username', data.gbUsername).maybeSingle();
+              const taken = { exists: !!_taken2, data: () => _taken2 };
               if (!taken.exists) {
-                await db.collection('gbUsernames').doc(data.gbUsername).set({ uid: state.user.uid, email: state.user.email });
-                await db.collection('userAccess').doc(state.user.uid).update({ gbUsername: data.gbUsername });
+                await supabase.from('gb_usernames').upsert({ username: data.gbUsername, uid: state.user.uid, email: state.user.email }, {onConflict:'username'});
+                await supabase.from('user_access').update({ gb_username: data.gbUsername }).eq('uid', state.user.uid);
                 state.gbUsername = data.gbUsername;
               }
             } catch(e) { console.warn('Username restore skipped:', e); }
@@ -3841,7 +3830,7 @@
           const pts = parseFloat($('#mgNewPoints').value) || 0;
           if (!name) return;
           const costRate = parseFloat($('#mgNewCostRate').value) || 0;
-          await trackedWrite(() => db.collection(`${userPath()}/masterGames`).add({ name, totalPoints: pts, remainingPoints: pts, costRate }));
+          await trackedWrite(async () => { const {data:_mgr} = await supabase.from('master_games').insert({owner_uid:effectiveOwnerUid(),name,total_points:pts,remaining_points:pts,cost_rate:costRate}).select().single(); if(_mgr){state.masterGames.push(_mapMgRow(_mgr));} });
           $('#mgNewName').value = ''; $('#mgNewPoints').value = ''; if($('#mgNewCostRate'))$('#mgNewCostRate').value = '';
           renderMasterGamesList();
           bindMasterGameListEvents();
@@ -3915,7 +3904,7 @@
           const newPts = parseFloat($('#mgDetailPts').value) || 0;
           const btn = $('#mgDetailSave');
           btn.disabled = true; btn.innerHTML = 'Saving...';
-          await trackedWrite(() => db.doc(`${userPath()}/masterGames/${g._id}`).update({ remainingPoints: newPts }));
+          await trackedWrite(async () => { await supabase.from('master_games').update({remaining_points:newPts}).eq('id',g._id); if(g)g.remainingPoints=newPts; });
           overlay.remove();
           renderMasterGamesList();
           bindMasterGameListEvents();
@@ -4214,10 +4203,10 @@
         const highestLevel = $('#mgDetailHighestLevel').value;
         const btn = $('#mgConfigSave');
         btn.disabled = true; btn.innerHTML = 'Saving...';
-        await trackedWrite(() => db.doc(`${userPath()}/masterGames/${g._id}`).update({
-          name: newName, costRate: newCostRate,
-          assignedUsername, assignedLevel, highestLevel
-        }));
+        await trackedWrite(async () => { await supabase.from('master_games').update({
+          name: newName, cost_rate: newCostRate,
+          assigned_username: assignedUsername, assigned_level: assignedLevel, highest_level: highestLevel
+        }).eq('id', g._id); });
         btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Saved!';
         setTimeout(() => { if($('#mgConfigSave')) $('#mgConfigSave').innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg> Save Config'; }, 1500);
         renderMasterGamesList();
@@ -4229,7 +4218,7 @@
         if (!confirm('Delete "' + g.name + '"?')) return;
         const btn = $('#mgDetailDelete');
         btn.disabled = true; btn.innerHTML = 'Deleting...';
-        await trackedWrite(() => db.doc(`${userPath()}/masterGames/${g._id}`).delete());
+        await trackedWrite(async () => { await supabase.from('master_games').delete().eq('id',g._id); state.masterGames=state.masterGames.filter(m=>m._id!==g._id); });
         overlay.remove();
         renderMasterGamesList();
         bindMasterGameListEvents();
@@ -4250,11 +4239,11 @@
         const newHistory = [...(g.stockHistory||[]), entry];
         const btn = $('#mgStockApply');
         btn.disabled = true; btn.innerHTML = 'Applying...';
-        await trackedWrite(() => db.doc(`${userPath()}/masterGames/${g._id}`).update({
-          remainingPoints: newAvail,
-          totalPoints: action === 'Set' ? amt : (g.totalPoints || prev),
-          stockHistory: newHistory
-        }));
+        await trackedWrite(async () => { await supabase.from('master_games').update({
+          remaining_points: newAvail,
+          total_points: action === 'Set' ? amt : (g.totalPoints || prev),
+          stock_history: newHistory
+        }).eq('id', g._id); });
         g.remainingPoints = newAvail;
         g.stockHistory = newHistory;
         if (action === 'Set') g.totalPoints = amt;
@@ -4713,14 +4702,14 @@
             const ag=(comp.assignedGames||[]).find(g=>g.gameName===gameName);
             if(ag){
               ag.rate=newRate;
-              await db.doc(userPath()+'/companies/'+comp._id).update({assignedGames:comp.assignedGames});
+              // assignedGames now in separate table — no-op legacy update
               if(state.companies[comp._id])state.companies[comp._id].assignedGames=comp.assignedGames;
             } else {
               // Game not yet assigned — assign it with this rate
               const mg=state.masterGames.find(g=>g.name===gameName);
               const newAg={gameName,gameId:mg?._id||'',rate:newRate,usernames:[]};
               const updatedGames=[...(comp.assignedGames||[]),newAg];
-              await db.doc(userPath()+'/companies/'+comp._id).update({assignedGames:updatedGames});
+              // assignedGames now in separate table — no-op legacy update
               comp.assignedGames=updatedGames;
               if(state.companies[comp._id])state.companies[comp._id].assignedGames=updatedGames;
             }
@@ -5090,8 +5079,8 @@
                   const lvl=row[CI.level]||'';
                   const gname=row[CI.game];
                   const nu={username:uname,level:lvl,gameName:gname};
-                  const ref2=await db.collection(userPath()+'/companies/'+comp._id+'/usernames').add(nu);
-                  comp.usernames=[...(comp.usernames||[]),{_id:ref2.id,...nu}];
+                  const {data:_unr2}=await supabase.from('company_usernames').insert({company_id:comp._id,owner_uid:effectiveOwnerUid(),username:nu.username,game_name:nu.gameName,level:nu.level||''}).select().single(); const ref2={id:_unr2?.id};
+                  if(ref2?.id&&comp) comp.usernames=[...(comp.usernames||[]),{_id:ref2.id,username:nu.username,gameName:nu.gameName,level:nu.level||''}];
                   if(state.companies[comp._id])state.companies[comp._id].usernames=comp.usernames;
                 }
               }
@@ -5167,7 +5156,8 @@
               referenceNumber:refNum,companyCode,
               ...(pm?{paymentMethodId:pm.id}:{})
             };
-            const ref=await db.collection(userPath()+'/bills').add(bill);
+            const { data: _bref } = await supabase.from('bills').insert({ owner_uid:effectiveOwnerUid(), company_id:bill.companyId||null, company_name:bill.companyName, company_code:bill.companyCode, reference_number:bill.referenceNumber, date:bill.date, conv_mode:bill.convMode||'pts2dollar', total_points:bill.totalPoints||0, total_dollars:bill.totalDollars||0, credit_applied:bill.creditApplied||0, partial_amount:bill.partialAmount||0, balance_due:bill.balanceDue||0, extra_fee_percent:bill.extraFeePercent||0, extra_fee_amount:bill.extraFeeAmount||0, extra_fee_profit:bill.extraFeeProfit||0, extra_fee_cost_rate:bill.extraFeeCostRate||0, payment_status:bill.paymentStatus||'pending', items:bill.items||[], extra_payments:bill.extraPayments||[], payment_method_id:bill.paymentMethodId||null }).select().single();
+            const ref = { id: _bref?.id }; if(_bref){bill._id=_bref.id;state.bills.unshift(_mapBillRow(_bref));}
             // Do NOT push to state.bills manually — the onSnapshot listener
             // updates state.bills when Firestore confirms, preventing double entries.
 
@@ -5187,10 +5177,10 @@
                 mg.billingHistory=[...(mg.billingHistory||[]),billingEntry];
                 if(isOrdered){
                   mg.orderedPoints=(mg.orderedPoints||0)+pts;
-                  await db.doc(userPath()+'/masterGames/'+mg._id).update({orderedPoints:mg.orderedPoints,billingHistory:mg.billingHistory});
+                  await supabase.from('master_games').update({ordered_points:mg.orderedPoints,billing_history:mg.billingHistory}).eq('id',mg._id);
                 }else{
                   mg.remainingPoints=(mg.remainingPoints||0)-pts;
-                  await db.doc(userPath()+'/masterGames/'+mg._id).update({remainingPoints:mg.remainingPoints,billingHistory:mg.billingHistory});
+                  await supabase.from('master_games').update({remaining_points:mg.remainingPoints,billing_history:mg.billingHistory}).eq('id',mg._id);
                 }
               }
             }
@@ -5239,24 +5229,19 @@
         try {
           // Generate unique company code
           const companyCode = await generateCompanyCode();
-          const docRef = await db.collection(userPath()+'/companies').add({ 
-            name, 
-            active: true,
-            companyCode: companyCode,
-            createdAt: new Date().toISOString()
-          });
-          // Let onSnapshot handle adding to state.companies with the real Firestore ID
-          // Just set up subcollection listeners and re-render
-          setupCompanySubListeners(docRef.id);
-          if (!state.companies[docRef.id]) {
-            state.companies[docRef.id] = { 
-              _id: docRef.id, 
-              name, 
-              active: true, 
-              companyCode: companyCode,
-              assignedGames: [], 
-              usernames: [] 
-            };
+          const { data: _ncr } = await supabase.from('companies').insert({ owner_uid: effectiveOwnerUid(), name, active: true, company_code: companyCode||null }).select().single();
+          if (_ncr) {
+            setupCompanySubListeners(_ncr.id);
+            if (!state.companies[_ncr.id]) {
+              state.companies[_ncr.id] = {
+                _id: _ncr.id,
+                name,
+                active: true,
+                companyCode: companyCode,
+                assignedGames: [],
+                usernames: []
+              };
+            }
           }
           // Clear form fields while DOM still exists, BEFORE render()
           const _nameEl = $('#newCompanyName');
@@ -5716,6 +5701,7 @@
     // Reusable helper: accepts any date value (Firestore Timestamp or ISO string)
     // and returns a valid JS Date object in local time.
     function toLocalDate(dateValue) {
+      if (typeof dateValue === 'string') return new Date(dateValue);  // Supabase ISO
       if (!dateValue) return new Date();
       if (dateValue && dateValue.seconds) return new Date(dateValue.seconds * 1000);
       return new Date(dateValue);
@@ -5993,7 +5979,7 @@
             setTimeout(() => ov.querySelector('#_qaName')?.focus(), 100);
           });
           if (!result) return;
-          await trackedWrite(() => db.collection(`${userPath()}/companies/${c._id}/usernames`).add({ gameName, username: result.name, level: result.level||'' }));
+          await trackedWrite(async () => { const {data:_cu}=await supabase.from('company_usernames').insert({company_id:c._id,owner_uid:effectiveOwnerUid(),username:result.name,game_name:gameName,level:result.level||''}).select().single(); if(_cu&&state.companies[c._id])state.companies[c._id].usernames.push({_id:_cu.id,username:_cu.username,gameName:_cu.game_name,level:_cu.level}); });
           state.billItems[idx].username = result.name;
           render();
         };
@@ -6206,7 +6192,7 @@
                       mg.billingHistory = [...(mg.billingHistory || []), _billingEntry];
                       _mgUpdatePayload.billingHistory = mg.billingHistory;
                     }
-                    await db.doc(userPath()+'/masterGames/'+mg._id).update(_mgUpdatePayload);
+                    { const _p=_mgUpdatePayload; const _sp={}; if('remainingPoints'in _p)_sp.remaining_points=_p.remainingPoints; if('billingHistory'in _p)_sp.billing_history=_p.billingHistory; if('orderedPoints'in _p)_sp.ordered_points=_p.orderedPoints; await supabase.from('master_games').update(_sp).eq('id',mg._id); }
                     mg.orderedPoints = newOrdered;
                   } else {
                     // Direct load — deduct from available balance
@@ -6217,7 +6203,7 @@
                       mg.billingHistory = [...(mg.billingHistory || []), _billingEntry];
                       _mgUpdatePayload.billingHistory = mg.billingHistory;
                     }
-                    await db.doc(userPath()+'/masterGames/'+mg._id).update(_mgUpdatePayload);
+                    { const _p=_mgUpdatePayload; const _sp={}; if('remainingPoints'in _p)_sp.remaining_points=_p.remainingPoints; if('billingHistory'in _p)_sp.billing_history=_p.billingHistory; if('orderedPoints'in _p)_sp.ordered_points=_p.orderedPoints; await supabase.from('master_games').update(_sp).eq('id',mg._id); }
                     mg.remainingPoints = newPts;
                   }
                 }
@@ -6225,16 +6211,29 @@
             }
             // Save bill to Firestore and immediately add to state.bills so UI updates
             // without waiting for the onSnapshot listener (which may be slow or miss past-dated bills)
-            const _newBillRef = await db.collection(userPath()+'/bills').add(bill);
-            const _newBillWithId = Object.assign({ _id: _newBillRef.id }, bill);
-            state.bills = state.bills.filter(function(b){ return b._id !== _newBillRef.id; });
+            const { data: _nb2 } = await supabase.from('bills').insert({
+              owner_uid: effectiveOwnerUid(), company_id: bill.companyId||null,
+              company_name: bill.companyName, company_code: bill.companyCode,
+              reference_number: bill.referenceNumber, date: bill.date,
+              conv_mode: bill.convMode||'pts2dollar', total_points: bill.totalPoints||0,
+              total_dollars: bill.totalDollars||0, credit_applied: bill.creditApplied||0,
+              partial_amount: bill.partialAmount||0, balance_due: bill.balanceDue||0,
+              extra_fee_percent: bill.extraFeePercent||0, extra_fee_amount: bill.extraFeeAmount||0,
+              extra_fee_profit: bill.extraFeeProfit||0, extra_fee_cost_rate: bill.extraFeeCostRate||0,
+              payment_status: bill.paymentStatus||'pending', items: bill.items||[],
+              extra_payments: bill.extraPayments||[], payment_method_id: bill.paymentMethodId||null
+            }).select().single();
+            const _newBillRef = { id: _nb2?.id };
+            if (_nb2) { bill._id = _nb2.id; state.bills.unshift(_mapBillRow(_nb2)); }
+            const _newBillWithId = Object.assign({ _id: bill._id || _newBillRef?.id }, bill);
+            state.bills = state.bills.filter(function(b){ return b._id !== _newBillWithId._id; });
             state.bills.push(_newBillWithId);
             _gbCache.set('data', {mg:state.masterGames, bills:state.bills, companies:state.companies});
             // If credit was applied, reduce company creditBalance
             if(bill.creditApplied > 0){
               var prevCrBal = typeof c.creditBalance==='number' ? c.creditBalance : getCompanyCreditBalance(c);
               var newCrBal = parseFloat(Math.max(0, prevCrBal - bill.creditApplied).toFixed(2));
-              await db.doc(userPath()+'/companies/'+c._id).update({creditBalance:newCrBal});
+              await supabase.from('companies').update({credit_balance:newCrBal}).eq('id',c._id);
               if(state.companies[c._id]) state.companies[c._id].creditBalance = newCrBal;
             }
             // If there is an overpayment (extra payment), apply it to legacy due bills first.
@@ -6262,7 +6261,7 @@
                 // Add only the true leftover credit to company balance
                 var _curCr = typeof c.creditBalance==='number' ? c.creditBalance : 0;
                 var _newCr = parseFloat((_curCr + _trueCreditLeftover).toFixed(2));
-                await db.doc(userPath()+'/companies/'+c._id).update({creditBalance:_newCr});
+                await supabase.from('companies').update({credit_balance:_newCr}).eq('id',c._id);
                 if(state.companies[c._id]) state.companies[c._id].creditBalance = _newCr;
               }
             }
@@ -6365,7 +6364,7 @@
             var bill = compBills[di];
             try {
               if (bill._id) {
-                await db.doc(userPath() + '/bills/' + bill._id).delete();
+                await supabase.from('bills').delete().eq('id', bill._id);
               }
             } catch(e) { errors++; console.error('Delete failed:', bill._id, e); }
           }
@@ -6389,7 +6388,7 @@
               newCreditBal -= (b.creditApplied||0);
             });
             newCreditBal = Math.max(0, parseFloat(newCreditBal.toFixed(2)));
-            await db.doc(userPath()+'/companies/'+c._id).update({creditBalance: newCreditBal});
+            await supabase.from('companies').update({credit_balance:newCreditBal}).eq('id',c._id);
             if(state.companies[c._id]) state.companies[c._id].creditBalance = newCreditBal;
           } catch(e2){ console.error('Credit recalc failed:', e2); }
           invalidateAnalyticsCache();
@@ -6433,7 +6432,7 @@
           const bid = btn.dataset.billid;
           btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:10px;height:10px;border-width:2px;margin:0"></span>';
           try {
-            await trackedWrite(() => db.doc(userPath()+'/bills/'+bid).delete());
+            await trackedWrite(async () => { await supabase.from('bills').delete().eq('id', bid); });
             invalidateAnalyticsCache();
             btn.closest('.bill-hist-wrap')?.remove();
             // Listener will update state.bills
@@ -6455,14 +6454,14 @@
       try { localStorage.setItem('gb_invoice_settings', JSON.stringify(s)); } catch(e){}
       // Sync to Firestore under user doc
       try {
-        await db.doc(userPath()).set({ invoiceSettings: s }, { merge: true });
+        await supabase.from('user_access').update({ invoice_settings: s }).eq('uid', effectiveOwnerUid());
       } catch(e){ console.warn('Invoice settings cloud sync failed:', e); }
     }
     async function loadInvoiceSettings() {
       try {
-        const doc = await db.doc(userPath()).get();
-        if (doc.exists && doc.data().invoiceSettings) {
-          const s = doc.data().invoiceSettings;
+        const { data: _iacc } = await supabase.from('user_access').select('invoice_settings').eq('uid', effectiveOwnerUid()).maybeSingle();
+        if (_iacc?.invoice_settings) {
+          const s = _iacc.invoice_settings;
           state._invoiceSettings = s;
           try { localStorage.setItem('gb_invoice_settings', JSON.stringify(s)); } catch(e){}
         }
@@ -6594,8 +6593,8 @@
       // Load existing config
       let addresses = [], contacts = [];
       try {
-        const snap = await db.doc('siteConfig/paymentInfo').get();
-        if (snap.exists) { addresses = snap.data().paymentAddresses || []; contacts = snap.data().contactInfo || []; }
+        const { data: _sc } = await supabase.from('site_config').select('*').eq('doc_id','paymentInfo').maybeSingle();
+        if (_sc) { addresses = _sc.payment_addresses || []; contacts = _sc.contact_info || []; }
       } catch(e) {}
 
       renderPaymentSettingsBody(document.getElementById('psBody'), addresses, contacts, ov);
@@ -6681,7 +6680,7 @@
           value: r.querySelector('.ps-ct-value').value.trim()
         })).filter(c => c.label && c.value);
         try {
-          await db.doc('siteConfig/paymentInfo').set({ paymentAddresses: newAddresses, contactInfo: newContacts }, { merge: true });
+          await supabase.from('site_config').upsert({ doc_id: 'paymentInfo', payment_addresses: newAddresses, contact_info: newContacts }, { onConflict: 'doc_id' });
           msg.textContent = '✓ Saved successfully';
           msg.style.color = '#34d399';
           setTimeout(() => { msg.textContent = ''; ov.remove(); }, 1200);
@@ -7345,8 +7344,8 @@
       var remaining = extraAmt;
       for (var i = 0; i < unpaid.length && remaining > 0.001; i++) {
         var ub = unpaid[i];
-        var uref = db.doc(userPath() + '/bills/' + ub._id);
-        var usn = await uref.get(); var ud = usn.data();
+        // uref → supabase below (use ub._id directly)
+        var ud = ub; // use local state
         var uDue = ud.balanceDue || 0;
         if (uDue <= 0.001) continue;
         var applyAmt = parseFloat(Math.min(remaining, uDue).toFixed(2));
@@ -7359,7 +7358,7 @@
           paymentStatus: newDue <= 0.001 ? 'received' : 'partial',
           partialAmount: parseFloat((gt - newDue).toFixed(2))
         };
-        await trackedWrite(function() { return uref.update(uup); });
+        await trackedWrite(async function() { await supabase.from('bills').update(uup).eq('id', ub._id); });
         var lb = state.bills.find(function(b) { return b._id === ub._id; });
         if (lb) Object.assign(lb, uup);
         remaining -= applyAmt;
@@ -7710,7 +7709,7 @@
         $('#confirmAssign').onclick = async () => {
           const rate = parseFloat($('#assignRate').value) || 0;
           for (const name of selectedGames) {
-            await trackedWrite(() => db.collection(`${userPath()}/companies/${cid}/assignedGames`).add({ gameName: name, rate }));
+            await trackedWrite(async () => { const {data:_agr}=await supabase.from('assigned_games').insert({company_id:cid,owner_uid:effectiveOwnerUid(),game_name:name,rate}).select().single(); if(_agr&&state.companies[cid]){state.companies[cid].assignedGames.push({_id:_agr.id,gameName:_agr.game_name,rate:_agr.rate});} });
           }
           render();
         };
@@ -7733,7 +7732,7 @@
             $(`#editRate_${id}`).onkeydown = (e) => { if (e.key === 'Enter') $(`#saveRate_${id}`).click(); };
             $(`#saveRate_${id}`).onclick = async () => {
               const newRate = parseFloat($(`#editRate_${id}`).value) || 0;
-              await trackedWrite(() => db.doc(`${userPath()}/companies/${cid}/assignedGames/${id}`).update({ rate: newRate }));
+              await trackedWrite(async () => { await supabase.from('assigned_games').update({rate:newRate}).eq('id',id); });
               render();
             };
           };
@@ -7741,7 +7740,7 @@
         $$('.rate-del').forEach(btn => {
           btn.onclick = async () => {
             if (!confirm('Remove this game?')) return;
-            await trackedWrite(() => db.doc(`${userPath()}/companies/${cid}/assignedGames/${btn.dataset.id}`).delete());
+            await trackedWrite(async () => { const _delId=btn.dataset.id; await supabase.from('assigned_games').delete().eq('id',_delId); if(state.companies[cid])state.companies[cid].assignedGames=state.companies[cid].assignedGames.filter(ag=>ag._id!==_delId); });
             render();
           };
         });
@@ -7887,7 +7886,7 @@
             return;
           }
           for (const gameName of selectedUnGames) {
-            await trackedWrite(() => db.collection(`${userPath()}/companies/${cid}/usernames`).add({ gameName, username: name, level }));
+            await trackedWrite(async () => { const {data:_unr}=await supabase.from('company_usernames').insert({company_id:cid,owner_uid:effectiveOwnerUid(),username:name,game_name:gameName,level:level||''}).select().single(); if(_unr&&state.companies[cid])state.companies[cid].usernames.push({_id:_unr.id,username:_unr.username,gameName:_unr.game_name,level:_unr.level}); });
           }
           render();
         };
@@ -7925,12 +7924,12 @@
               if(!nn){alert('Username required');return}
               var updates={username:nn};
               if(nl!==undefined) updates.level=nl;
-              await trackedWrite(function(){return db.doc(userPath()+"/companies/"+state.selectedCompanyId+"/usernames/"+uid).update(updates)});
+              await trackedWrite(async function(){ const _up={}; if('username'in updates)_up.username=updates.username; if('gameName'in updates)_up.game_name=updates.gameName; if('level'in updates)_up.level=updates.level; await supabase.from('company_usernames').update(_up).eq('id',uid); });
               eov.remove();render();
             };
             document.getElementById('ueDeleteBtn').onclick=async function(){
               if(!confirm('Delete username "'+oldName+'"?'))return;
-              await trackedWrite(function(){return db.doc(userPath()+'/companies/'+cid+'/usernames/'+uid).delete()});
+              await trackedWrite(async function(){ await supabase.from('company_usernames').delete().eq('id',uid); if(state.companies[cid])state.companies[cid].usernames=state.companies[cid].usernames.filter(u=>u._id!==uid); });
               eov.remove();render();
             };
           };
@@ -8586,7 +8585,7 @@
         if(isNaN(_parsed)||_parsed<0){alert('Invalid amount');return;}
         _parsed = parseFloat(_parsed.toFixed(2));
         try{
-          await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance:_parsed})});
+          await trackedWrite(async function(){ await supabase.from('companies').update({credit_balance:_parsed}).eq('id',c._id); });
           if(state.companies[c._id])state.companies[c._id].creditBalance=_parsed;
           c.creditBalance=_parsed;
           invalidateAnalyticsCache();
@@ -8598,7 +8597,7 @@
         var _cur = typeof c.creditBalance==='number' ? c.creditBalance : getCompanyCreditBalance(c);
         if(!confirm('Clear credit balance of $' + _cur.toFixed(2) + ' for ' + (c.name||'this company') + '?\n\nThis will set it to $0.'))return;
         try{
-          await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance:0})});
+          await trackedWrite(async function(){ await supabase.from('companies').update({credit_balance:0}).eq('id',c._id); });
           if(state.companies[c._id])state.companies[c._id].creditBalance=0;
           c.creditBalance=0;
           invalidateAnalyticsCache();
@@ -8616,10 +8615,10 @@
           var newAmt=parseFloat(document.getElementById('peAmt').value)||0;var newDate=document.getElementById('peDate').value;var newBill=document.getElementById('peBill').value;
           try{
             // Remove from old bill
-            var oldRef=db.doc(userPath()+'/bills/'+bid);var oldSnap=await oldRef.get();var oldEps=(oldSnap.data().extraPayments||[]);oldEps.splice(pidx,1);await trackedWrite(function(){return oldRef.update({extraPayments:oldEps})});
+            { const { data: _ob } = await supabase.from('bills').select('extra_payments').eq('id',bid).single(); const oldEps = (_ob?.extra_payments||[]); oldEps.splice(pidx,1); await supabase.from('bills').update({extra_payments:oldEps}).eq('id',bid); }
             var lb1=state.bills.find(function(b3){return b3._id===bid});if(lb1)lb1.extraPayments=oldEps;
             // Add to new bill
-            var newRef=db.doc(userPath()+'/bills/'+newBill);var newSnap=await newRef.get();var newEps=(newSnap.data().extraPayments||[]);newEps.push({amount:newAmt,date:newDate});await trackedWrite(function(){return newRef.update({extraPayments:newEps})});
+            { const { data: _nb } = await supabase.from('bills').select('extra_payments').eq('id',newBill).single(); const newEps = (_nb?.extra_payments||[]); newEps.push({amount:newAmt,date:newDate}); await supabase.from('bills').update({extra_payments:newEps}).eq('id',newBill); }
             var lb2=state.bills.find(function(b4){return b4._id===newBill});if(lb2)lb2.extraPayments=newEps;
             invalidateAnalyticsCache();pev.remove();ov.remove();render();
           }catch(e3){alert('Error: '+e3.message)}
@@ -8629,21 +8628,19 @@
         if(!confirm('Delete this payment? The credit balance will be adjusted accordingly.'))return;
         var bid=pb.dataset.billid,pidx=parseInt(pb.dataset.payidx);
         try{
-          var ref=db.doc(userPath()+'/bills/'+bid);
-          var snap=await ref.get();
-          var eps=(snap.data().extraPayments||[]);
+          var eps=((state.bills.find(function(b4){return b4._id===bid;})||{}).extraPayments||[]);
           var delEp=eps[pidx];
           var delAmt=delEp?(delEp.amount||0):0;
           var isAddedToCredit=(delEp&&(delEp.isCredit||delEp.isGeneral))||false;
           eps.splice(pidx,1);
-          await trackedWrite(function(){return ref.update({extraPayments:eps})});
+          await trackedWrite(async function(){ await supabase.from('bills').update({extra_payments:eps}).eq('id',bid); });
           var lb=state.bills.find(function(bb){return bb._id===bid});
           if(lb)lb.extraPayments=eps;
           // Always subtract this payment from the credit balance
           if(delAmt>0&&isAddedToCredit){
             var _prevCr=typeof c.creditBalance==='number'?c.creditBalance:getCompanyCreditBalance(c);
             var _newCr=parseFloat(Math.max(0,_prevCr-delAmt).toFixed(2));
-            await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance:_newCr})});
+            await trackedWrite(async function(){ await supabase.from('companies').update({credit_balance:_newCr}).eq('id',c._id); });
             if(state.companies[c._id])state.companies[c._id].creditBalance=_newCr;
             if(c)c.creditBalance=_newCr;
           }
@@ -8665,9 +8662,21 @@
               // No bills at all — create a holder bill to record the payment
               var _epEntry={amount:amt,date:payDate,isGeneral:true}; if(_payMethId) _epEntry.paymentMethodId=_payMethId;
               var payBill={companyId:c._id,companyName:c.name,date:new Date().toISOString(),convMode:'pts2dollar',items:[],totalDollars:0,totalPoints:0,paymentStatus:'received',partialAmount:0,balanceDue:0,extraPayments:[_epEntry]};
-              await trackedWrite(function(){return db.collection(userPath()+'/bills').add(payBill)});
+              await trackedWrite(async function(){
+                const { data: _pbr } = await supabase.from('bills').insert({
+                  owner_uid: effectiveOwnerUid(), company_id: payBill.companyId||null,
+                  company_name: payBill.companyName, company_code: payBill.companyCode,
+                  reference_number: payBill.referenceNumber, date: payBill.date,
+                  conv_mode: payBill.convMode||'pts2dollar', total_points: 0,
+                  total_dollars: payBill.totalDollars||0, credit_applied: 0,
+                  partial_amount: 0, balance_due: 0,
+                  payment_status: payBill.paymentStatus||'received', items: payBill.items||[],
+                  extra_payments: payBill.extraPayments||[]
+                }).select().single();
+                if (_pbr) { payBill._id = _pbr.id; state.bills.unshift(_mapBillRow(_pbr)); }
+              });
               // Update company creditBalance
-              await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance: Math.max(0,(c.creditBalance||0)+amt)})});
+              await trackedWrite(async function(){ await supabase.from('companies').update({credit_balance:Math.max(0,(c.creditBalance||0)+amt)}).eq('id',c._id); });
               if(state.companies[c._id]) state.companies[c._id].creditBalance = Math.max(0,(c.creditBalance||0)+amt);
               // Record in cash flow
               if(_payMethId) cfRecordExtraPayment(amt, _payMethId, payDate, c._id, c.name);
@@ -8675,22 +8684,22 @@
               var remaining = amt;
               for(let ubi=0; ubi<unpaidBills.length && remaining>0.001; ubi++){
                 let ubill = unpaidBills[ubi];
-                let uref = db.doc(userPath()+'/bills/'+ubill._id);
-                let usn = await uref.get(); let udata = usn.data();
+                // uref supabase — use ubill._id directly
+                let udata = ubill; // use local state
                 let uDue = udata.balanceDue||0;
                 if(uDue <= 0.001) continue;
                 let applyAmt = Math.min(remaining, uDue);
                 let newDue = parseFloat((uDue - applyAmt).toFixed(2));
                 let uupdates = { balanceDue: newDue };
                 uupdates.paymentStatus = newDue <= 0.001 ? 'received' : 'partial';
-                let grandTotal = (udata.totalDollars||0)+(udata.extraFeeAmount||0);
+                let grandTotal = (ubill.totalDollars||0)+(ubill.extraFeeAmount||0);
                 uupdates.partialAmount = parseFloat((grandTotal - newDue).toFixed(2));
                 let existingEps = udata.extraPayments || [];
                 var _epEntry2={amount: parseFloat(applyAmt.toFixed(2)), date: payDate, isGeneral: true}; if(_payMethId) _epEntry2.paymentMethodId=_payMethId;
                 existingEps.push(_epEntry2);
                 uupdates.extraPayments = existingEps;
                 if(_payMethId) uupdates.paymentMethodId = _payMethId;
-                await trackedWrite(function(){return uref.update(uupdates)});
+                await trackedWrite(async function(){ await supabase.from('bills').update(uupdates)});
                 let lbU=state.bills.find(function(bb){return bb._id===ubill._id});
                 if(lbU){Object.assign(lbU,uupdates);}
                 remaining -= applyAmt;
@@ -8702,12 +8711,11 @@
 
               if(newCredit > 0.001){
                 var newestBill = allCompBills[allCompBills.length-1];
-                var nbRef = db.doc(userPath()+'/bills/'+newestBill._id);
-                var nbSnap = await nbRef.get(); var nbData = nbSnap.data();
-                var nbEp = (nbData.extraPayments||[]);
+                var nbData = newestBill; // use local state
+                var nbEp = ([...(nbData.extraPayments||[])]);
                 var _crEpEntry={amount:newCredit, date:payDate, isCredit:true}; if(_payMethId) _crEpEntry.paymentMethodId=_payMethId;
                 nbEp.push(_crEpEntry);
-                await trackedWrite(function(){return nbRef.update({extraPayments:nbEp})});
+                await trackedWrite(async function(){ await supabase.from('bills').update({extra_payments:nbEp}).eq('id',newestBill._id); });
                 var lbN=state.bills.find(function(bb){return bb._id===newestBill._id});
                 if(lbN){lbN.extraPayments=nbEp;}
               }
@@ -8715,13 +8723,12 @@
               // Record in cash flow for payment method tracking
               if(_payMethId) cfRecordExtraPayment(amt, _payMethId, payDate, c._id, c.name);
 
-              await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance: totalCredit})});
+              await trackedWrite(async function(){ await supabase.from('companies').update({credit_balance:totalCredit}).eq('id',c._id); });
               if(state.companies[c._id]) state.companies[c._id].creditBalance = totalCredit;
             }
           } else {
-            var ref=db.doc(userPath()+'/bills/'+bid);
-            var sn=await ref.get(); var bData=sn.data();
-            var ep=(bData.extraPayments||[]);
+            var bData=state.bills.find(function(bb){return bb._id===bid;})||{};
+            var ep=([...(bData.extraPayments||[])]);
             var payDate2=dt||localDateStr();
             var _epEntry3={amount:amt,date:payDate2}; if(_payMethId) _epEntry3.paymentMethodId=_payMethId;
             ep.push(_epEntry3);
@@ -8732,7 +8739,7 @@
             var grandTotal2=(bData.totalDollars||0)+(bData.extraFeeAmount||0);
             updates2.partialAmount = parseFloat((grandTotal2 - newDue2).toFixed(2));
             if(_payMethId) updates2.paymentMethodId = _payMethId;
-            await trackedWrite(function(){return ref.update(updates2)});
+            await trackedWrite(async function(){ const _u2={extra_payments:updates2.extraPayments||ep,balance_due:updates2.balanceDue,payment_status:updates2.paymentStatus,partial_amount:updates2.partialAmount}; await supabase.from('bills').update(_u2).eq('id',bid); });
             var lb4=state.bills.find(function(bb){return bb._id===bid});
             if(lb4){Object.assign(lb4,updates2);}
             if(_payMethId) cfRecordExtraPayment(amt, _payMethId, payDate2, c._id, c.name);
@@ -8740,7 +8747,7 @@
             if(overpay > 0.001){
               var prevCr = typeof c.creditBalance==='number' ? c.creditBalance : 0;
               var newCr = parseFloat((prevCr + overpay).toFixed(2));
-              await trackedWrite(function(){return db.doc(userPath()+'/companies/'+c._id).update({creditBalance:newCr})});
+              await trackedWrite(async function(){ await supabase.from('companies').update({credit_balance:newCr}).eq('id',c._id); });
               if(state.companies[c._id]) state.companies[c._id].creditBalance = newCr;
             }
           }
@@ -9028,7 +9035,8 @@
           // Fetch payments in this period
           let paid = 0, payments = [];
           try {
-            const paySnap = await db.collection(payPath()).where('employeeId', '==', emp._id).get();
+            const { data: _pchk } = await supabase.from('salary_payments').select('id').eq('org_id', state.empOrgId).eq('employee_id', emp._id).limit(1);
+          const paySnap = { empty: !_pchk || _pchk.length === 0, size: _pchk?.length||0 };
             payments = paySnap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(p => {
               if (!p.paidAt) return false;
               const pt = p.paidAt.toDate ? p.paidAt.toDate() : new Date(p.paidAt);
@@ -9667,7 +9675,7 @@
           var lb=state.bills.find(function(b){return b._id===bill._id});
           if(lb){Object.assign(lb,updates);}
           
-          await trackedWrite(function(){return db.doc(userPath()+'/bills/'+bill._id).update(updates)});
+          await trackedWrite(async function(){ await supabase.from('bills').update(updates).eq('id', bill._id); });
           
           console.log('Bill edit saved successfully');
           invalidateAnalyticsCache();
@@ -9687,7 +9695,7 @@
         if(!confirm('Delete this bill permanently?'))return;
         var delBtn=this;delBtn.disabled=true;delBtn.textContent='Deleting...';
         try{
-          await db.doc(userPath()+'/bills/'+bill._id).delete();
+          await supabase.from('bills').delete().eq('id', bill._id);
           state.bills=state.bills.filter(function(b){return b._id!==bill._id});
           // Restore credit balance: recompute from remaining bills for this company
           try {
@@ -9703,7 +9711,7 @@
               _newCrBal -= (b.creditApplied||0);
             });
             _newCrBal = Math.max(0, parseFloat(_newCrBal.toFixed(2)));
-            await db.doc(userPath()+'/companies/'+_delCompId).update({creditBalance: _newCrBal});
+            await supabase.from('companies').update({credit_balance:_newCrBal}).eq('id',_delCompId);
             if(state.companies[_delCompId]) state.companies[_delCompId].creditBalance = _newCrBal;
           } catch(_crErr){ console.error('Credit recalc failed:', _crErr); }
           invalidateAnalyticsCache();
@@ -9801,7 +9809,7 @@
       document.getElementById('csSaveName').onclick = async function() {
         var newName = document.getElementById('csNameInput').value.trim();
         if (!newName) return;
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({ name: newName }); });
+        await trackedWrite(async function() { await supabase.from('companies').update({ name: newName }).eq('id', c._id); });
         overlay.remove(); render();
       };
       document.getElementById('csNameInput').onkeydown = function(e) {
@@ -9849,7 +9857,7 @@
         btn.disabled = true; btn.textContent = '...';
         var oldCode = c.companyCode || '';
         try {
-          await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({ companyCode: newCode }); });
+          await trackedWrite(async function() { await supabase.from('companies').update({ company_code: newCode }).eq('id', c._id); });
           c.companyCode = newCode;
           state.companies[c._id].companyCode = newCode;
           // Update referenceNumbers on all bills for this company that used the old code
@@ -9861,7 +9869,7 @@
               var bill = compBillsToUpdate[bi];
               var updatedRef = newCode + bill.referenceNumber.slice(oldCode.length);
               try {
-                await db.doc(userPath()+'/bills/'+bill._id).update({ referenceNumber: updatedRef, companyCode: newCode });
+                await supabase.from('bills').update({ reference_number: updatedRef, company_code: newCode }).eq('id', bill._id);
                 bill.referenceNumber = updatedRef;
                 bill.companyCode = newCode;
               } catch(re) { console.error('Failed to update bill reference', bill._id, re); }
@@ -9879,14 +9887,14 @@
       };
       document.getElementById('csActiveToggle').onclick = async function() {
         var newVal = c.active === false ? true : false;
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({ active: newVal }); });
+        await trackedWrite(async function() { await supabase.from('companies').update({ active: newVal }).eq('id', c._id); });
         overlay.remove(); render();
       };
       // Extra Fee toggle & save
       var csEft = document.getElementById('csExtraFeeToggle');
       if (csEft) csEft.onclick = async function() {
         var on = !(c.extraFeeEnabled);
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({extraFeeEnabled:on}); });
+        await trackedWrite(async function() { await supabase.from('companies').update({ extra_fee_enabled: on }).eq('id', c._id); });
         c.extraFeeEnabled = on;
         overlay.remove(); showCompanySettingsModal();
       };
@@ -9894,7 +9902,7 @@
       if (csEfs) csEfs.onclick = async function() {
         var val = parseFloat(document.getElementById('csExtraFeePercent').value) || 0;
         var costVal = parseFloat(document.getElementById('csExtraFeeCost').value) || 0;
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({extraFeePercent:val, extraFeeCostRate:costVal}); });
+        await trackedWrite(async function() { await supabase.from('companies').update({ extra_fee_percent: val, extra_fee_cost_rate: costVal }).eq('id', c._id); });
         c.extraFeePercent = val; c.extraFeeCostRate = costVal;
         overlay.remove(); showCompanySettingsModal();
       };
@@ -9902,11 +9910,8 @@
       document.getElementById('csDeleteCompany').onclick = async function() {
         if (!confirm('Delete company "' + c.name + '" and all its data? This cannot be undone.')) return;
         try {
-          var agSnap = await db.collection(userPath()+'/companies/'+c._id+'/assignedGames').get();
-          for (var d of agSnap.docs) await d.ref.delete();
-          var unSnap = await db.collection(userPath()+'/companies/'+c._id+'/usernames').get();
-          for (var d2 of unSnap.docs) await d2.ref.delete();
-          await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).delete(); });
+          // assigned_games and company_usernames removed via CASCADE on companies delete
+          await trackedWrite(async function() { await supabase.from('companies').delete().eq('id',c._id); });
           overlay.remove();
           state.view = 'companies'; state.selectedCompanyId = null; state.billDateOverride = null; render();
         } catch (e) { alert('Delete failed: ' + e.message); }
@@ -10037,7 +10042,7 @@
       $('#saveCompanyName').onclick = async () => {
         const newName = $('#editCompanyNameInput').value.trim();
         if (!newName) return;
-        await trackedWrite(() => db.doc(`${userPath()}/companies/${c._id}`).update({ name: newName }));
+        await trackedWrite(async () => { await supabase.from('companies').update({ name: newName }).eq('id', c._id); });
         render();
       };
       $('#editCompanyNameInput').onkeydown = (e) => {
@@ -10048,7 +10053,7 @@
       // Toggle active
       $('#activeToggle').onclick = async () => {
         const newVal = c.active === false ? true : false;
-        await trackedWrite(() => db.doc(`${userPath()}/companies/${c._id}`).update({ active: newVal }));
+        await trackedWrite(async () => { await supabase.from('companies').update({ active: newVal }).eq('id', c._id); });
         render();
       };
 
@@ -10060,14 +10065,14 @@
       var eft = document.getElementById('extraFeeToggle');
       if (eft) eft.onclick = async function() {
         var on = !(c.extraFeeEnabled);
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({extraFeeEnabled:on}); });
+        await trackedWrite(async function() { await supabase.from('companies').update({ extra_fee_enabled: on }).eq('id', c._id); });
         c.extraFeeEnabled = on;
         showCompanySettingsModal();
       };
       var efs = document.getElementById('saveExtraFee');
       if (efs) efs.onclick = async function() {
         var val = parseFloat(document.getElementById('extraFeePercent').value) || 0;
-        await trackedWrite(function() { return db.doc(userPath()+'/companies/'+c._id).update({extraFeePercent:val}); });
+        await trackedWrite(async function() { await supabase.from('companies').update({ extra_fee_percent: val }).eq('id', c._id); });
         c.extraFeePercent = val;
         alert('Extra fee saved: ' + val + '%');
       };
@@ -10076,12 +10081,9 @@
         if (!confirm('Delete company "' + c.name + '" and all its data? This cannot be undone.')) return;
         try {
           // Delete subcollections first
-          const agSnap = await db.collection(`${userPath()}/companies/${c._id}/assignedGames`).get();
-          for (const doc of agSnap.docs) await doc.ref.delete();
-          const unSnap = await db.collection(`${userPath()}/companies/${c._id}/usernames`).get();
-          for (const doc of unSnap.docs) await doc.ref.delete();
+          // subcollections removed via CASCADE
           // Delete company doc
-          await trackedWrite(() => db.doc(`${userPath()}/companies/${c._id}`).delete());
+          await trackedWrite(async () => { await supabase.from('companies').delete().eq('id',c._id); });
           state.view = 'companies';
           state.selectedCompanyId = null;
           render();
@@ -10097,67 +10099,44 @@
     const ADMIN_EMAIL = 'service@sweepadmin.com';
 
     async function checkUserAccess(user) {
-      // Admin always has access
       if (user.email === ADMIN_EMAIL) return { hasAccess: true, daysLeft: 999, expiry: null, gbUsername: 'admin' };
-
-      // Safety net: if this user is actually an cashier (resolved by role check),
-      // do NOT create a blank userAccess doc for them.
-      // This path should only be reached for owners — cashiers return early in onAuthStateChanged.
       if (state.empRole === 'employee') {
-        console.warn('[checkUserAccess] Called for an cashier — should not happen. Returning no access.');
+        console.warn('[checkUserAccess] Called for cashier — returning no access.');
         return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: '' };
       }
-
       try {
-        const doc = await db.collection('userAccess').doc(user.uid).get();
-        if (!doc.exists) {
-          // Before creating a new record, double-check they are not an cashier
-          // (employeeLinks lookup as final safety net)
+        const { data: row } = await supabase.from('user_access').select('*').eq('uid', user.id).maybeSingle();
+        if (!row) {
+          // Safety: check not a cashier
           const linkKey = emailToKey(user.email);
-          try {
-            const linkDoc = await db.collection('employeeLinks').doc(linkKey).get();
-            if (linkDoc.exists && linkDoc.data().active !== false) {
-              console.warn('[checkUserAccess] User has employeeLinks doc but was not resolved as cashier — should not create userAccess doc');
-              return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: '' };
-            }
-          } catch(e) { /* ignore */ }
-
-          // First-time owner: create record with no access
-          await db.collection('userAccess').doc(user.uid).set({
-            email: user.email,
-            displayName: user.displayName || '',
-            photoURL: user.photoURL || '',
-            gbUsername: '',
-            expiryDate: null,
-            isDisabled: false,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+          const { data: lk } = await supabase.from('employee_links').select('owner_uid').eq('link_key', linkKey).maybeSingle().catch(()=>({data:null}));
+          if (lk) return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: '' };
+          // New owner — create access row
+          await supabase.from('user_access').insert({
+            uid: user.id, email: user.email,
+            display_name: user.user_metadata?.full_name || '',
+            photo_url: user.user_metadata?.avatar_url || '',
+            gb_username: '', expiry_date: null, is_disabled: false
           });
           return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: '' };
         }
-
-        const data = doc.data();
-        // Update last login (preserve existing gbUsername)
-        db.collection('userAccess').doc(user.uid).update({
-          lastLogin: firebase.firestore.FieldValue.serverTimestamp(),
+        // Update last login async
+        supabase.from('user_access').update({
+          last_login: new Date().toISOString(),
           email: user.email,
-          displayName: user.displayName || '',
-          photoURL: user.photoURL || '',
-        });
+          display_name: user.user_metadata?.full_name || '',
+          photo_url: user.user_metadata?.avatar_url || '',
+        }).eq('uid', user.id).then(()=>{}).catch(()=>{});
 
-        if (data.isDisabled) return { hasAccess: false, daysLeft: 0, expiry: data.expiryDate, gbUsername: data.gbUsername || '', isUnlimited: false };
+        if (row.is_disabled) return { hasAccess: false, daysLeft: 0, expiry: row.expiry_date, gbUsername: row.gb_username||'', isUnlimited: false };
+        if (row.is_unlimited) return { hasAccess: true, daysLeft: 0, expiry: null, gbUsername: row.gb_username||'', isUnlimited: true };
+        if (!row.expiry_date) return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: row.gb_username||'', isUnlimited: false };
 
-        if (data.isUnlimited) return { hasAccess: true, daysLeft: 0, expiry: null, gbUsername: data.gbUsername || '', isUnlimited: true };
-
-        if (!data.expiryDate) return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: data.gbUsername || '', isUnlimited: false };
-
-        const now = new Date();
-        const expiry = data.expiryDate.toDate();
-        const diffMs = expiry - now;
-        const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-        return { hasAccess: daysLeft > 0, daysLeft: Math.max(0, daysLeft), expiry: data.expiryDate, gbUsername: data.gbUsername || '', isUnlimited: false };
-      } catch (e) {
+        const expiry = new Date(row.expiry_date);
+        const daysLeft = Math.ceil((expiry - new Date()) / 86400000);
+        const isUnlim = daysLeft > 36500;
+        return { hasAccess: isUnlim || daysLeft > 0, daysLeft: Math.max(0, daysLeft), expiry: row.expiry_date, gbUsername: row.gb_username||'', isUnlimited: isUnlim };
+      } catch(e) {
         console.error('Access check error:', e);
         return { hasAccess: false, daysLeft: 0, expiry: null, gbUsername: '' };
       }
@@ -10259,174 +10238,33 @@
     // ─────────────────────────────────────────────────────────────────────────────
 
     async function checkUserAccessByUid(ownerUid) {
-      let anyReadSucceeded = false;
-
-      // Primary: read embedded access from employeeLinks doc (cashier can read their own)
       try {
         const linkKey = emailToKey((state.user?.email || '').toLowerCase().trim());
-        const linkDoc = await db.collection('employeeLinks').doc(linkKey).get();
-        console.log('[checkAccess] employeeLinks read — exists:', linkDoc.exists, '| key:', linkKey);
-        anyReadSucceeded = true;
-        if (linkDoc.exists) {
-          const link = linkDoc.data();
-          console.log('[checkAccess] link data:', JSON.stringify({
-            ownerHasAccess: link.ownerHasAccess,
-            ownerAccessExpiry: link.ownerAccessExpiry,
-            accessGrantedAt: link.accessGrantedAt,
-          }));
-          // ownerHasAccess is written by owner at sync time
-          if (link.ownerHasAccess === true) {
-            console.log('[checkAccess] ✓ Access granted via embedded ownerHasAccess flag');
-            return { hasAccess: true };
-          }
-          // Explicit denial
-          if (link.ownerHasAccess === false) {
-            console.log('[checkAccess] ✗ Access explicitly denied via ownerHasAccess=false');
-            return { hasAccess: false };
-          }
-          // Fallback: check expiry date embedded at sync time
-          if (link.ownerAccessExpiry) {
-            const exp = link.ownerAccessExpiry.toDate ? link.ownerAccessExpiry.toDate() : new Date(link.ownerAccessExpiry);
-            const daysLeft = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
-            console.log('[checkAccess] ownerAccessExpiry daysLeft:', daysLeft);
-            if (daysLeft > 0) return { hasAccess: true };
-          }
-          // Doc exists but has no access flags yet (owner hasn't synced yet) — grant tentative access
-          // The employee was already found in the org, trust that
-          console.log('[checkAccess] employeeLinks doc exists but no access flags — granting tentative access');
-          return { hasAccess: true };
-        }
-      } catch(e) {
-        console.error('[checkAccess] employeeLinks read failed:', e.code, e.message);
-      }
-
-      // Fallback: try reading userAccess directly (works if security rules allow it)
-      try {
-        const doc = await db.collection('userAccess').doc(ownerUid).get();
-        console.log('[checkAccess] userAccess fallback — exists:', doc.exists);
-        anyReadSucceeded = true;
-        if (doc.exists) {
-          const data = doc.data();
-          console.log('[checkAccess] userAccess data:', JSON.stringify({
-            isDisabled: data.isDisabled,
-            isUnlimited: data.isUnlimited,
-            expiryDate: data.expiryDate ? (data.expiryDate.toDate ? data.expiryDate.toDate().toISOString() : String(data.expiryDate)) : null,
-          }));
-          if (data.isDisabled) return { hasAccess: false };
-          if (data.isUnlimited) return { hasAccess: true };
-          if (data.expiryDate) {
-            const exp = data.expiryDate.toDate ? data.expiryDate.toDate() : new Date(data.expiryDate);
-            const days = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
-            console.log('[checkAccess] userAccess daysLeft:', days);
+        const { data: link } = await supabase.from('employee_links').select('owner_expiry, owner_unlimited, owner_has_access').eq('link_key', linkKey).maybeSingle();
+        if (link) {
+          if (link.owner_has_access === true)  return { hasAccess: true };
+          if (link.owner_has_access === false) return { hasAccess: false };
+          if (link.owner_unlimited) return { hasAccess: true };
+          if (link.owner_expiry) {
+            const days = Math.ceil((new Date(link.owner_expiry) - new Date()) / 86400000);
             if (days > 0) return { hasAccess: true };
           }
+          // Link exists but no flags — tentative grant
+          return { hasAccess: true };
         }
-      } catch(e) {
-        console.warn('[checkAccess] userAccess read blocked (expected if security rules deny cross-user reads):', e.code);
-      }
-
-      // If both Firestore reads failed due to errors (not explicit denial), fail-open:
-      // the employee has already been authenticated via Firebase Auth and found in the org.
-      // Blocking them due to a transient read error would be incorrect.
-      if (!anyReadSucceeded) {
-        console.log('[checkAccess] All reads failed — granting fail-open access (transient error)');
-        return { hasAccess: true };
-      }
-
-      console.log('[checkAccess] No access found via any method');
+      } catch(e) { console.warn('[checkAccess] employee_links read failed:', e.message); }
       return { hasAccess: false };
     }
 
-    auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        state.user = {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          photoURL: user.photoURL,
-        };
-        state.view = 'loading';
-        render();
+    // Restore session on page load (handles OAuth redirect returns)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) await _handleSignedIn(session.user);
+      else { state.view = 'login'; render(); }
+    });
 
-        // STEP 1: Resolve role FIRST — cashier vs owner
-        try {
-          await resolveEmployeeRole(user);
-        } catch(e) {
-          console.error('[Auth] resolveEmployeeRole threw:', e);
-          state.empRole  = 'owner';
-          state.empOrgId = user.uid;
-        }
-
-        console.log('[Auth] empRole:', state.empRole, '| empOrgId:', state.empOrgId,
-          '| empEmployeeDoc:', state.empEmployeeDoc ? state.empEmployeeDoc._id : 'null');
-
-        // STEP 2: Cashier path
-        if (state.empRole === 'employee') {
-          console.log('[Auth] Cashier path. Checking owner subscription. orgId:', state.empOrgId);
-
-          // Check if cashier is deactivated
-          if (state.empEmployeeDoc && state.empEmployeeDoc.active === false) {
-            console.log('[Auth] Cashier is deactivated');
-            state.view = 'accessDenied';
-            render();
-            return;
-          }
-
-          // Check owner subscription using the same exact logic as the owner's own login
-          let ownerHasAccess = false;
-          try {
-            const ownerAccess = await checkUserAccessByUid(state.empOrgId);
-            console.log('[Auth] Owner access result:', JSON.stringify(ownerAccess));
-            ownerHasAccess = ownerAccess.hasAccess;
-          } catch(e) {
-            console.error('[Auth] Owner access check threw:', e);
-          }
-
-          if (!ownerHasAccess) {
-            console.log('[Auth] Owner subscription invalid — blocking cashier');
-            state.view = 'accessDenied';
-            render();
-            return;
-          }
-
-          console.log('[Auth] Cashier authorized ✓ — loading full app');
-          // Cashiers get the full app experience — load their own data
-          state.gbUsername = '';
-          state.accessDaysLeft = 0;
-          state.accessExpiry = null;
-          state.accessUnlimited = true; // access already validated via owner
-          await loadAllData(false);
-          loadInvoiceSettings().catch(() => {});
-          state.view = 'companies';
-          render();
-          _lastSyncedTime = new Date();
-          setupListeners();
-          cfEnsureLoaded().catch(() => {}); // load CF payment methods for employees
-          setTimeout(() => checkPopupMessages(user.uid), 600);
-          return;
-        }
-
-        // STEP 3: Owner path — check their own subscription
-        const access = await checkUserAccess(user);
-        state.gbUsername = access.gbUsername || '';
-        state.accessDaysLeft = access.daysLeft;
-        state.accessExpiry = access.expiry;
-        state.accessUnlimited = access.isUnlimited || false;
-
-        if (!access.hasAccess) {
-          state.view = 'accessDenied';
-          render();
-          return;
-        }
-        // Load all data (cache-first, then fresh)
-        await loadAllData(false);
-        loadInvoiceSettings().catch(e => console.warn('Invoice settings load:', e));
-        state.view = 'companies';
-        render();
-        _lastSyncedTime = new Date();
-        setupListeners();
-        cfEnsureLoaded().catch(() => {}); // load CF data for owner
-        setTimeout(() => checkPopupMessages(user.uid), 600);
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await _handleSignedIn(session.user);
       } else {
         stopListeners();
         state.user = null;
@@ -10437,6 +10275,54 @@
         render();
       }
     });
+
+    async function _handleSignedIn(user) {
+      state.user = { uid: user.id, email: user.email, displayName: user.user_metadata?.full_name, photoURL: user.user_metadata?.avatar_url };
+      state.view = 'loading';
+      render();
+
+      // STEP 1: Resolve role FIRST
+      try { await resolveEmployeeRole(user); }
+      catch(e) { console.error('[Auth] resolveEmployeeRole threw:', e); state.empRole = 'owner'; state.empOrgId = user.id; }
+
+      console.log('[Auth] empRole:', state.empRole, '| empOrgId:', state.empOrgId);
+
+      // STEP 2: Cashier path
+      if (state.empRole === 'employee') {
+        if (state.empEmployeeDoc && state.empEmployeeDoc.active === false) { state.view = 'accessDenied'; render(); return; }
+        let ownerHasAccess = false;
+        try { const ownerAccess = await checkUserAccessByUid(state.empOrgId); ownerHasAccess = ownerAccess.hasAccess; }
+        catch(e) { console.error('[Auth] Owner access check threw:', e); }
+        if (!ownerHasAccess) { state.view = 'accessDenied'; render(); return; }
+        state.gbUsername = '';
+        state.accessDaysLeft = 0;
+        state.accessExpiry = null;
+        state.accessUnlimited = true;
+        await loadAllData(false);
+        loadInvoiceSettings().catch(()=>{});
+        state.view = 'companies'; render();
+        _lastSyncedTime = new Date();
+        setupListeners();
+        cfEnsureLoaded().catch(()=>{});
+        setTimeout(() => checkPopupMessages(user.id), 600);
+        return;
+      }
+
+      // STEP 3: Owner path
+      const access = await checkUserAccess(user);
+      state.gbUsername = access.gbUsername || '';
+      state.accessDaysLeft = access.daysLeft;
+      state.accessExpiry = access.expiry ? tsWrap(access.expiry) : null;
+      state.accessUnlimited = access.isUnlimited || false;
+      if (!access.hasAccess) { state.view = 'accessDenied'; render(); return; }
+      await loadAllData(false);
+      loadInvoiceSettings().catch(e => console.warn('Invoice settings load:', e));
+      state.view = 'companies'; render();
+      _lastSyncedTime = new Date();
+      setupListeners();
+      cfEnsureLoaded().catch(()=>{});
+      setTimeout(() => checkPopupMessages(user.id), 600);
+    }
 
 
     // ============================================================
@@ -10481,35 +10367,23 @@
     async function checkPopupMessages(uid) {
       try {
         const now = Date.now();
-        const [snap1, snap2] = await Promise.all([
-          db.collection('popupMessages')
-            .where('targetUid', '==', uid)
-            .where('dismissed', '==', false)
-            .get(),
-          db.collection('popupMessages')
-            .where('targetAll', '==', true)
-            .where('dismissed', '==', false)
-            .get(),
+        const [{ data: rows1 }, { data: rows2 }] = await Promise.all([
+          supabase.from('popup_messages').select('*').eq('target_uid', uid).eq('dismissed', false),
+          supabase.from('popup_messages').select('*').eq('target_all', true).eq('dismissed', false),
         ]);
-
         const seen = new Set();
         const msgs = [];
-        for (const doc of [...snap1.docs, ...snap2.docs]) {
-          if (seen.has(doc.id)) continue;
-          seen.add(doc.id);
-          const d = doc.data();
-          // Check if snoozed (remind later)
-          const snoozeUntil = parseInt(localStorage.getItem(REMIND_LATER_KEY_PREFIX + doc.id) || '0', 10);
-          if (snoozeUntil && now < snoozeUntil) continue; // still snoozed
-          msgs.push({ id: doc.id, ...d });
+        for (const r of [...(rows1||[]), ...(rows2||[])]) {
+          if (seen.has(r.id)) continue;
+          seen.add(r.id);
+          const snoozeUntil = parseInt(localStorage.getItem(REMIND_LATER_KEY_PREFIX + r.id) || '0', 10);
+          if (snoozeUntil && now < snoozeUntil) continue;
+          msgs.push({ id: r.id, targetUid: r.target_uid, targetAll: r.target_all, message: r.message, type: r.type, dismissed: r.dismissed, read: r.read });
         }
-
         if (!msgs.length) return;
         _popupQueue = msgs;
         showNextPopup();
-      } catch(e) {
-        console.warn('Popup check error:', e);
-      }
+      } catch(e) { console.warn('Popup check error:', e); }
     }
 
     function showNextPopup() {
@@ -10563,11 +10437,7 @@
       document.getElementById('gbPopupDismiss').onclick = async () => {
         closePopupWith(overlay, async () => {
           try {
-            await db.collection('popupMessages').doc(msg.id).update({
-              dismissed: true,
-              read: true,
-              dismissedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            });
+            await supabase.from('popup_messages').update({ dismissed: true, read: true }).eq('id', msg.id);
           } catch(e) { console.warn('Dismiss update error:', e); }
           // Remove snooze key if present
           localStorage.removeItem(REMIND_LATER_KEY_PREFIX + msg.id);
@@ -10685,98 +10555,48 @@
     async function resolveEmployeeRole(user) {
       const email = (user.email || '').toLowerCase().trim();
       const linkKey = emailToKey(email);
-      console.log('[resolveRole] email:', email, '| linkKey:', linkKey, '| uid:', user.uid);
+      console.log('[resolveRole] email:', email, '| linkKey:', linkKey, '| uid:', user.id);
 
-      // ── STEP 1: Check employeeLinks FIRST ──────────────────────────────────
-      // This takes priority over the organizations check because an cashier
-      // may have previously triggered ensureOrgDoc (creating organizations/{uid})
-      // which would falsely identify them as an owner.
+      // STEP 1: Check employee_links table
       try {
-        const linkDoc = await db.collection('employeeLinks').doc(linkKey).get();
-        console.log('[resolveRole] employeeLinks doc exists:', linkDoc.exists);
-
-        if (linkDoc.exists) {
-          const link = linkDoc.data();
-          console.log('[resolveRole] link data:', JSON.stringify(link));
-
+        const { data: link } = await supabase.from('employee_links').select('*').eq('link_key', linkKey).maybeSingle();
+        console.log('[resolveRole] employee_links exists:', !!link);
+        if (link) {
           if (link.active === false) {
-            console.log('[resolveRole] Cashier is deactivated → treating as owner (will be denied)');
-            state.empRole  = 'employee';   // still cashier, just deactivated
-            state.empOrgId = link.ownerUid || user.uid;
-            return;
+            state.empRole = 'employee'; state.empOrgId = link.owner_uid; return;
           }
-
-          if (!link.ownerUid || !link.employeeId) {
-            console.warn('[resolveRole] employeeLinks doc missing ownerUid or employeeId:', link);
-          } else {
-            // Fetch the actual cashier record
-            try {
-              const empDoc = await db.collection('organizations')
-                .doc(link.ownerUid)
-                .collection('employees')
-                .doc(link.employeeId)
-                .get();
-              console.log('[resolveRole] cashier doc exists:', empDoc.exists,
-                empDoc.exists ? '| active:' + empDoc.data().active : '');
-
-              if (empDoc.exists && empDoc.data().active !== false) {
-                state.empRole        = 'employee';
-                state.empOrgId       = link.ownerUid;
-                state.empEmployeeDoc = { _id: empDoc.id, ...empDoc.data() };
-                console.log('[resolveRole] ✓ Resolved as EMPLOYEE for org:', link.ownerUid);
-                // Write employeeUids/{uid} so Firestore rules can do uid-based access checks
-                // without needing to parse email strings
-                try {
-                  await db.collection('employeeUids').doc(user.uid).set({
-                    ownerUid:   link.ownerUid,
-                    employeeId: empDoc.id,
-                    active:     true,
-                    email:      user.email,
-                    updatedAt:  firebase.firestore.FieldValue.serverTimestamp(),
-                  });
-                } catch(e) { console.warn('[resolveRole] employeeUids write failed:', e.message); }
-                return;
-              }
-            } catch(e) {
-              console.warn('[resolveRole] Failed to fetch cashier doc:', e);
+          if (link.owner_uid && link.employee_id) {
+            // Fetch actual employee record
+            const { data: empRow } = await supabase.from('org_employees').select('*').eq('id', link.employee_id).maybeSingle().catch(()=>({data:null}));
+            if (empRow && empRow.active !== false) {
+              state.empRole = 'employee';
+              state.empOrgId = link.owner_uid;
+              state.empEmployeeDoc = { _id: empRow.id, ...empRow };
+              // Write employee_uids so RLS helper works
+              await supabase.from('employee_uids').upsert({ uid: user.id, owner_uid: link.owner_uid, employee_id: empRow.id, active: true }, { onConflict: 'uid' }).catch(()=>{});
+              console.log('[resolveRole] ✓ Resolved as EMPLOYEE for org:', link.owner_uid);
+              return;
             }
           }
         }
-      } catch(e) {
-        console.warn('[resolveRole] employeeLinks lookup failed:', e.code, e.message);
-      }
+      } catch(e) { console.warn('[resolveRole] employee_links lookup failed:', e.message); }
 
-      // ── STEP 2: Check if this user owns an org ─────────────────────────────
+      // STEP 2: Check if user has an org doc
       try {
-        const ownerDoc = await db.collection('organizations').doc(user.uid).get();
-        console.log('[resolveRole] organizations doc exists:', ownerDoc.exists);
-        if (ownerDoc.exists) {
-          state.empRole  = 'owner';
-          state.empOrgId = user.uid;
-          console.log('[resolveRole] ✓ Resolved as OWNER (has org doc)');
-          return;
-        }
-      } catch(e) {
-        console.warn('[resolveRole] organizations lookup failed:', e);
-      }
+        const { data: orgRow } = await supabase.from('organizations').select('id').eq('id', user.id).maybeSingle();
+        if (orgRow) { state.empRole = 'owner'; state.empOrgId = user.id; console.log('[resolveRole] ✓ Owner (has org)'); return; }
+      } catch(e) {}
 
-      // ── STEP 3: Default — new owner, no org yet ────────────────────────────
-      state.empRole  = 'owner';
-      state.empOrgId = user.uid;
-      console.log('[resolveRole] ✓ Resolved as OWNER (default — no org doc yet)');
+      // Default: owner
+      state.empRole = 'owner'; state.empOrgId = user.id;
+      console.log('[resolveRole] ✓ Owner (default)');
     }
 
     // --- Ensure org document exists for owner ---
     async function ensureOrgDoc() {
-      const ref = db.collection('organizations').doc(state.user.uid);
-      const snap = await ref.get();
-      if (!snap.exists) {
-        await ref.set({
-          ownerUid: state.user.uid,
-          ownerEmail: state.user.email,
-          ownerName: state.user.displayName || '',
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
+      const { data: existing } = await supabase.from('organizations').select('id').eq('id', state.user.uid).maybeSingle();
+      if (!existing) {
+        await supabase.from('organizations').upsert({ id: state.user.uid, name: state.user.displayName || '' }, { onConflict: 'id' });
       }
     }
 
@@ -11239,9 +11059,8 @@
     // Returns all active shifts (multiple cashiers can be on shift simultaneously)
     async function getActiveShifts() {
       try {
-        const snap = await db.collection(shiftPath()).where('status', '==', 'active').get();
-        if (snap.empty) return [];
-        return snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+        const { data: _as } = await supabase.from('shifts').select('*').eq('org_id', state.empOrgId).eq('status','active');
+        return (_as||[]).map(r => ({ _id: r.id, employeeId: r.employee_id, startTime: tsWrap(r.start_time), status: r.status }));
       } catch(e) { return []; }
     }
 
@@ -11256,44 +11075,32 @@
       const shifts = await getActiveShifts();
       const mine = shifts.find(s => s.employeeId === empId);
       if (mine) throw new Error('You are already on shift. Shift out first.');
-      const now = firebase.firestore.FieldValue.serverTimestamp();
-      await db.collection(shiftPath()).add({
-        employeeId:   empId,
-        employeeName: empName,
-        startTime:    now,
-        endTime:      null,
-        durationMs:   0,
-        status:       'active',
-      });
+      const _nowISO = new Date().toISOString();
+      await supabase.from('shifts').insert({ org_id: state.empOrgId, employee_id: empId, status: 'active', start_time: _nowISO, end_time: null, duration_minutes: 0 });
     }
 
     async function shiftOut(shiftId, startTimestamp) {
       const startMs = startTimestamp.toDate ? startTimestamp.toDate().getTime() : startTimestamp;
       const endMs   = Date.now();
       const durMs   = endMs - startMs;
-      await db.collection(shiftPath()).doc(shiftId).update({
-        endTime:    firebase.firestore.FieldValue.serverTimestamp(),
-        durationMs: durMs,
-        status:     'completed',
-      });
+      await supabase.from('shifts').update({ end_time: new Date().toISOString(), duration_minutes: Math.round(durMs/60000), status: 'completed' }).eq('id', shiftId);
     }
 
     // --- Fetch all cashiers for owner ---
     async function fetchEmployees() {
-      const snap = await db.collection(empPath()).get();
-      return snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+      const { data: _emps } = await supabase.from('org_employees').select('*').eq('org_id', state.empOrgId);
+      return (_emps||[]).map(r=>({_id:r.id,name:r.name,email:r.email,role:r.role,permissions:r.permissions||{},salary:r.salary,salaryType:r.salary_type,active:r.active}));
     }
 
     // --- Fetch shifts for date range ---
     async function fetchShifts(fromDate, toDate, empId) {
-      let q = db.collection(shiftPath())
-        .where('status', '==', 'completed');
-      if (empId) q = q.where('employeeId', '==', empId);
-      const snap = await q.get();
-      return snap.docs.map(d => ({ _id: d.id, ...d.data() })).filter(s => {
+      let _sq = supabase.from('shifts').select('*').eq('org_id', state.empOrgId).eq('status','completed');
+      if (empId) _sq = _sq.eq('employee_id', empId);
+      const { data: _sh } = await _sq;
+      return (_sh||[]).map(r=>({_id:r.id,employeeId:r.employee_id,startTime:tsWrap(r.start_time),endTime:tsWrap(r.end_time),durationMs:(r.duration_minutes||0)*60000,status:r.status})).filter(s=>{
         if (!s.startTime) return false;
         if (!fromDate && !toDate) return true;
-        const t = s.startTime.toDate ? s.startTime.toDate() : new Date(s.startTime);
+        const t = s.startTime.toDate();
         if (fromDate && t < fromDate) return false;
         if (toDate && t > toDate) return false;
         return true;
@@ -11302,8 +11109,8 @@
 
     // --- Fetch salary payments ---
     async function fetchSalaryPayments(empId) {
-      const snap = await db.collection(payPath()).where('employeeId', '==', empId).get();
-      return snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+      const { data: _pays } = await supabase.from('salary_payments').select('*').eq('org_id', state.empOrgId).eq('employee_id', empId);
+      return (_pays||[]).map(r=>({_id:r.id,employeeId:r.employee_id,amount:r.amount,periodStart:r.period_start,periodEnd:r.period_end,receivedByEmployee:r.received_by_employee,receivedAt:r.received_at,paidAt:r.created_at}));
     }
 
     // ============================================================
@@ -11362,9 +11169,8 @@
 
       // Live listener: refresh dashboard when any shift changes
       if (_empShiftListener) _empShiftListener();
-      _empShiftListener = db.collection(shiftPath())
-        .where('status', '==', 'active')
-        .onSnapshot(() => {
+      _empShiftListener = supabase.channel('shifts_' + state.empOrgId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: 'org_id=eq.' + state.empOrgId }, () => {
           refreshEmployeeList();
           refreshOwnerDashboard();
         }, () => {});
@@ -11568,7 +11374,7 @@
           modal.querySelectorAll('.mgr-shift-out-btn').forEach(btn => {
             btn.onclick = async () => {
               btn.disabled = true; btn.textContent = 'Ending…';
-              const startTs = firebase.firestore.Timestamp.fromMillis(parseInt(btn.dataset.startts));
+              const startTs = tsWrap(new Date(parseInt(btn.dataset.startts)).toISOString());
               try {
                 await shiftOut(btn.dataset.shiftid, startTs);
                 clearInterval(timerInterval);
@@ -11633,57 +11439,32 @@
       const email = (emp.email || '').toLowerCase().trim();
       const linkKey = emailToKey(email);
 
-      // Read owner's current access to embed in the link doc
-      let ownerHasAccess = false;
-      let ownerAccessExpiry = null;
+      let ownerHasAccess = false, ownerExpiry = null, ownerUnlimited = false;
       try {
-        const ownerDoc = await db.collection('userAccess').doc(state.user.uid).get();
-        if (ownerDoc.exists) {
-          const od = ownerDoc.data();
-          if (od.isDisabled) {
-            ownerHasAccess = false;
-          } else if (od.isUnlimited) {
-            ownerHasAccess = true;
-          } else if (od.expiryDate) {
-            const exp = od.expiryDate.toDate ? od.expiryDate.toDate() : new Date(od.expiryDate);
-            const days = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
+        const { data: od } = await supabase.from('user_access').select('expiry_date, is_unlimited, is_disabled').eq('uid', state.user.uid).single();
+        if (od && !od.is_disabled) {
+          ownerUnlimited = od.is_unlimited || false;
+          ownerExpiry    = od.expiry_date || null;
+          if (ownerUnlimited) { ownerHasAccess = true; }
+          else if (ownerExpiry) {
+            const days = Math.ceil((new Date(ownerExpiry) - new Date()) / 86400000);
             ownerHasAccess = days > 0;
-            ownerAccessExpiry = od.expiryDate;
-          }
-          // Backend stores "unlimited" as far-future date (100 years), not isUnlimited flag
-          // Check for that pattern too
-          if (!ownerHasAccess && od.expiryDate) {
-            const exp = od.expiryDate.toDate ? od.expiryDate.toDate() : new Date(od.expiryDate);
-            const daysLeft = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
-            if (daysLeft > 36500) { // >100 years = unlimited
-              ownerHasAccess = true;
-            } else if (daysLeft > 0) {
-              ownerHasAccess = true;
-            }
-            ownerAccessExpiry = od.expiryDate;
+            if (days > 36500) { ownerHasAccess = true; ownerUnlimited = true; }
           }
         }
-        console.log('[writeEmployeeLink] Owner access snapshot: hasAccess=', ownerHasAccess,
-          '| expiry=', ownerAccessExpiry ? (ownerAccessExpiry.toDate ? ownerAccessExpiry.toDate().toISOString() : ownerAccessExpiry) : null);
-      } catch(e) {
-        console.warn('[writeEmployeeLink] Could not read owner userAccess:', e.message);
-        // If we can't read it, assume owner has access (they are logged in and using the app)
-        ownerHasAccess = true;
-      }
+      } catch(e) { ownerHasAccess = true; /* fail-open */ }
 
-      await db.collection('employeeLinks').doc(linkKey).set({
-        email:             email,
-        ownerUid:          state.user.uid,  // always use current logged-in user's UID
-        employeeId:        empId,
-        active:            emp.active !== false,
-        ownerHasAccess:    ownerHasAccess,
-        ownerAccessExpiry: ownerAccessExpiry,
-        accessGrantedAt:   firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt:         firebase.firestore.FieldValue.serverTimestamp(),
-      });
-      console.log('[writeEmployeeLink] ✓ Wrote link for', email,
-        '→ key:', linkKey, '| ownerUid:', state.user.uid, '| empId:', empId,
-        '| ownerHasAccess:', ownerHasAccess);
+      await supabase.from('employee_links').upsert({
+        link_key:        linkKey,
+        owner_uid:       state.user.uid,
+        employee_id:     empId || emp._id,
+        employee_email:  email,
+        active:          emp.active !== false,
+        owner_has_access: ownerHasAccess,
+        owner_expiry:    ownerExpiry,
+        owner_unlimited: ownerUnlimited,
+      }, { onConflict: 'link_key' });
+      console.log('[writeEmployeeLink] ✓ Wrote link for', email, '| ownerHasAccess:', ownerHasAccess);
     }
 
     // Sync every cashier's link doc — fixes legacy cashiers added before this feature
@@ -11842,7 +11623,7 @@
             newPerms[cb.dataset.key] = cb.checked;
           });
           await trackedWrite(() =>
-            db.doc(empPath() + '/' + emp._id).update({ permissions: newPerms })
+            supabase.from('org_employees').update({ permissions: newPerms }).eq('id', emp._id).then(()=>{}).catch(()=>{})
           );
           // Update local cache
           emp.permissions = newPerms;
@@ -11877,8 +11658,9 @@
       }
       const linkChecks = await Promise.all(employees.map(async emp => {
         try {
-          const doc = await db.collection('employeeLinks').doc(emailToKey(emp.email)).get();
-          return { empId: emp._id, linked: doc.exists && doc.data().active !== false };
+          const { data: _elcheck } = await supabase.from('employee_links').select('link_key').eq('link_key', emailToKey(emp.email)).maybeSingle();
+          const doc = { exists: !!_elcheck };
+          return { empId: emp._id, linked: doc.exists };
         } catch(e) { return { empId: emp._id, linked: false }; }
       }));
       const linkMap = {};
@@ -11945,7 +11727,7 @@
           e.stopPropagation();
           if (!confirm('End this cashier\'s shift now?')) return;
           btn.disabled = true; btn.textContent = 'Ending…';
-          const startTs = firebase.firestore.Timestamp.fromMillis(parseInt(btn.dataset.startts));
+          const startTs = tsWrap(new Date(parseInt(btn.dataset.startts)).toISOString());
           try {
             await shiftOut(btn.dataset.shiftid, startTs);
             await Promise.all([refreshEmployeeList(), refreshOwnerDashboard()]);
@@ -12009,11 +11791,11 @@
       await refreshEmploymentSelf();
       // Live listener: refresh when any shift changes (e.g. owner ends shift, another cashier shifts in/out)
       if (_empSelfListener) _empSelfListener();
-      _empSelfListener = db.collection(shiftPath())
-        .where('status', '==', 'active')
-        .onSnapshot(snap => {
+      _empSelfListener = supabase.channel('self_shifts_' + state.empOrgId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: 'org_id=eq.' + state.empOrgId }, async (payload) => { const snap = { docs: [] }; // handled inline below
           // Only auto-refresh UI if user is not mid-action (timer running is fine)
-          const myShiftActive = snap.docs.some(d => d.data().employeeId === state.empEmployeeDoc?._id);
+          const { data: _activeShifts } = await supabase.from('shifts').select('*').eq('org_id', state.empOrgId).eq('status','active');
+          const myShiftActive = (_activeShifts||[]).some(r => r.employee_id === state.empEmployeeDoc?._id);
           if (!myShiftActive) refreshEmploymentSelf();
         }, () => {});
     }
@@ -12168,11 +11950,11 @@
           if (!confirm('Delete this shift record?')) return;
           try {
             // Verify the shift belongs to this employee before deleting
-            const shiftDoc = await db.collection(shiftPath()).doc(btn.dataset.shiftid).get();
+            const { data: shiftDoc } = await supabase.from('shifts').select('*').eq('id', btn.dataset.shiftid).single();
             if (shiftDoc.exists && shiftDoc.data().employeeId !== state.empEmployeeDoc?._id) {
               alert('You can only delete your own shifts.'); return;
             }
-            await db.collection(shiftPath()).doc(btn.dataset.shiftid).delete();
+            await supabase.from('shifts').delete().eq('id', btn.dataset.shiftid);
             await refreshEmploymentSelf();
           } catch(err) { alert('Delete failed: ' + err.message); }
         };
@@ -12182,10 +11964,7 @@
       wrap.querySelectorAll('[id^="markRcv_"]').forEach(btn => {
         btn.onclick = async () => {
           if (!confirm('Mark this salary as received?')) return;
-          await db.collection(payPath()).doc(btn.dataset.payid).update({
-            receivedByEmployee: true,
-            receivedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          });
+          await supabase.from('salary_payments').update({ received_by_employee: true, received_at: new Date().toISOString() }).eq('id', btn.dataset.payid);
           await refreshEmploymentSelf();
         };
       });
@@ -12370,19 +12149,13 @@
             const pMs = thisPeriod ? thisPeriod.totalMs : 0;
             const pStart = pShifts.length ? (pShifts[pShifts.length-1].startTime?.toDate ? pShifts[pShifts.length-1].startTime.toDate() : new Date()) : from;
             const pEnd   = pShifts.length ? (pShifts[0].startTime?.toDate ? pShifts[0].startTime.toDate() : new Date()) : to;
-            await db.collection(payPath()).add({
-              employeeId:         emp._id,
-              employeeName:       emp.name || '',
-              employeeEmail:      emp.email || '',
-              periodKey:          periodKey,
-              periodStart:        firebase.firestore.Timestamp.fromDate(pStart),
-              periodEnd:          firebase.firestore.Timestamp.fromDate(pEnd),
-              salaryType:         emp.salaryType,
-              totalDurationMs:    pMs,
-              amount:             amount,
-              paidByOwner:        true,
-              receivedByEmployee: false,
-              paidAt:             firebase.firestore.FieldValue.serverTimestamp(),
+            await supabase.from('salary_payments').insert({
+              org_id:              state.empOrgId,
+              employee_id:         emp._id,
+              amount:              amount,
+              period_start:        pStart.toISOString().slice(0,10),
+              period_end:          pEnd.toISOString().slice(0,10),
+              received_by_employee: false,
             });
             await loadEmpDetail(emp);
           };
@@ -12464,11 +12237,11 @@
         const data = { name, email, role, contact, salaryType, salaryRate, active: true };
         let empId;
         if (isEdit) {
-          await db.collection(empPath()).doc(existing._id).update(data);
+          { const _ud={}; if(data.name)_ud.name=data.name; if(data.email)_ud.email=data.email; if(data.role)_ud.role=data.role; if(data.salary!==undefined)_ud.salary=data.salary; if(data.salaryType)_ud.salary_type=data.salaryType; if(data.permissions)_ud.permissions=data.permissions; if(data.active!==undefined)_ud.active=data.active; await supabase.from('org_employees').update(_ud).eq('id',existing._id); }
           empId = existing._id;
         } else {
-          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-          const ref = await db.collection(empPath()).add(data);
+          const { data: _empNew } = await supabase.from('org_employees').insert({ org_id: state.empOrgId, name: data.name||'', email: data.email||'', role: data.role||'employee', salary: data.salary||0, salary_type: data.salaryType||'monthly', permissions: data.permissions||{}, active: true }).select().single();
+          const ref = { id: _empNew?.id };
           empId = ref.id;
         }
         // Write/update employeeLinks so the cashier can log in without collectionGroup query
@@ -12481,13 +12254,11 @@
         document.getElementById('toggleEmpActive').onclick = async () => {
           const newActive = existing.active === false;
           if (!confirm(newActive ? 'Re-activate this employee?' : 'Deactivate this employee?')) return;
-          await db.collection(empPath()).doc(existing._id).update({ active: newActive });
+          await supabase.from('org_employees').update({ active: newActive }).eq('id', existing._id);
           await writeEmployeeLink({ email: existing.email, active: newActive }, existing._id);
           // Also update employeeUids active flag (best-effort)
           try {
-            const euSnap = await db.collection('employeeUids')
-              .where('employeeId','==',existing._id).limit(1).get();
-            if (!euSnap.empty) await euSnap.docs[0].ref.update({ active: newActive });
+            await supabase.from('employee_uids').update({ active: newActive }).eq('employee_id', existing._id).catch(()=>{});
           } catch(e) {}
           modal.remove();
           await refreshEmployeeList();
@@ -12496,10 +12267,10 @@
           if (!confirm(`Permanently delete ${existing.name}? This cannot be undone. All their shifts and salary records will remain but the cashier account will be removed.`)) return;
           try {
             // Delete the cashier doc
-            await db.collection(empPath()).doc(existing._id).delete();
+            await supabase.from('org_employees').delete().eq('id', existing._id);
             // Delete the employeeLinks doc so they can't log in
             const linkKey = emailToKey(existing.email);
-            try { await db.collection('employeeLinks').doc(linkKey).delete(); } catch(e) {}
+            await supabase.from('employee_links').delete().eq('link_key', linkKey).catch(()=>{});
             modal.remove();
             await refreshEmployeeList();
           } catch(e) {
@@ -12521,7 +12292,7 @@
         const [cashiers, allShifts, allPayments] = await Promise.all([
           fetchEmployees(),
           fetchShifts(fromDate, toDate, null),
-          db.collection(payPath()).get().then(s => s.docs.map(d => ({_id:d.id,...d.data()}))).catch(()=>[]),
+          supabase.from('salary_payments').select('*').eq('org_id', state.empOrgId).then(({data:_p})=>(_p||[]).map(r=>({_id:r.id,employeeId:r.employee_id,amount:r.amount,periodStart:r.period_start,periodEnd:r.period_end,receivedByEmployee:r.received_by_employee,receivedAt:r.received_at,paidAt:r.created_at}))).catch(()=>[]),
         ]);
         let total = 0, paid = 0, unpaid = 0;
         const empDetails = cashiers.map(emp => {
@@ -12566,28 +12337,27 @@
       // Employees can see payment methods (needed for billing dropdown) but not full CF data
       var isEmployee = state.empRole === 'employee';
       try {
-        // Always load payment methods — needed for billing panel for all roles
-        var pmSnap = await db.collection(cfPath('paymentMethods')).get();
-        cfPaymentMethods = pmSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+        const _cuid = effectiveOwnerUid();
+        // Always load payment methods
+        const { data: _pmRows } = await supabase.from('cf_payment_methods').select('*').eq('owner_uid', _cuid);
+        cfPaymentMethods = (_pmRows||[]).map(r => ({ id: r.id, name: r.name }));
         if (cfPaymentMethods.length > 0) {
           var _initBest = cfGetMostUsedPaymentMethod(state.selectedCompanyId);
           if (!state.selectedPaymentMethodId || !cfPaymentMethods.find(p=>p.id===state.selectedPaymentMethodId)) {
             state.selectedPaymentMethodId = _initBest || cfPaymentMethods[0].id;
           }
         }
-        if (isEmployee) return; // employees only need payment methods
-        // Full load for managers/owners
-        var [txSnap, shSnap, opSnap, divSnap] = await Promise.all([
-          db.collection(cfPath('transactions')).get(),
-          db.collection(cfPath('shareholders')).get(),
-          db.collection(cfPath('opExpenses')).get(),
-          db.collection(cfPath('dividendPayments')).get(),
+        if (isEmployee) return;
+        const [{ data: _txRows }, { data: _shRows }, { data: _opRows }, { data: _divRows }] = await Promise.all([
+          supabase.from('cf_transactions').select('*').eq('owner_uid', _cuid),
+          supabase.from('cf_shareholders').select('*').eq('owner_uid', _cuid),
+          supabase.from('cf_op_expenses').select('*').eq('owner_uid', _cuid),
+          supabase.from('cf_dividend_payments').select('*').eq('owner_uid', _cuid),
         ]);
-        cfTransactions      = txSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-        cfShareholders      = shSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-        cfOperatingExpenses = opSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-        cfDividendPayments  = divSnap.docs.map(d => Object.assign({ id: d.id }, d.data()));
-        // Auto-sync historical bills that were never tracked as CF transactions
+        cfTransactions      = (_txRows||[]).map(r=>({ id:r.id, type:r.type, category:r.category, amount:r.amount, paymentMethodId:r.payment_method_id, companyId:r.company_id, companyName:r.company_name, date:r.date, billId:r.bill_id||'', note:r.note, synced:r.synced_from_bill||false }));
+        cfShareholders      = (_shRows||[]).map(r=>({ id:r.id, name:r.name, percentage:r.share_pct }));
+        cfOperatingExpenses = (_opRows||[]).map(r=>({ id:r.id, description:r.description, amount:r.amount, paid:r.paid, dueDate:r.due_date }));
+        cfDividendPayments  = (_divRows||[]).map(r=>({ id:r.id, shareholderId:r.shareholder_id, amount:r.amount, date:r.date }));
         cfSyncBillsToTransactions();
       } catch(e) { console.warn('[CF] load error:', e.message); }
     }
@@ -12635,12 +12405,11 @@
       // Check if transaction for this bill already exists (prevent duplicates on retry)
       var existing = cfTransactions.find(t => t.billId === tx.billId && tx.billId !== '');
       if (existing) {
-        db.doc(cfPath('transactions') + '/' + existing.id).update(tx).catch(()=>{});
+        const _txup = { type:tx.type, category:tx.category, amount:tx.amount, payment_method_id:tx.paymentMethodId||null, company_id:tx.companyId||null, company_name:tx.companyName||'', date:tx.date, bill_id:tx.billId||null, note:tx.note||'' };
+        supabase.from('cf_transactions').update(_txup).eq('id', existing.id).then(()=>{}).catch(()=>{});
         Object.assign(existing, tx);
       } else {
-        db.collection(cfPath('transactions')).add(tx).then(ref => {
-          cfTransactions.push(Object.assign({ id: ref.id }, tx));
-        }).catch(()=>{});
+        supabase.from('cf_transactions').insert({ owner_uid:effectiveOwnerUid(), type:tx.type, category:tx.category, amount:tx.amount, payment_method_id:tx.paymentMethodId||null, company_id:tx.companyId||null, company_name:tx.companyName||'', date:tx.date, bill_id:tx.billId||null, note:tx.note||'', synced_from_bill:false }).select().single().then(({data:_r})=>{ if(_r) cfTransactions.push(Object.assign({ id:_r.id }, tx)); }).catch(()=>{});
       }
     }
 
@@ -12659,9 +12428,7 @@
         billId: '',
         note: 'Extra payment – ' + (companyName || '')
       };
-      db.collection(cfPath('transactions')).add(tx).then(ref => {
-        cfTransactions.push(Object.assign({ id: ref.id }, tx));
-      }).catch(e => { console.error('cfRecordExtraPayment:', e); });
+      supabase.from('cf_transactions').insert({ owner_uid:effectiveOwnerUid(), type:tx.type, category:tx.category, amount:tx.amount, payment_method_id:tx.paymentMethodId||null, company_id:tx.companyId||null, company_name:tx.companyName||'', date:tx.date, bill_id:null, note:tx.note||'', synced_from_bill:false }).select().single().then(({data:_r})=>{ if(_r) cfTransactions.push(Object.assign({id:_r.id},tx)); }).catch(e=>{ console.error('cfRecordExtraPayment:', e); });
     }
 
     // ── Sync all existing bills into cfTransactions (backfill) ──
@@ -12709,9 +12476,7 @@
         cfTransactions.push(localTx);
         // Persist to Firestore async, then update the local id
         writes.push(
-          db.collection(cfPath('transactions')).add(tx).then(function(ref) {
-            localTx.id = ref.id;
-          }).catch(function(){})
+          supabase.from('cf_transactions').insert({ owner_uid:effectiveOwnerUid(), type:tx.type, category:tx.category, amount:tx.amount, payment_method_id:tx.paymentMethodId||null, company_id:tx.companyId||null, company_name:tx.companyName||'', date:tx.date, bill_id:tx.billId||null, note:tx.note||'', synced_from_bill:true }).select().single().then(function({data:_r}){ if(_r) localTx.id=_r.id; }).catch(function(){})
         );
       });
       if (writes.length > 0) {
@@ -13348,7 +13113,8 @@
         $('#cfAddPm').onclick = async () => {
           var name = ($('#cfPmName').value || '').trim();
           if (!name) { $('#cfPmName').focus(); return; }
-          var doc = await db.collection(cfPath('paymentMethods')).add({ name, createdAt: new Date().toISOString() });
+          var { data: _pmn } = await supabase.from('cf_payment_methods').insert({ owner_uid: effectiveOwnerUid(), name }).select().single();
+          var doc = { id: _pmn?.id };
           cfPaymentMethods.push({ id: doc.id, name, createdAt: new Date().toISOString() });
           var _pmEl = $('#cfPmName'); if (_pmEl) _pmEl.value = '';
           render();
@@ -13362,7 +13128,7 @@
           var newName = prompt('Edit payment method name:', pm.name);
           if (!newName || !newName.trim()) return;
           newName = newName.trim();
-          await db.doc(cfPath('paymentMethods') + '/' + pm.id).update({ name: newName });
+          await supabase.from('cf_payment_methods').update({ name: newName }).eq('id', pm.id);
           pm.name = newName;
           render();
         };
@@ -13373,7 +13139,7 @@
           var pm = cfPaymentMethods.find(p => p.id === btn.dataset.pmid);
           if (!pm) return;
           if (!confirm('Delete payment method "' + pm.name + '"?')) return;
-          await db.doc(cfPath('paymentMethods') + '/' + pm.id).delete();
+          await supabase.from('cf_payment_methods').delete().eq('id', pm.id);
           cfPaymentMethods = cfPaymentMethods.filter(p => p.id !== pm.id);
           render();
         };
@@ -13426,7 +13192,8 @@
           if (!title) { $('#cfExpTitle').focus(); return; }
           if (!amount || isNaN(amount) || amount <= 0) { $('#cfExpAmount').focus(); return; }
           var rec = { title, amount: parseFloat(amount.toFixed(2)), date, createdAt: new Date().toISOString() };
-          var doc = await db.collection(cfPath('opExpenses')).add(rec);
+          var { data: _ope } = await supabase.from('cf_op_expenses').insert({ owner_uid: effectiveOwnerUid(), description: rec.description, amount: rec.amount, paid: rec.paid||false, due_date: rec.dueDate||null }).select().single();
+          var doc = { id: _ope?.id };
           cfOperatingExpenses.push(Object.assign({ id: doc.id }, rec));
           var _etEl=$('#cfExpTitle'); if(_etEl) _etEl.value='';
           var _eaEl=$('#cfExpAmount'); if(_eaEl) _eaEl.value='';
@@ -13439,7 +13206,7 @@
           var exp = cfOperatingExpenses.find(e => e.id === btn.dataset.expid);
           if (!exp) return;
           if (!confirm('Delete expense "' + exp.title + '"?')) return;
-          await db.doc(cfPath('opExpenses') + '/' + exp.id).delete();
+          await supabase.from('cf_op_expenses').delete().eq('id', exp.id);
           cfOperatingExpenses = cfOperatingExpenses.filter(e => e.id !== exp.id);
           render();
         };
@@ -13457,7 +13224,7 @@
             // Undo — delete the payment record
             if (!confirm('Undo dividend payment for this shareholder?')) return;
             if (payId) {
-              await db.doc(cfPath('dividendPayments') + '/' + payId).delete().catch(() => {});
+              await supabase.from('cf_dividend_payments').delete().eq('id', payId).catch(()=>{});
               cfDividendPayments = cfDividendPayments.filter(p => p.id !== payId);
             }
           } else {
@@ -13465,7 +13232,8 @@
             var rec = { shareholderId: shId, amount, period, paidAt: new Date().toISOString() };
             var sh = cfShareholders.find(s => s.id === shId);
             rec.shareholderName = sh ? sh.name : '';
-            var doc = await db.collection(cfPath('dividendPayments')).add(rec).catch(() => null);
+            var { data: _dp } = await supabase.from('cf_dividend_payments').insert({ owner_uid: effectiveOwnerUid(), shareholder_id: rec.shareholderId||null, amount: rec.amount, date: rec.date }).select().single().catch(()=>({data:null}));
+            var doc = { id: _dp?.id };
             if (doc) cfDividendPayments.push(Object.assign({ id: doc.id }, rec));
           }
           render();
@@ -13482,7 +13250,8 @@
           var totalPct = cfShareholders.reduce((s, h) => s + (h.percentage || 0), 0);
           if (totalPct + pct > 100.01) { alert('Total shareholding would exceed 100%. Current total: ' + totalPct.toFixed(1) + '%'); return; }
           var rec = { name, percentage: pct, createdAt: new Date().toISOString() };
-          var doc = await db.collection(cfPath('shareholders')).add(rec);
+          var { data: _sh } = await supabase.from('cf_shareholders').insert({ owner_uid: effectiveOwnerUid(), name: rec.name, share_pct: rec.percentage||0 }).select().single();
+          var doc = { id: _sh?.id };
           cfShareholders.push(Object.assign({ id: doc.id }, rec));
           var _snEl=$('#cfShName'); if(_snEl) _snEl.value='';
           var _spEl=$('#cfShPct'); if(_spEl) _spEl.value='';
@@ -13501,7 +13270,7 @@
           if (isNaN(newPct) || newPct <= 0 || newPct > 100) { alert('Invalid percentage'); return; }
           var otherTotal = cfShareholders.filter(s => s.id !== sh.id).reduce((s, h) => s + (h.percentage || 0), 0);
           if (otherTotal + newPct > 100.01) { alert('Total shareholding would exceed 100%'); return; }
-          await db.doc(cfPath('shareholders') + '/' + sh.id).update({ name: newName.trim(), percentage: newPct });
+          await supabase.from('cf_shareholders').update({ name: newName.trim(), share_pct: newPct }).eq('id', sh.id);
           sh.name = newName.trim();
           sh.percentage = newPct;
           render();
@@ -13513,7 +13282,7 @@
           var sh = cfShareholders.find(s => s.id === btn.dataset.shid);
           if (!sh) return;
           if (!confirm('Remove shareholder "' + sh.name + '"?')) return;
-          await db.doc(cfPath('shareholders') + '/' + sh.id).delete();
+          await supabase.from('cf_shareholders').delete().eq('id', sh.id);
           cfShareholders = cfShareholders.filter(s => s.id !== sh.id);
           render();
         };
