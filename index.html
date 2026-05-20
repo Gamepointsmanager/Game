@@ -1331,7 +1331,7 @@
       employeeUids:'employee_uids', organizations:'organizations',
       companies:'companies', masterGames:'master_games', bills:'bills',
       assignedGames:'assigned_games', usernames:'company_usernames',
-      employees:'employees', shifts:'shifts', salaryPayments:'salary_payments',
+      employees:'org_employees', shifts:'shifts', salaryPayments:'salary_payments',
       cf_transactions:'cf_transactions', cf_paymentMethods:'cf_payment_methods',
       cf_shareholders:'cf_shareholders', cf_opExpenses:'cf_op_expenses',
       cf_dividendPayments:'cf_dividend_payments',
@@ -1463,9 +1463,8 @@
         const subCol = parts[2] || null;
         const subId  = parts[3] || null;
         if (!subCol) {
-          // organizations/{orgId} — look up by owner_uid since orgId = user uuid
-          const ref = new _SBRef('organizations', null);
-          if (orgId) ref._w.push({f:'owner_uid', op:'eq', v:orgId});
+          // organizations/{orgId} — PK is 'id' which equals the owner's uid
+          const ref = new _SBRef('organizations', orgId);
           return ref;
         }
         // organizations/{orgId}/employees etc
@@ -2997,7 +2996,6 @@
             <div id="shiftCardBottomSep" style="height:1px;background:linear-gradient(to right,transparent,rgba(6,182,212,0.25),transparent);margin:4px 0 8px;display:none"></div>
             <div class="account-panel-item" id="menuInvoiceSettings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> Invoice Settings</div>
             <div class="account-panel-divider"></div>
-            ${state.user?.email === ADMIN_EMAIL ? `<div class="account-panel-item" id="menuPaymentSettings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg> Payment Settings</div><div class="account-panel-divider"></div>` : ''}
             <div class="account-panel-item" id="menuExport"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Export Data</div>
             <div class="account-panel-item" id="menuImport"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Import Data</div>
             <div class="account-panel-item" id="menuClearBillRange" style="color:#fbbf24;display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Clear Bills by Date Range</div>
@@ -3139,9 +3137,7 @@
 
       $('#menuGenReport').onclick = () => { closePanel(); showReportDatePicker('all'); };
       $('#menuInvoiceSettings').onclick = () => { closePanel(); showInvoiceSettingsModal(); };
-        if (state.user?.email === ADMIN_EMAIL && $('#menuPaymentSettings')) {
-          $('#menuPaymentSettings').onclick = () => { closePanel(); showPaymentSettingsModal(); };
-        }
+
       $('#menuGlobalAnalytics').onclick = () => { closePanel(); state.view = 'globalAnalytics'; render(); };
       // Cash Flow Management navigation
       if ($('#menuCashFlow')) {
@@ -11019,19 +11015,16 @@
     }
 
     // --- Ensure org document exists for owner ---
-    async function ensureOrgDoc() {
-      const ref = db.collection('organizations').doc(state.user.uid);
-      const snap = await ref.get();
-      if (!snap.exists) {
-        await ref.set({
-          ownerUid: state.user.uid,
-          ownerEmail: state.user.email,
-          ownerName: state.user.displayName || '',
-          createdAt: _serverTs(),
-        });
+      async function ensureOrgDoc() {
+        const { data: existing } = await _supabase.from('organizations').select('id').eq('id', state.user.uid).maybeSingle();
+        if (!existing) {
+          const { error } = await _supabase.from('organizations').upsert({
+            id: state.user.uid,
+            name: state.user.displayName || state.user.email || '',
+          }, { onConflict: 'id' });
+          if (error) console.warn('[ensureOrgDoc]', error.message);
+        }
       }
-    }
-
     // --- Salary calculation helpers ---
     function hoursFromMs(ms) { return ms / 3600000; }
 
@@ -14224,13 +14217,7 @@
       }
     }
 
-    // ============================================================
-    // PWA Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'})
-        .then(reg => { console.log('[SW] registered:', reg.scope); reg.update(); })
-        .catch(e => console.log('[SW] failed:', e.message));
-    }
+    // ServiceWorker disabled — sw.js not deployed
     // Initial render
     render();
   </script>
