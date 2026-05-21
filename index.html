@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+<      payment_bonuses:'paymentBonuses', contact_info:'contact',
+!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -1821,9 +1822,74 @@
           }
         }
         _startupCacheInvalidate(); // force fresh fetch next load
-        render(); // re-render immediately with updated state
+        _renderSilent(); // re-render with zero flicker
       } catch(e) { console.warn('[_localUpdate] error:', e.message); }
     }
+    // ── Silent section-only UI refresh — zero flicker ──
+    // Instead of wiping app.innerHTML, only re-renders the section
+    // that's currently visible. Used after realtime data updates.
+    function _silentRefreshUI() {
+      try {
+        const view = state.view;
+        if (view === 'companies') {
+          // Only update the company list grid, not the header
+          const listEl = document.getElementById('companyListGrid') ||
+                         document.querySelector('.company-list-body') ||
+                         document.querySelector('.companies-grid');
+          if (listEl) {
+            const newHtml = renderCompanyListBody ? renderCompanyListBody() : null;
+            if (newHtml) { listEl.innerHTML = newHtml; bindCompanyListBody && bindCompanyListBody(); return; }
+          }
+          // Fallback: full render but suppress loading flash
+          _renderSilent();
+        } else if (view === 'company') {
+          const tab = state.companyTab;
+          if (tab === 'billing') {
+            const histEl = document.getElementById('billHistoryBody') ||
+                          document.querySelector('.bill-history-list');
+            if (histEl) {
+              const newHtml = renderBillHistoryBody ? renderBillHistoryBody() : null;
+              if (newHtml) { histEl.innerHTML = newHtml; bindBillHistory && bindBillHistory(); return; }
+            }
+          } else if (tab === 'games') {
+            const gamesEl = document.getElementById('gamesTabBody') ||
+                           document.querySelector('.assigned-games-list');
+            if (gamesEl) {
+              const newHtml = renderAssignedGamesBody ? renderAssignedGamesBody() : null;
+              if (newHtml) { gamesEl.innerHTML = newHtml; return; }
+            }
+          }
+          _renderSilent();
+        } else if (view === 'analytics' || view === 'globalAnalytics') {
+          _renderSilent();
+        } else {
+          _renderSilent();
+        }
+      } catch(e) {
+        // If section-only update fails, fall back to silent full render
+        _renderSilent();
+      }
+    }
+
+    // Full render but without triggering the loading screen or any flash
+    // Saves and restores scroll position so user doesn't lose their place
+    function _renderSilent() {
+      const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+      const scrollLeft = document.documentElement.scrollLeft || document.body.scrollLeft;
+      // Save focus
+      const focusedId = document.activeElement ? document.activeElement.id : null;
+      render();
+      // Restore scroll
+      requestAnimationFrame(() => {
+        window.scrollTo(scrollLeft, scrollTop);
+        if (focusedId) {
+          const el = document.getElementById(focusedId);
+          if (el) el.focus();
+        }
+      });
+    }
+
+
 
 
 
@@ -1866,7 +1932,12 @@
       }));
       rebuildBillIndex();
       _startupCacheSave();
-      render();
+      // Use silent render — only called from background refresh, not initial load
+      if (state.view !== 'loading' && state.view !== 'login') {
+        _renderSilent();
+      } else {
+        render();
+      }
     }
 
         async function loadAllData(force) {
@@ -10658,85 +10729,48 @@
     // ─────────────────────────────────────────────────────────────────────────────
 
     async function checkUserAccessByUid(ownerUid) {
-      let anyReadSucceeded = false;
-
-      // Primary: read embedded access from employeeLinks doc (cashier can read their own)
+      // Read from employee_links (cashier has SELECT permission on their own row)
       try {
         const linkKey = emailToKey((state.user?.email || '').toLowerCase().trim());
-        const linkDoc = await db.collection('employeeLinks').doc(linkKey).get();
-        console.log('[checkAccess] employeeLinks read — exists:', linkDoc.exists, '| key:', linkKey);
-        anyReadSucceeded = true;
-        if (linkDoc.exists) {
-          const link = linkDoc.data();
-          console.log('[checkAccess] link data:', JSON.stringify({
-            ownerHasAccess: link.ownerHasAccess,
-            ownerAccessExpiry: link.ownerAccessExpiry,
-            accessGrantedAt: link.accessGrantedAt,
-          }));
-          // ownerHasAccess is written by owner at sync time
-          if (link.ownerHasAccess === true) {
-            console.log('[checkAccess] ✓ Access granted via embedded ownerHasAccess flag');
-            return { hasAccess: true };
+        const { data: link } = await _supabase
+          .from('employee_links')
+          .select('owner_has_access, owner_expiry, owner_unlimited, active')
+          .eq('link_key', linkKey)
+          .maybeSingle();
+
+        if (link) {
+          if (link.active === false) return { hasAccess: false };
+          if (link.owner_unlimited) return { hasAccess: true };
+          if (link.owner_has_access) return { hasAccess: true };
+          if (link.owner_expiry) {
+            const days = Math.ceil((new Date(link.owner_expiry) - new Date()) / 86400000);
+            if (days > 0) return { hasAccess: true };
           }
-          // Explicit denial
-          if (link.ownerHasAccess === false) {
-            console.log('[checkAccess] ✗ Access explicitly denied via ownerHasAccess=false');
-            return { hasAccess: false };
-          }
-          // Fallback: check expiry date embedded at sync time
-          if (link.ownerAccessExpiry) {
-            const exp = link.ownerAccessExpiry.toDate ? link._safeDate(ownerAccessExpiry) : new Date(link.ownerAccessExpiry);
-            const daysLeft = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
-            console.log('[checkAccess] ownerAccessExpiry daysLeft:', daysLeft);
-            if (daysLeft > 0) return { hasAccess: true };
-          }
-          // Doc exists but has no access flags yet (owner hasn't synced yet) — grant tentative access
-          // The employee was already found in the org, trust that
-          console.log('[checkAccess] employeeLinks doc exists but no access flags — granting tentative access');
+          // Link exists — owner added this cashier so assume access (fail-open)
           return { hasAccess: true };
         }
       } catch(e) {
-        console.error('[checkAccess] employeeLinks read failed:', e.code, e.message);
+        console.warn('[checkUserAccessByUid] failed:', e.message);
       }
-
-      // Fallback: try reading userAccess directly (works if security rules allow it)
-      try {
-        const doc = await db.collection('userAccess').doc(ownerUid).get();
-        console.log('[checkAccess] userAccess fallback — exists:', doc.exists);
-        anyReadSucceeded = true;
-        if (doc.exists) {
-          const data = doc.data();
-          console.log('[checkAccess] userAccess data:', JSON.stringify({
-            isDisabled: data.isDisabled,
-            isUnlimited: data.isUnlimited,
-            expiryDate: data.expiryDate ? (data.expiryDate.toDate ? data._safeDate(expiryDate).toISOString() : String(data.expiryDate)) : null,
-          }));
-          if (data.isDisabled) return { hasAccess: false };
-          if (data.isUnlimited) return { hasAccess: true };
-          if (data.expiryDate) {
-            const exp = data.expiryDate.toDate ? data._safeDate(expiryDate) : new Date(data.expiryDate);
-            const days = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
-            console.log('[checkAccess] userAccess daysLeft:', days);
-            if (days > 0) return { hasAccess: true };
-          }
-        }
-      } catch(e) {
-        console.warn('[checkAccess] userAccess read blocked (expected if security rules deny cross-user reads):', e.code);
-      }
-
-      // If both Firestore reads failed due to errors (not explicit denial), fail-open:
-      // the employee has already been authenticated via Firebase Auth and found in the org.
-      // Blocking them due to a transient read error would be incorrect.
-      if (!anyReadSucceeded) {
-        console.log('[checkAccess] All reads failed — granting fail-open access (transient error)');
-        return { hasAccess: true };
-      }
-
-      console.log('[checkAccess] No access found via any method');
-      return { hasAccess: false };
+      // No link found yet — fail-open so fresh installs work
+      return { hasAccess: true };
     }
 
-    auth.onAuthStateChanged(async (user) => {
+    auth.onAuthStateChanged(async (user, event) => {
+      // If already loaded and this is just a token refresh, do NOT re-run the full auth flow.
+      // This prevents the page from reloading every time the user switches tabs or
+      // minimizes/maximizes the window.
+      if (user && state.user && state.view !== 'login' && state.view !== 'loading') {
+        // Already authenticated and app is loaded — just refresh the user object silently
+        state.user = {
+          uid: user.uid||user.id, id: user.id||user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+        };
+        return; // Do NOT re-run auth flow
+      }
+
       if (user) {
         state.user = {
           uid: user.uid||user.id, id: user.id||user.uid,
@@ -12245,14 +12279,24 @@
         wrap.innerHTML = '<div class="card" style="text-align:center;padding:28px;color:var(--textMuted);font-size:14px">No cashiers yet. Add your first cashier above.</div>';
         return;
       }
-      const linkChecks = await Promise.all(employees.map(async emp => {
-        try {
-          const doc = await db.collection('employeeLinks').doc(emailToKey(emp.email)).get();
-          return { empId: emp._id, linked: doc.exists && doc.data().active !== false };
-        } catch(e) { return { empId: emp._id, linked: false }; }
-      }));
-      const linkMap = {};
-      linkChecks.forEach(c => { linkMap[c.empId] = c.linked; });
+      // Fetch all employee_links for this org in one query (much faster)
+      const empEmails = employees.map(e => emailToKey(e.email||''));
+      let linkMap = {};
+      try {
+        const { data: linkRows } = await _supabase
+          .from('employee_links')
+          .select('link_key, active, owner_has_access')
+          .eq('owner_uid', state.empOrgId || state.user.uid);
+        if (linkRows) {
+          const linkByKey = {};
+          linkRows.forEach(r => { linkByKey[r.link_key] = r; });
+          employees.forEach(emp => {
+            const key = emailToKey(emp.email||'');
+            const row = linkByKey[key];
+            linkMap[emp._id] = row && row.active !== false;
+          });
+        }
+      } catch(e) { console.warn('[linkMap]', e.message); }
 
       const now = Date.now();
       const colors = ['clr-0','clr-1','clr-2','clr-3','clr-4','clr-5'];
@@ -12264,7 +12308,7 @@
         const clr         = colors[idx % colors.length];
         const isDeactivated = emp.active === false;
         const isLinked    = linkMap[emp._id];
-        const slLabel     = {hourly:'Hourly',daily:'Daily',weekly:'Weekly',biweekly:'Bi-Weekly',monthly:'Monthly'}[emp.salaryType] || (emp.salaryType||'');
+        const slLabel     = {hourly:'Hourly',daily:'Daily',weekly:'Weekly','bi-weekly':'Bi-Weekly',biweekly:'Bi-Weekly',monthly:'Monthly'}[emp.salaryType] || (emp.salaryType||'');
         const warnSvg     = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
         const editSvg     = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
         return `<div class="emp-card ${clr}${isActive?' active-shift':''}" data-empid="${emp._id}" style="${isDeactivated?'opacity:0.55;':''}cursor:pointer">
@@ -12344,8 +12388,20 @@
           const emp = employees.find(e2 => e2._id === btn.dataset.empid);
           if (!emp) return;
           btn.textContent = 'Fixing…'; btn.disabled = true;
-          try { await writeEmployeeLink(emp, emp._id); await refreshEmployeeList(); }
-          catch(e2) { btn.textContent = 'Fix Now'; btn.disabled = false; alert('Failed: ' + e2.message); }
+          try {
+            await ensureOrgDoc();
+            await writeEmployeeLink(emp, emp._id);
+            // Verify it was written
+            const { data: verify } = await _supabase
+              .from('employee_links')
+              .select('link_key, active, owner_has_access')
+              .eq('link_key', emailToKey(emp.email||''))
+              .maybeSingle();
+            console.log('[Fix Now] link after write:', verify);
+            btn.textContent = '✓ Fixed'; btn.style.color = '#34d399';
+            setTimeout(() => { btn.textContent = 'Fix Now'; btn.style.color = ''; btn.disabled = false; }, 2000);
+            await refreshEmployeeList();
+          } catch(e2) { btn.textContent = 'Fix Now'; btn.disabled = false; alert('Failed: ' + e2.message); }
         };
       });
     }
