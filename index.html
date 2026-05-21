@@ -1767,6 +1767,66 @@
       try { localStorage.removeItem('gb_startup_'+dataOwnerUid()); } catch(e) {}
     }
 
+    // ── Instant local state update after writes (no page reload needed) ──
+    // Call this after every insert/update/delete to patch state immediately.
+    function _localUpdate(type, entity, data) {
+      // type: 'upsert' | 'delete'
+      // entity: 'company' | 'masterGame' | 'bill' | 'assignedGame' | 'username'
+      // data: the object (must have _id for upsert/delete)
+      try {
+        if (entity === 'masterGame') {
+          if (type === 'delete') {
+            state.masterGames = state.masterGames.filter(m => m._id !== data._id);
+          } else {
+            const idx = state.masterGames.findIndex(m => m._id === data._id);
+            if (idx >= 0) Object.assign(state.masterGames[idx], data);
+            else state.masterGames.unshift(data);
+          }
+        } else if (entity === 'company') {
+          if (type === 'delete') {
+            delete state.companies[data._id];
+          } else {
+            if (!state.companies[data._id]) state.companies[data._id] = { assignedGames:[], usernames:[] };
+            Object.assign(state.companies[data._id], data);
+          }
+        } else if (entity === 'bill') {
+          if (type === 'delete') {
+            state.bills = state.bills.filter(b => b._id !== data._id);
+          } else {
+            const idx = state.bills.findIndex(b => b._id === data._id);
+            if (idx >= 0) Object.assign(state.bills[idx], data);
+            else state.bills.unshift(data);
+          }
+        } else if (entity === 'assignedGame') {
+          const comp = state.companies[data.companyId];
+          if (comp) {
+            if (type === 'delete') {
+              comp.assignedGames = comp.assignedGames.filter(ag => ag._id !== data._id);
+            } else {
+              const idx = comp.assignedGames.findIndex(ag => ag._id === data._id);
+              if (idx >= 0) Object.assign(comp.assignedGames[idx], data);
+              else comp.assignedGames.push(data);
+            }
+          }
+        } else if (entity === 'username') {
+          const comp = state.companies[data.companyId];
+          if (comp) {
+            if (type === 'delete') {
+              comp.usernames = comp.usernames.filter(u => u._id !== data._id);
+            } else {
+              const idx = comp.usernames.findIndex(u => u._id === data._id);
+              if (idx >= 0) Object.assign(comp.usernames[idx], data);
+              else comp.usernames.push(data);
+            }
+          }
+        }
+        _startupCacheInvalidate(); // force fresh fetch next load
+        render(); // re-render immediately with updated state
+      } catch(e) { console.warn('[_localUpdate] error:', e.message); }
+    }
+
+
+
     // ── Direct parallel Supabase fetch (bypasses shim for performance) ──
     async function _loadAllDataFresh(uid) {
       if (!uid) return;
@@ -1836,36 +1896,64 @@
     function setupListeners() {
       stopListeners();
       if (!state.user) return;
-      const bp = userPath();
-      // Listen to master games
-      // MASTER GAMES: No real-time listener — managed locally after writes.
-      // Each snapshot re-reads ALL master games. We update state.masterGames locally on save.
-      // Listen to bills (latest 100)
-      // BILLS: No real-time listener — we manage state locally after writes.
-      // onSnapshot on bills re-reads ALL bills every time ANY bill changes = massive reads.
-      // Instead: one-time load at startup, then update state locally on every save/delete.
-      // Listen to companies
-      // COMPANIES: No real-time listener — managed locally after writes.
-      // companies.onSnapshot re-reads ALL companies on every change.
-      // Instead: loaded once at startup, updated locally on add/edit/delete.
+      const uid = dataOwnerUid();
+      if (!uid) return;
 
-      // Run migration for companies missing codes — only once at startup using already-loaded data
-      var _companiesMigrationDone = false;
-      (async function migrateCompanyCodes() {
-        if (_companiesMigrationDone) return;
-        _companiesMigrationDone = true;
-        var companiesNeedingCodes = Object.entries(state.companies)
-          .filter(function(e){ return !e[1].companyCode; }).map(function(e){ return e[0]; });
-        if (companiesNeedingCodes.length === 0) return;
-        var firestoreCodes = new Set(Object.values(state.companies).map(function(c){ return c.companyCode; }).filter(Boolean));
-        for (var _mci = 0; _mci < companiesNeedingCodes.length; _mci++) {
-          var _mid = companiesNeedingCodes[_mci];
+      // ── Supabase Realtime subscriptions ──
+      // On any change: silently re-fetch fresh data and patch state without
+      // showing a loading screen or blank page. User never notices.
+
+      function _silentRefresh() {
+        _loadAllDataFresh(uid).catch(e => console.warn('[realtime refresh]', e.message));
+      }
+
+      // Master games channel
+      const _mgCh = _supabase.channel('rt_mg_' + uid)
+        .on('postgres_changes', { event:'*', schema:'public', table:'master_games', filter:'owner_uid=eq.'+uid },
+          () => _silentRefresh())
+        .subscribe();
+      _unsubs.push(() => _supabase.removeChannel(_mgCh));
+
+      // Bills channel
+      const _bCh = _supabase.channel('rt_bills_' + uid)
+        .on('postgres_changes', { event:'*', schema:'public', table:'bills', filter:'owner_uid=eq.'+uid },
+          () => _silentRefresh())
+        .subscribe();
+      _unsubs.push(() => _supabase.removeChannel(_bCh));
+
+      // Companies channel
+      const _cCh = _supabase.channel('rt_co_' + uid)
+        .on('postgres_changes', { event:'*', schema:'public', table:'companies', filter:'owner_uid=eq.'+uid },
+          () => _silentRefresh())
+        .subscribe();
+      _unsubs.push(() => _supabase.removeChannel(_cCh));
+
+      // Assigned games channel
+      const _agCh = _supabase.channel('rt_ag_' + uid)
+        .on('postgres_changes', { event:'*', schema:'public', table:'assigned_games', filter:'owner_uid=eq.'+uid },
+          () => _silentRefresh())
+        .subscribe();
+      _unsubs.push(() => _supabase.removeChannel(_agCh));
+
+      // Company usernames channel
+      const _unCh = _supabase.channel('rt_un_' + uid)
+        .on('postgres_changes', { event:'*', schema:'public', table:'company_usernames', filter:'owner_uid=eq.'+uid },
+          () => _silentRefresh())
+        .subscribe();
+      _unsubs.push(() => _supabase.removeChannel(_unCh));
+
+      // Migrate companies missing codes (one-time, silent)
+      (async function() {
+        var needCodes = Object.entries(state.companies).filter(e => !e[1].companyCode).map(e => e[0]);
+        if (!needCodes.length) return;
+        var usedCodes = new Set(Object.values(state.companies).map(c => c.companyCode).filter(Boolean));
+        for (var id of needCodes) {
           try {
-            var newCode = await generateCompanyCodeFromSet(firestoreCodes);
-            firestoreCodes.add(newCode);
-            state.companies[_mid].companyCode = newCode;
-            await db.doc(bp+'/companies/'+_mid).update({ companyCode: newCode });
-          } catch(e) { /* silent */ }
+            var code = await generateCompanyCodeFromSet(usedCodes);
+            usedCodes.add(code);
+            state.companies[id].companyCode = code;
+            await _supabase.from('companies').update({ company_code: code }).eq('id', id);
+          } catch(e) {}
         }
       })();
     }
@@ -4075,7 +4163,9 @@
           const pts = parseFloat($('#mgNewPoints').value) || 0;
           if (!name) return;
           const costRate = parseFloat($('#mgNewCostRate').value) || 0;
-          await trackedWrite(() => db.collection(`${userPath()}/masterGames`).add({ name, totalPoints: pts, remainingPoints: pts, costRate }));
+          const {data:_mgNew} = await _supabase.from('master_games').insert({owner_uid:dataOwnerUid(),name,total_points:pts,remaining_points:pts,cost_rate:costRate}).select().single();
+        if(_mgNew) _localUpdate('upsert','masterGame',{_id:_mgNew.id,name,totalPoints:pts,remainingPoints:pts,costRate,orderedPoints:0,billingHistory:[],stockHistory:[],assignedUsername:'',assignedLevel:'',highestLevel:''});
+        await trackedWrite(()=>Promise.resolve());
           $('#mgNewName').value = ''; $('#mgNewPoints').value = ''; if($('#mgNewCostRate'))$('#mgNewCostRate').value = '';
           renderMasterGamesList();
           bindMasterGameListEvents();
@@ -4961,6 +5051,7 @@
             if(ag){
               ag.rate=newRate;
               await _supabase.from('assigned_games').update({rate:newRate}).eq('id',ag._id);
+              _localUpdate('upsert','assignedGame',{_id:ag._id,companyId:comp._id,gameName:ag.gameName,rate:newRate});
               if(state.companies[comp._id])state.companies[comp._id].assignedGames=comp.assignedGames;
             } else {
               // Game not yet assigned — assign it with this rate
@@ -5417,7 +5508,12 @@
               ...(pm?{paymentMethodId:pm.id}:{})
             };
             const ref=await db.collection(userPath()+'/bills').add(bill);
-            // Do NOT push to state.bills manually — the onSnapshot listener
+            // Update local state immediately — don't wait for onSnapshot
+          if (ref && ref.id) {
+            const _newBill = Object.assign({}, bill, {_id: ref.id});
+            _localUpdate('upsert','bill',_newBill);
+          }
+          // onSnapshot will also fire but state is already updated
             // updates state.bills when Firestore confirms, preventing double entries.
 
             // Update master game balances (use ref.id for the bill reference)
@@ -10988,85 +11084,72 @@
     async function resolveEmployeeRole(user) {
       const email = (user.email || '').toLowerCase().trim();
       const linkKey = emailToKey(email);
-      console.log('[resolveRole] email:', email, '| linkKey:', linkKey, '| uid:', user.uid);
+      console.log('[resolveRole] checking:', email);
 
-      // ── STEP 1: Check employeeLinks FIRST ──────────────────────────────────
-      // This takes priority over the organizations check because an cashier
-      // may have previously triggered ensureOrgDoc (creating organizations/{uid})
-      // which would falsely identify them as an owner.
+      // STEP 1: Check employee_links — direct Supabase query, no auth.users lookup
       try {
-        const linkDoc = await db.collection('employeeLinks').doc(linkKey).get();
-        console.log('[resolveRole] employeeLinks doc exists:', linkDoc.exists);
+        const { data: link } = await _supabase
+          .from('employee_links')
+          .select('*')
+          .eq('link_key', linkKey)
+          .maybeSingle();
 
-        if (linkDoc.exists) {
-          const link = linkDoc.data();
-          console.log('[resolveRole] link data:', JSON.stringify(link));
+        console.log('[resolveRole] employee_links exists:', !!link);
 
+        if (link) {
           if (link.active === false) {
-            console.log('[resolveRole] Cashier is deactivated → treating as owner (will be denied)');
-            state.empRole  = 'employee';   // still cashier, just deactivated
-            state.empOrgId = link.ownerUid || user.uid;
+            state.empRole  = 'employee';
+            state.empOrgId = link.owner_uid || user.uid;
+            console.log('[resolveRole] Cashier deactivated');
             return;
           }
+          if (link.owner_uid && link.employee_id) {
+            // Fetch the cashier record from org_employees
+            const { data: empRow } = await _supabase
+              .from('org_employees')
+              .select('*')
+              .eq('id', link.employee_id)
+              .maybeSingle();
 
-          if (!link.ownerUid || !link.employeeId) {
-            console.warn('[resolveRole] employeeLinks doc missing ownerUid or employeeId:', link);
-          } else {
-            // Fetch the actual cashier record
-            try {
-              const empDoc = await db.collection('organizations')
-                .doc(link.ownerUid)
-                .collection('employees')
-                .doc(link.employeeId)
-                .get();
-              console.log('[resolveRole] cashier doc exists:', empDoc.exists,
-                empDoc.exists ? '| active:' + empDoc.data().active : '');
-
-              if (empDoc.exists && empDoc.data().active !== false) {
-                state.empRole        = 'employee';
-                state.empOrgId       = link.ownerUid;
-                state.empEmployeeDoc = { _id: empDoc.id, ...empDoc.data() };
-                console.log('[resolveRole] ✓ Resolved as EMPLOYEE for org:', link.ownerUid);
-                // Write employeeUids/{uid} so Firestore rules can do uid-based access checks
-                // without needing to parse email strings
-                try {
-                  await db.collection('employeeUids').doc(user.uid).set({
-                    ownerUid:   link.ownerUid,
-                    employeeId: empDoc.id,
-                    active:     true,
-                    email:      user.email,
-                    updatedAt:  _serverTs(),
-                  });
-                } catch(e) { console.warn('[resolveRole] employeeUids write failed:', e.message); }
-                return;
-              }
-            } catch(e) {
-              console.warn('[resolveRole] Failed to fetch cashier doc:', e);
+            if (empRow && empRow.active !== false) {
+              state.empRole        = 'employee';
+              state.empOrgId       = link.owner_uid;
+              state.empEmployeeDoc = { _id: empRow.id, ...empRow };
+              // Write employee_uids so RLS helper works
+              await _supabase.from('employee_uids').upsert({
+                uid:         user.uid,
+                owner_uid:   link.owner_uid,
+                employee_id: empRow.id,
+                active:      true,
+              }, { onConflict: 'uid' }).catch(() => {});
+              console.log('[resolveRole] ✓ EMPLOYEE for org:', link.owner_uid);
+              return;
             }
           }
         }
       } catch(e) {
-        console.warn('[resolveRole] employeeLinks lookup failed:', e.code, e.message);
+        console.warn('[resolveRole] employee_links check failed:', e.message);
       }
 
-      // ── STEP 2: Check if this user owns an org ─────────────────────────────
+      // STEP 2: Check if user has an organizations row
       try {
-        const ownerDoc = await db.collection('organizations').doc(user.uid).get();
-        console.log('[resolveRole] organizations doc exists:', ownerDoc.exists);
-        if (ownerDoc.exists) {
+        const { data: orgRow } = await _supabase
+          .from('organizations')
+          .select('id')
+          .eq('id', user.uid)
+          .maybeSingle();
+        if (orgRow) {
           state.empRole  = 'owner';
           state.empOrgId = user.uid;
-          console.log('[resolveRole] ✓ Resolved as OWNER (has org doc)');
+          console.log('[resolveRole] ✓ OWNER (has org)');
           return;
         }
-      } catch(e) {
-        console.warn('[resolveRole] organizations lookup failed:', e);
-      }
+      } catch(e) {}
 
-      // ── STEP 3: Default — new owner, no org yet ────────────────────────────
+      // Default: treat as owner
       state.empRole  = 'owner';
       state.empOrgId = user.uid;
-      console.log('[resolveRole] ✓ Resolved as OWNER (default — no org doc yet)');
+      console.log('[resolveRole] ✓ OWNER (default)');
     }
 
     // --- Ensure org document exists for owner ---
@@ -11947,61 +12030,30 @@
       const email = (emp.email || '').toLowerCase().trim();
       const linkKey = emailToKey(email);
 
-      // Read owner's current access to embed in the link doc
-      let ownerHasAccess = false;
+      // Use access info already in state — no extra DB read needed
+      let ownerHasAccess = true;
       let ownerAccessExpiry = null;
       try {
-        const ownerDoc = await db.collection('userAccess').doc(state.user.uid).get();
-        if (ownerDoc.exists) {
-          const od = ownerDoc.data();
-          if (od.isDisabled) {
-            ownerHasAccess = false;
-          } else if (od.isUnlimited) {
-            ownerHasAccess = true;
-          } else if (od.expiryDate) {
-            const exp = od.expiryDate.toDate ? od._safeDate(expiryDate) : new Date(od.expiryDate);
-            const days = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
-            ownerHasAccess = days > 0;
-            ownerAccessExpiry = od.expiryDate;
-          }
-          // Backend stores "unlimited" as far-future date (100 years), not isUnlimited flag
-          // Check for that pattern too
-          if (!ownerHasAccess && od.expiryDate) {
-            const exp = od.expiryDate.toDate ? od._safeDate(expiryDate) : new Date(od.expiryDate);
-            const daysLeft = Math.ceil((exp - new Date()) / (1000 * 60 * 60 * 24));
-            if (daysLeft > 36500) { // >100 years = unlimited
-              ownerHasAccess = true;
-            } else if (daysLeft > 0) {
-              ownerHasAccess = true;
-            }
-            ownerAccessExpiry = od.expiryDate;
-          }
+        ownerHasAccess = state.accessUnlimited || (state.accessDaysLeft > 0);
+        if (state.accessExpiry) {
+          ownerAccessExpiry = state.accessExpiry.toDate
+            ? state.accessExpiry.toDate().toISOString()
+            : String(state.accessExpiry);
         }
-        console.log('[writeEmployeeLink] Owner access snapshot: hasAccess=', ownerHasAccess,
-          '| expiry=', ownerAccessExpiry ? (ownerAccessExpiry.toDate ? _safeDate(ownerAccessExpiry).toISOString() : ownerAccessExpiry) : null);
-      } catch(e) {
-        console.warn('[writeEmployeeLink] Could not read owner userAccess:', e.message);
-        // If we can't read it, assume owner has access (they are logged in and using the app)
-        ownerHasAccess = true;
-      }
+      } catch(e) { ownerHasAccess = true; }
 
-      const _expISO = ownerAccessExpiry
-        ? (ownerAccessExpiry.toDate ? ownerAccessExpiry.toDate().toISOString() : new Date(ownerAccessExpiry).toISOString())
-        : null;
       const { error: _welErr } = await _supabase.from('employee_links').upsert({
-        link_key:          linkKey,
-        owner_uid:         state.user.uid,
-        employee_id:       empId,
-        employee_email:    email,
-        active:            emp.active !== false,
-        owner_has_access:  ownerHasAccess,
-        owner_expiry:      _expISO,
-        owner_unlimited:   false,
+        link_key:         linkKey,
+        owner_uid:        state.user.uid,
+        employee_id:      empId,
+        employee_email:   email,
+        active:           emp.active !== false,
+        owner_has_access: ownerHasAccess,
+        owner_expiry:     ownerAccessExpiry,
+        owner_unlimited:  state.accessUnlimited || false,
       }, { onConflict: 'link_key' });
       if (_welErr) console.warn('[writeEmployeeLink] error:', _welErr.message);
-      console.log('[writeEmployeeLink] ✓ Wrote link for', email,
-        '→ key:', linkKey, '| ownerUid:', state.user.uid, '| empId:', empId,
-        '| ownerHasAccess:', ownerHasAccess);
+      else console.log('[writeEmployeeLink] ✓', email, '| ownerHasAccess:', ownerHasAccess);
     }
 
     // Sync every cashier's link doc — fixes legacy cashiers added before this feature
@@ -12011,8 +12063,8 @@
       try {
         await ensureOrgDoc();
         const employees = await fetchEmployees();
-        console.log('[syncAllLinks] Syncing', cashiers.length, 'cashiers. orgId:', state.empOrgId);
-        await Promise.all(cashiers.map(emp => {
+        console.log('[syncAllLinks] Syncing', employees.length, 'employees. orgId:', state.empOrgId);
+        await Promise.all(employees.map(emp => {
           const normalizedEmail = (emp.email || '').toLowerCase().trim();
           return writeEmployeeLink({ ...emp, email: normalizedEmail }, emp._id);
         }));
